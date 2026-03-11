@@ -50,6 +50,7 @@ import { routesCommand } from './routes/command';
 import { rollbackCommand } from './rollback/command';
 import { rollingReleaseCommand } from './rolling-release/command';
 import { sandboxCommand } from './sandbox/command';
+import { shareCommand } from './share/command';
 import { skillsCommand } from './skills/command';
 import { targetCommand } from './target/command';
 import { teamsCommand } from './teams/command';
@@ -115,6 +116,7 @@ const commandsStructs = [
   rollbackCommand,
   rollingReleaseCommand,
   sandboxCommand,
+  shareCommand,
   skillsCommand,
   targetCommand,
   teamsCommand,
