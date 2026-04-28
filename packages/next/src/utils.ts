@@ -2530,12 +2530,21 @@ export const onPrerenderRoute =
     // if there isn't a srcRoute then it's a non-dynamic SSG page
     if ((nonDynamicSsg && !isLocalePrefixed) || isFallback || isOmitted) {
       routeFileNoExt = addLocaleOrDefault(
-        // root index files are located without folder/index.html
         routeFileNoExt,
         routesManifest,
         locale
       );
     }
+
+    // ============================================
+    // 🔧 FIX: Determine if we should keep lambda for this page
+    // When canUsePreviewMode is true, we must keep the lambda for generateStaticParams pages
+    // because they need to be able to render dynamically when Draft Mode is enabled.
+    // ============================================
+    const shouldKeepLambdaForPreview =
+      canUsePreviewMode &&
+      (prerenderManifest.omittedRoutes[routeKey] !== undefined ||
+        prerenderManifest.fallbackRoutes[routeKey] !== undefined);
 
     const isNotFound = prerenderManifest.notFoundRoutes.includes(routeKey);
 
@@ -2888,10 +2897,12 @@ export const onPrerenderRoute =
         });
       }
 
-      // if preview mode/On-Demand ISR can't be leveraged
-      // we can output pure static outputs instead of prerenders
+      // ============================================
+      // 🔧 MODIFIED: Only output static prerender if preview mode CANNOT be used
+      // OR if we explicitly want to keep the lambda
+      // ============================================
       if (
-        !canUsePreviewMode ||
+        (!canUsePreviewMode && !shouldKeepLambdaForPreview) ||
         (routeKey === '/404' && !lambdas[outputPathPage])
       ) {
         htmlFallbackFsRef.contentType = htmlContentType;
@@ -2901,8 +2912,6 @@ export const onPrerenderRoute =
           prerenders[outputPathPrefetchData] = dataFallbackFsRef;
         }
 
-        // If experimental ppr is not enabled for this route, then add the data
-        // route as a target for the prerender as well.
         if (
           outputPathData &&
           renderingMode !== RenderingMode.PARTIALLY_STATIC
@@ -2910,6 +2919,10 @@ export const onPrerenderRoute =
           prerenders[outputPathData] = dataFallbackFsRef;
         }
       }
+      // ============================================
+      // If preview mode is possible, we do NOT create a static prerender here.
+      // The lambda will remain in the output, allowing dynamic rendering when Draft Mode is enabled.
+      // ============================================
     }
     const isNotFoundPreview =
       isCorrectNotFoundRoutes &&

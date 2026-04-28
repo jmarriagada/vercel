@@ -1726,22 +1726,33 @@ export async function serverBuild({
       route = normalizeLocalePath(route, routesManifest.i18n.locales).pathname;
     }
 
-    if (
-      // we can't delete dynamic app route lambdas just because
-      // they are in the prerender manifest since a dynamic
-      // route can have some prerendered paths and the rest SSR
-      inversedAppPathManifest[route] &&
-      isDynamicRoute(route, nextVersion)
-    ) {
+    if (inversedAppPathManifest[route] && isDynamicRoute(route, nextVersion)) {
       return;
     }
 
-    delete lambdas[
-      normalizeIndexOutput(
-        path.posix.join('./', entryDirectory, route === '/' ? '/index' : route),
-        true
-      )
-    ];
+    // ============================================
+    // 🔧 FIX: Keep lambdas for generateStaticParams pages when Preview Mode is possible
+    // When canUsePreviewMode is true (Draft/Preview Mode enabled), we must keep the lambda
+    // for pages using generateStaticParams so that dynamic APIs (searchParams, cookies, headers)
+    // can work correctly when Draft Mode is activated.
+    // ============================================
+    const shouldKeepLambda =
+      canUsePreviewMode &&
+      (prerenderManifest.omittedRoutes[route] !== undefined ||
+        prerenderManifest.fallbackRoutes[route] !== undefined);
+
+    if (!shouldKeepLambda) {
+      delete lambdas[
+        normalizeIndexOutput(
+          path.posix.join(
+            './',
+            entryDirectory,
+            route === '/' ? '/index' : route
+          ),
+          true
+        )
+      ];
+    }
   });
 
   // Check if the app has Pages Router
