@@ -14,8 +14,8 @@ export const ALIGNED_LABEL_WIDTH = 12;
  * semantic glyphs (▲ production URL, ✓ Ready, ? prompt). The ▲ renders at
  * most once per deploy summary: on the Aliased row, or on the Production
  * row when no Aliased row will print. Everything else lives at column 2+
- * as indented body content. See the deploy-flow design doc for the full
- * gutter system.
+ * as indented body content. See the cli-ux skill's Layout and Glyphs + Color
+ * sections for the full gutter system.
  */
 export function printAlignedLabel(
   label: string,
