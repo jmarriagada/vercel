@@ -989,7 +989,7 @@ describe('deploy', () => {
       // remove first 3 lines which contains randomized data
       const output = client.getFullOutput().split('\n').slice(3).join('\n');
       expect(output).toContain('Building');
-      expect(output).toContain('Production  https');
+      expect(output).toContain('Production      https');
       expect(output).toContain('Completing');
       expect(exitCode).toEqual(0);
     });
@@ -1787,7 +1787,7 @@ describe('deploy', () => {
 
       await expect(client.stderr).toOutput('Production ');
       await expect(client.stderr).toOutput(
-        'Aliased     https://my-app.vercel.app'
+        'Aliased         https://my-app.vercel.app'
       );
 
       // Anti-regression: ANSI is stripped from toOutput, so assert the raw
@@ -1985,7 +1985,7 @@ describe('deploy', () => {
 
       const exitCodePromise = deploy(client);
 
-      await expect(client.stderr).toOutput('Preview     https');
+      await expect(client.stderr).toOutput('Preview         https');
 
       const exitCode = await exitCodePromise;
       expect(exitCode).toEqual(0);
@@ -2059,7 +2059,7 @@ describe('deploy', () => {
 
       const exitCodePromise = deploy(client);
 
-      await expect(client.stderr).toOutput('Production  https');
+      await expect(client.stderr).toOutput('Production      https');
 
       const exitCode = await exitCodePromise;
       expect(exitCode).toEqual(0);
@@ -2842,7 +2842,7 @@ describe('deploy', () => {
       const exitCodePromise = deploy(client);
 
       await expect(client.stderr).toOutput('Running Checks…');
-      await expect(client.stderr).toOutput('Aliased     https');
+      await expect(client.stderr).toOutput('Aliased         https');
 
       const exitCode = await exitCodePromise;
       expect(exitCode).toEqual(0);
