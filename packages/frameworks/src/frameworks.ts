@@ -1,7 +1,7 @@
 import { join } from 'path';
 import { existsSync, promises } from 'fs';
 
-import { Framework } from './types';
+import { Framework, Language } from './types';
 import { readConfigFile } from './read-config-file';
 
 export * from './types';
@@ -20,6 +20,7 @@ export const frameworks = [
   {
     name: 'Blitz.js (Legacy)',
     slug: 'blitzjs',
+    language: Language.JavaScript,
     demo: 'https://blitz-template.vercel.app',
     logo: 'https://api-frameworks.vercel.sh/framework-logos/blitz.svg',
     tagline: 'Blitz.js: The Fullstack React Framework',
@@ -61,6 +62,7 @@ export const frameworks = [
   {
     name: 'Next.js',
     slug: 'nextjs',
+    language: Language.JavaScript,
     demo: 'https://nextjs-template.vercel.app',
     logo: 'https://api-frameworks.vercel.sh/framework-logos/next.svg',
     darkModeLogo:
@@ -110,6 +112,7 @@ export const frameworks = [
   {
     name: 'Gatsby.js',
     slug: 'gatsby',
+    language: Language.JavaScript,
     demo: 'https://gatsby.vercel.app',
     logo: 'https://api-frameworks.vercel.sh/framework-logos/gatsby.svg',
     tagline:
@@ -196,6 +199,7 @@ export const frameworks = [
   {
     name: 'Remix',
     slug: 'remix',
+    language: Language.JavaScript,
     demo: 'https://remix-run-template.vercel.app',
     logo: 'https://api-frameworks.vercel.sh/framework-logos/remix-no-shadow.svg',
     tagline: 'Build Better Websites',
@@ -241,6 +245,7 @@ export const frameworks = [
   {
     name: 'React Router',
     slug: 'react-router',
+    language: Language.JavaScript,
     demo: 'https://react-router-v7-template.vercel.app',
     logo: 'https://api-frameworks.vercel.sh/framework-logos/react-router.svg',
     darkModeLogo:
@@ -294,6 +299,7 @@ export const frameworks = [
   {
     name: 'Astro',
     slug: 'astro',
+    language: Language.JavaScript,
     demo: 'https://astro-template.vercel.app',
     logo: 'https://api-frameworks.vercel.sh/framework-logos/astro.svg',
     darkModeLogo:
@@ -345,6 +351,7 @@ export const frameworks = [
   {
     name: 'Hexo',
     slug: 'hexo',
+    language: Language.JavaScript,
     demo: 'https://hexo-template.vercel.app',
     logo: 'https://api-frameworks.vercel.sh/framework-logos/hexo.svg',
     tagline:
@@ -381,6 +388,7 @@ export const frameworks = [
   {
     name: 'Eleventy',
     slug: 'eleventy',
+    language: Language.JavaScript,
     demo: 'https://eleventy-template.vercel.app',
     logo: 'https://api-frameworks.vercel.sh/framework-logos/eleventy.svg',
     tagline:
@@ -418,6 +426,7 @@ export const frameworks = [
   {
     name: 'Docusaurus (v2+)',
     slug: 'docusaurus-2',
+    language: Language.JavaScript,
     demo: 'https://docusaurus-2-template.vercel.app',
     logo: 'https://api-frameworks.vercel.sh/framework-logos/docusaurus.svg',
     tagline:
@@ -505,6 +514,7 @@ export const frameworks = [
   {
     name: 'Docusaurus (v1)',
     slug: 'docusaurus',
+    language: Language.JavaScript,
     demo: 'https://docusaurus-template.vercel.app',
     logo: 'https://api-frameworks.vercel.sh/framework-logos/docusaurus.svg',
     tagline:
@@ -556,6 +566,7 @@ export const frameworks = [
   {
     name: 'Preact',
     slug: 'preact',
+    language: Language.JavaScript,
     demo: 'https://preact-template.vercel.app',
     logo: 'https://api-frameworks.vercel.sh/framework-logos/preact.svg',
     tagline:
@@ -603,6 +614,7 @@ export const frameworks = [
   {
     name: 'SolidStart (v1)',
     slug: 'solidstart-1',
+    language: Language.JavaScript,
     demo: 'https://solid-start-template.vercel.app',
     logo: 'https://api-frameworks.vercel.sh/framework-logos/solid.svg',
     tagline: 'Simple and performant reactivity for building user interfaces.',
@@ -640,6 +652,7 @@ export const frameworks = [
   {
     name: 'SolidStart (v0)',
     slug: 'solidstart',
+    language: Language.JavaScript,
     demo: 'https://solid-start-template.vercel.app',
     logo: 'https://api-frameworks.vercel.sh/framework-logos/solid.svg',
     tagline: 'Simple and performant reactivity for building user interfaces.',
@@ -678,6 +691,7 @@ export const frameworks = [
   {
     name: 'Dojo',
     slug: 'dojo',
+    language: Language.JavaScript,
     demo: 'https://dojo-template.vercel.app',
     logo: 'https://api-frameworks.vercel.sh/framework-logos/dojo.png',
     tagline: 'Dojo is a modern progressive, TypeScript first framework.',
@@ -739,6 +753,7 @@ export const frameworks = [
   {
     name: 'Ember.js',
     slug: 'ember',
+    language: Language.JavaScript,
     demo: 'https://ember-template.vercel.app',
     logo: 'https://api-frameworks.vercel.sh/framework-logos/ember.svg',
     tagline:
@@ -787,6 +802,7 @@ export const frameworks = [
   {
     name: 'Vue.js',
     slug: 'vue',
+    language: Language.JavaScript,
     demo: 'https://vue-template.vercel.app',
     logo: 'https://api-frameworks.vercel.sh/framework-logos/vue.svg',
     tagline:
@@ -843,6 +859,7 @@ export const frameworks = [
   {
     name: 'Scully',
     slug: 'scully',
+    language: Language.JavaScript,
     demo: 'https://scully-template.vercel.app',
     logo: 'https://api-frameworks.vercel.sh/framework-logos/scullyio-logo.png',
     tagline: 'Scully is a static site generator for Angular.',
@@ -878,6 +895,7 @@ export const frameworks = [
   {
     name: 'Ionic Angular',
     slug: 'ionic-angular',
+    language: Language.JavaScript,
     demo: 'https://ionic-angular-template.vercel.app',
     logo: 'https://api-frameworks.vercel.sh/framework-logos/ionic.svg',
     tagline:
@@ -922,6 +940,7 @@ export const frameworks = [
   {
     name: 'Angular',
     slug: 'angular',
+    language: Language.JavaScript,
     demo: 'https://angular-template.vercel.app',
     logo: 'https://api-frameworks.vercel.sh/framework-logos/angular.svg',
     tagline:
@@ -985,6 +1004,7 @@ export const frameworks = [
   {
     name: 'Polymer',
     slug: 'polymer',
+    language: Language.JavaScript,
     demo: 'https://polymer-template.vercel.app',
     logo: 'https://api-frameworks.vercel.sh/framework-logos/polymer.svg',
     tagline:
@@ -1041,6 +1061,7 @@ export const frameworks = [
   {
     name: 'Svelte',
     slug: 'svelte',
+    language: Language.JavaScript,
     demo: 'https://svelte.vercel.app',
     logo: 'https://api-frameworks.vercel.sh/framework-logos/svelte.svg',
     tagline:
@@ -1090,6 +1111,7 @@ export const frameworks = [
     // TODO: fix detected as "sveltekit-1"
     name: 'SvelteKit (v0)',
     slug: 'sveltekit',
+    language: Language.JavaScript,
     demo: 'https://sveltekit-template.vercel.app',
     logo: 'https://api-frameworks.vercel.sh/framework-logos/svelte.svg',
     screenshot:
@@ -1132,6 +1154,7 @@ export const frameworks = [
   {
     name: 'SvelteKit',
     slug: 'sveltekit-1',
+    language: Language.JavaScript,
     demo: 'https://sveltekit-1-template.vercel.app',
     logo: 'https://api-frameworks.vercel.sh/framework-logos/svelte.svg',
     screenshot:
@@ -1172,6 +1195,7 @@ export const frameworks = [
   {
     name: 'Ionic React',
     slug: 'ionic-react',
+    language: Language.JavaScript,
     demo: 'https://ionic-react-template.vercel.app',
     logo: 'https://api-frameworks.vercel.sh/framework-logos/ionic.svg',
     tagline:
@@ -1232,6 +1256,7 @@ export const frameworks = [
   {
     name: 'Create React App',
     slug: 'create-react-app',
+    language: Language.JavaScript,
     demo: 'https://create-react-template.vercel.app',
     logo: 'https://api-frameworks.vercel.sh/framework-logos/react.svg',
     tagline: 'Create React App allows you to get going with React in no time.',
@@ -1296,6 +1321,7 @@ export const frameworks = [
   {
     name: 'Gridsome',
     slug: 'gridsome',
+    language: Language.JavaScript,
     demo: 'https://gridsome-template.vercel.app',
     logo: 'https://api-frameworks.vercel.sh/framework-logos/gridsome.svg',
     tagline:
@@ -1332,6 +1358,7 @@ export const frameworks = [
   {
     name: 'UmiJS',
     slug: 'umijs',
+    language: Language.JavaScript,
     demo: 'https://umijs-template.vercel.app',
     logo: 'https://api-frameworks.vercel.sh/framework-logos/umi.svg',
     tagline:
@@ -1377,6 +1404,7 @@ export const frameworks = [
   {
     name: 'Sapper',
     slug: 'sapper',
+    language: Language.JavaScript,
     demo: 'https://sapper-template.vercel.app',
     logo: 'https://api-frameworks.vercel.sh/framework-logos/svelte.svg',
     tagline:
@@ -1413,6 +1441,7 @@ export const frameworks = [
   {
     name: 'Saber',
     slug: 'saber',
+    language: Language.JavaScript,
     logo: 'https://api-frameworks.vercel.sh/framework-logos/saber.svg',
     tagline:
       'Saber is a framework for building static sites in Vue.js that supports data from any source.',
@@ -1462,6 +1491,7 @@ export const frameworks = [
   {
     name: 'Stencil',
     slug: 'stencil',
+    language: Language.JavaScript,
     demo: 'https://stencil.vercel.app',
     logo: 'https://api-frameworks.vercel.sh/framework-logos/stencil.svg',
     tagline:
@@ -1522,6 +1552,7 @@ export const frameworks = [
   {
     name: 'Nuxt',
     slug: 'nuxtjs',
+    language: Language.JavaScript,
     demo: 'https://nuxtjs-template.vercel.app',
     logo: 'https://api-frameworks.vercel.sh/framework-logos/nuxt.svg',
     screenshot:
@@ -1591,6 +1622,7 @@ export const frameworks = [
   {
     name: 'RedwoodJS',
     slug: 'redwoodjs',
+    language: Language.JavaScript,
     demo: 'https://redwood-template.vercel.app',
     logo: 'https://api-frameworks.vercel.sh/framework-logos/redwoodjs.svg',
     tagline: 'RedwoodJS is a full-stack framework for the Jamstack.',
@@ -1627,6 +1659,7 @@ export const frameworks = [
   {
     name: 'Hugo',
     slug: 'hugo',
+    language: Language.Go,
     demo: 'https://hugo-template.vercel.app',
     logo: 'https://api-frameworks.vercel.sh/framework-logos/hugo.svg',
     tagline:
@@ -1680,6 +1713,7 @@ export const frameworks = [
   {
     name: 'Jekyll',
     slug: 'jekyll',
+    language: Language.Ruby,
     demo: 'https://jekyll-template.vercel.app',
     logo: 'https://api-frameworks.vercel.sh/framework-logos/jekyll.svg',
     tagline:
@@ -1721,6 +1755,7 @@ export const frameworks = [
   {
     name: 'Brunch',
     slug: 'brunch',
+    language: Language.JavaScript,
     demo: 'https://brunch-template.vercel.app',
     logo: 'https://api-frameworks.vercel.sh/framework-logos/brunch.svg',
     tagline:
@@ -1759,6 +1794,7 @@ export const frameworks = [
   {
     name: 'Middleman',
     slug: 'middleman',
+    language: Language.Ruby,
     demo: 'https://middleman-template.vercel.app',
     logo: 'https://api-frameworks.vercel.sh/framework-logos/middleman.svg',
     tagline:
@@ -1794,6 +1830,7 @@ export const frameworks = [
   {
     name: 'Zola',
     slug: 'zola',
+    language: Language.Rust,
     demo: 'https://zola-template.vercel.app',
     logo: 'https://api-frameworks.vercel.sh/framework-logos/zola.png',
     tagline: 'Everything you need to make a static site engine in one binary.',
@@ -1828,6 +1865,7 @@ export const frameworks = [
   {
     name: 'Hydrogen (v1)',
     slug: 'hydrogen',
+    language: Language.JavaScript,
     demo: 'https://hydrogen-template.vercel.app',
     logo: 'https://api-frameworks.vercel.sh/framework-logos/hydrogen.svg',
     tagline: 'React framework for headless commerce',
@@ -1872,6 +1910,7 @@ export const frameworks = [
   {
     name: 'Vite',
     slug: 'vite',
+    language: Language.JavaScript,
     demo: 'https://vite-vue-template.vercel.app',
     logo: 'https://api-frameworks.vercel.sh/framework-logos/vite.svg',
     tagline:
@@ -1910,6 +1949,7 @@ export const frameworks = [
   {
     name: 'TanStack Start',
     slug: 'tanstack-start',
+    language: Language.JavaScript,
     logo: 'https://api-frameworks.vercel.sh/framework-logos/tanstack-start.svg',
     darkModeLogo:
       'https://api-frameworks.vercel.sh/framework-logos/tanstack-start-dark.svg',
@@ -1948,6 +1988,7 @@ export const frameworks = [
   {
     name: 'VitePress',
     slug: 'vitepress',
+    language: Language.JavaScript,
     demo: 'https://vitepress-starter-template.vercel.app',
     logo: 'https://api-frameworks.vercel.sh/framework-logos/vite.svg',
     tagline: "VitePress is VuePress' little brother, built on top of Vite.",
@@ -1981,6 +2022,7 @@ export const frameworks = [
   {
     name: 'VuePress',
     slug: 'vuepress',
+    language: Language.JavaScript,
     demo: 'https://vuepress-starter-template.vercel.app',
     logo: 'https://api-frameworks.vercel.sh/framework-logos/vuepress.png',
     tagline: 'Vue-powered Static Site Generator',
@@ -2014,6 +2056,7 @@ export const frameworks = [
   {
     name: 'Parcel',
     slug: 'parcel',
+    language: Language.JavaScript,
     demo: 'https://parcel-template.vercel.app',
     logo: 'https://api-frameworks.vercel.sh/framework-logos/parcel.png',
     tagline:
@@ -2060,6 +2103,7 @@ export const frameworks = [
   {
     name: 'FastAPI',
     slug: 'fastapi',
+    language: Language.Python,
     demo: 'https://vercel-fastapi-gamma-smoky.vercel.app/',
     logo: 'https://api-frameworks.vercel.sh/framework-logos/fastapi.svg',
     darkModeLogo:
@@ -2118,6 +2162,7 @@ export const frameworks = [
   {
     name: 'Flask',
     slug: 'flask',
+    language: Language.Python,
     logo: 'https://api-frameworks.vercel.sh/framework-logos/flask.svg',
     tagline: 'The Python micro web framework',
     description: 'A Flask app, ready for production',
@@ -2171,6 +2216,7 @@ export const frameworks = [
   {
     name: 'FastHTML',
     slug: 'fasthtml',
+    language: Language.Python,
     demo: 'https://fasthtml-template.vercel.app',
     logo: 'https://api-frameworks.vercel.sh/framework-logos/fasthtml.png',
     darkModeLogo:
@@ -2218,6 +2264,7 @@ export const frameworks = [
   {
     name: 'Django',
     slug: 'django',
+    language: Language.Python,
     logo: 'https://api-frameworks.vercel.sh/framework-logos/django.svg',
     tagline:
       'Django is a high-level Python web framework that encourages rapid development and clean, pragmatic design. ',
@@ -2277,6 +2324,7 @@ export const frameworks = [
   {
     name: 'Ash',
     slug: 'ash',
+    language: Language.JavaScript,
     logo: 'https://api-frameworks.vercel.sh/framework-logos/ash.svg',
     darkModeLogo:
       'https://api-frameworks.vercel.sh/framework-logos/ash-dark.svg',
@@ -2315,6 +2363,7 @@ export const frameworks = [
   {
     name: 'Eve',
     slug: 'eve',
+    language: Language.JavaScript,
     logo: 'https://api-frameworks.vercel.sh/framework-logos/eve.svg',
     darkModeLogo:
       'https://api-frameworks.vercel.sh/framework-logos/eve-dark.svg',
@@ -2352,6 +2401,7 @@ export const frameworks = [
   {
     name: 'Sanity',
     slug: 'sanity',
+    language: Language.JavaScript,
     demo: 'https://template-studio-clean.sanity.dev',
     logo: 'https://api-frameworks.vercel.sh/framework-logos/sanity.svg',
     darkModeLogo:
@@ -2413,6 +2463,7 @@ export const frameworks = [
   {
     name: 'Sanity (v2 - legacy)',
     slug: 'sanity-v2',
+    language: Language.JavaScript,
     demo: 'https://sanity-studio-template.vercel.app',
     logo: 'https://api-frameworks.vercel.sh/framework-logos/sanity-v2.svg',
     tagline: 'The structured content platform.',
@@ -2464,6 +2515,7 @@ export const frameworks = [
   {
     name: 'Storybook',
     slug: 'storybook',
+    language: Language.JavaScript,
     logo: 'https://api-frameworks.vercel.sh/framework-logos/storybook.svg',
     tagline: 'Frontend workshop for UI development',
     description:
@@ -2499,6 +2551,7 @@ export const frameworks = [
   {
     name: 'Nitro',
     slug: 'nitro',
+    language: Language.JavaScript,
     logo: 'https://api-frameworks.vercel.sh/framework-logos/nitro.svg',
     demo: 'https://nitro-template.vercel.app',
     tagline: 'Nitro is a next generation server toolkit.',
@@ -2530,6 +2583,7 @@ export const frameworks = [
   {
     name: 'Hono',
     slug: 'hono',
+    language: Language.JavaScript,
     logo: 'https://api-frameworks.vercel.sh/framework-logos/hono.svg',
     demo: 'https://hono.vercel.dev',
     tagline: 'Web framework built on Web Standards',
@@ -2756,6 +2810,7 @@ export const frameworks = [
   {
     name: 'Express',
     slug: 'express',
+    language: Language.JavaScript,
     logo: 'https://api-frameworks.vercel.sh/framework-logos/express.svg',
     demo: 'https://express-vercel-example-demo.vercel.app/',
     darkModeLogo:
@@ -2982,6 +3037,7 @@ export const frameworks = [
   {
     name: 'H3',
     slug: 'h3',
+    language: Language.JavaScript,
     logo: 'https://api-frameworks.vercel.sh/framework-logos/h3.svg',
     tagline: 'Universal, Tiny, and Fast Servers',
     description:
@@ -3207,6 +3263,7 @@ export const frameworks = [
   {
     name: 'Koa',
     slug: 'koa',
+    language: Language.JavaScript,
     logo: 'https://api-frameworks.vercel.sh/framework-logos/koa.svg',
     tagline: 'Expressive middleware for Node.js using ES2017 async functions',
     description:
@@ -3432,6 +3489,7 @@ export const frameworks = [
   {
     name: 'NestJS',
     slug: 'nestjs',
+    language: Language.JavaScript,
     logo: 'https://api-frameworks.vercel.sh/framework-logos/nestjs.svg',
     tagline:
       'Framework for building efficient, scalable Node.js server-side applications',
@@ -3717,6 +3775,7 @@ export const frameworks = [
   {
     name: 'Elysia',
     slug: 'elysia',
+    language: Language.JavaScript,
     logo: 'https://api-frameworks.vercel.sh/framework-logos/elysia.svg',
     tagline: 'Ergonomic framework for humans',
     description:
@@ -3941,6 +4000,7 @@ export const frameworks = [
   {
     name: 'Fastify',
     slug: 'fastify',
+    language: Language.JavaScript,
     logo: 'https://api-frameworks.vercel.sh/framework-logos/fastify.svg',
     darkModeLogo:
       'https://api-frameworks.vercel.sh/framework-logos/fastify-dark.svg',
@@ -4167,6 +4227,7 @@ export const frameworks = [
   {
     name: 'xmcp',
     slug: 'xmcp',
+    language: Language.JavaScript,
     logo: 'https://api-frameworks.vercel.sh/framework-logos/xmcp.svg',
     demo: 'https://xmcp-template.vercel.app/',
     tagline: 'The MCP framework for building AI-powered tools',
@@ -4209,6 +4270,7 @@ export const frameworks = [
   {
     name: 'Python',
     slug: 'python',
+    language: Language.Python,
     runtimeFramework: true,
     logo: 'https://api-frameworks.vercel.sh/framework-logos/python.svg',
     tagline:
@@ -4261,6 +4323,7 @@ export const frameworks = [
   {
     name: 'Ruby',
     slug: 'ruby',
+    language: Language.Ruby,
     experimental: true,
     runtimeFramework: true,
     logo: 'https://api-frameworks.vercel.sh/framework-logos/ruby.svg',
@@ -4311,6 +4374,7 @@ export const frameworks = [
   {
     name: 'Rust',
     slug: 'rust',
+    language: Language.Rust,
     experimental: true,
     runtimeFramework: true,
     logo: 'https://api-frameworks.vercel.sh/framework-logos/rust.svg',
@@ -4361,6 +4425,7 @@ export const frameworks = [
   {
     name: 'Axum',
     slug: 'axum',
+    language: Language.Rust,
     experimental: true,
     supersedes: ['rust'],
     logo: 'https://api-frameworks.vercel.sh/framework-logos/axum.svg',
@@ -4411,6 +4476,7 @@ export const frameworks = [
   {
     name: 'Actix Web',
     slug: 'actix-web',
+    language: Language.Rust,
     experimental: true,
     runtimeFramework: true,
     supersedes: ['rust'],
@@ -4462,6 +4528,7 @@ export const frameworks = [
   {
     name: 'Bun',
     slug: 'bun',
+    language: Language.JavaScript,
     runtimeFramework: true,
     experimental: true,
     supersedes: ['node'],
@@ -4548,6 +4615,7 @@ export const frameworks = [
   {
     name: 'Node',
     slug: 'node',
+    language: Language.JavaScript,
     runtimeFramework: true,
     logo: 'https://api-frameworks.vercel.sh/framework-logos/node.svg',
     tagline:
@@ -4629,6 +4697,7 @@ export const frameworks = [
   {
     name: 'Go',
     slug: 'go',
+    language: Language.Go,
     runtimeFramework: true,
     logo: 'https://api-frameworks.vercel.sh/framework-logos/go.svg',
     tagline: 'An open-source programming language supported by Google.',
@@ -4684,6 +4753,7 @@ export const frameworks = [
   {
     name: 'Services',
     slug: 'services',
+    language: Language.JavaScript,
     experimental: true,
     logo: 'https://api-frameworks.vercel.sh/framework-logos/other.svg',
     tagline:
@@ -4712,6 +4782,7 @@ export const frameworks = [
   {
     name: 'Mastra',
     slug: 'mastra',
+    language: Language.JavaScript,
     logo: 'https://api-frameworks.vercel.sh/framework-logos/mastra.svg',
     darkModeLogo:
       'https://api-frameworks.vercel.sh/framework-logos/mastra-dark.svg',
