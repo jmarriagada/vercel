@@ -1,6 +1,7 @@
 import chalk from 'chalk';
 import dotenv from 'dotenv';
 import fs, { existsSync } from 'fs-extra';
+import { decodeJwt } from 'jose';
 import minimatch from 'minimatch';
 import { dirname, join, normalize, relative, resolve, sep } from 'path';
 import semver from 'semver';
@@ -151,10 +152,7 @@ function buildCommandWithGlobalFlags(
  */
 function isOidcTokenExpired(token: string, skewMs = 60_000): boolean {
   try {
-    const payload = token.split('.')[1];
-    if (!payload) return true;
-    const json = Buffer.from(payload, 'base64url').toString('utf8');
-    const { exp } = JSON.parse(json) as { exp?: number };
+    const { exp } = decodeJwt(token);
     if (typeof exp !== 'number') return true;
     return Date.now() + skewMs >= exp * 1000;
   } catch {
