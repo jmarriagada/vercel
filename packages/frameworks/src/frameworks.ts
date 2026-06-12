@@ -5,6 +5,7 @@ import { Framework, Language } from './types';
 import { readConfigFile } from './read-config-file';
 
 export * from './types';
+export * from './runtimes';
 
 const { readdir, readFile, unlink } = promises;
 
