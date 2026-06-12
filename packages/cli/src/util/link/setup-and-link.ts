@@ -766,7 +766,8 @@ export default async function setupAndLink(
           // the "Other" preset if none was detected.
           const detectedProjects = detectedProjectsForWorkspace.get('') || [];
           const framework =
-            detectedProjects[0] ?? frameworkList.find(f => f.slug === null);
+            detectedProjects[0]?.framework ??
+            frameworkList.find(f => f.slug === null);
 
           settings = await editProjectSettings(
             client,
