@@ -752,6 +752,7 @@ export default async function setupAndLink(
             buildCommand: localConfig?.buildCommand,
             devCommand: localConfig?.devCommand,
             framework: localConfig?.framework,
+            runtime: localConfig?.runtime,
             commandForIgnoringBuildStep: localConfig?.ignoreCommand,
             installCommand: localConfig?.installCommand,
             outputDirectory: localConfig?.outputDirectory,
@@ -768,11 +769,13 @@ export default async function setupAndLink(
           const framework =
             detectedProjects[0]?.framework ??
             frameworkList.find(f => f.slug === null);
+          const runtime = detectedProjects[0]?.runtime ?? null;
 
           settings = await editProjectSettings(
             client,
             {},
             framework,
+            runtime,
             autoConfirm,
             localConfigurationOverrides,
             configFileName
