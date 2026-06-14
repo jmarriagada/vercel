@@ -70,7 +70,7 @@ export default async function list(client: Client, argv: string[]) {
 
   if (rules.length === 0) {
     output.log(
-      `No routing rules found. Create one with ${getCommandName('ai-gateway rules create')}.`
+      `No routing rules found. Add one with ${getCommandName('ai-gateway rules add')}.`
     );
     return 0;
   }
