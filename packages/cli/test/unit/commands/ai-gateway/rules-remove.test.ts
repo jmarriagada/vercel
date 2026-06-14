@@ -49,6 +49,20 @@ describe('ai-gateway rules remove', () => {
     expect(getQuery()).toMatchObject({ ruleId: 'rule_1' });
   });
 
+  it('removes a rule via the delete alias', async () => {
+    const team = useTeam();
+    useUser();
+    const getQuery = useDeleteRule();
+    client.config.currentTeam = team.id;
+    client.setArgv('ai-gateway', 'rules', 'delete', 'rule_1', '--yes');
+
+    const exitCodePromise = aiGateway(client);
+
+    await expect(client.stderr).toOutput('removed');
+    expect(await exitCodePromise).toBe(0);
+    expect(getQuery()).toMatchObject({ ruleId: 'rule_1' });
+  });
+
   it('outputs JSON with --format json', async () => {
     const team = useTeam();
     useUser();
