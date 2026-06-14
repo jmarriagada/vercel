@@ -1,10 +1,10 @@
 import { TelemetryClient } from '../..';
 import type { TelemetryMethods } from '../../types';
-import type { rulesDeleteSubcommand } from '../../../../commands/ai-gateway/command';
+import type { rulesRemoveSubcommand } from '../../../../commands/ai-gateway/command';
 
-export class AiGatewayRulesDeleteTelemetryClient
+export class AiGatewayRulesRemoveTelemetryClient
   extends TelemetryClient
-  implements TelemetryMethods<typeof rulesDeleteSubcommand>
+  implements TelemetryMethods<typeof rulesRemoveSubcommand>
 {
   trackCliArgumentRuleId(ruleId: string | undefined) {
     if (ruleId) {

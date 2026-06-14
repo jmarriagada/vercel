@@ -24,21 +24,21 @@ function useCreateRule(response: unknown = sampleRule) {
   return () => body;
 }
 
-describe('ai-gateway rules create', () => {
+describe('ai-gateway rules add', () => {
   describe('--help', () => {
     it('returns exit code 2', async () => {
-      client.setArgv('ai-gateway', 'rules', 'create', '--help');
+      client.setArgv('ai-gateway', 'rules', 'add', '--help');
       const exitCode = await aiGateway(client);
       expect(exitCode).toBe(2);
 
       expect(client.telemetryEventStore).toHaveTelemetryEvents([
         { key: 'subcommand:rules', value: 'rules' },
-        { key: 'flag:help', value: 'ai-gateway rules:create' },
+        { key: 'flag:help', value: 'ai-gateway rules:add' },
       ]);
     });
   });
 
-  it('creates a rewrite rule', async () => {
+  it('adds a rewrite rule', async () => {
     const team = useTeam();
     useUser();
     const getBody = useCreateRule();
@@ -46,19 +46,19 @@ describe('ai-gateway rules create', () => {
     client.setArgv(
       'ai-gateway',
       'rules',
-      'create',
+      'add',
       '--type',
       'rewrite',
-      '--model',
+      '--source',
       'anthropic/claude-fable-5',
-      '--rewrite-model',
+      '--destination',
       'anthropic/claude-opus-4.8'
     );
 
     const exitCodePromise = aiGateway(client);
 
     await expect(client.stdout).toOutput('rule_1');
-    await expect(client.stderr).toOutput('created');
+    await expect(client.stderr).toOutput('added');
     expect(await exitCodePromise).toBe(0);
     expect(getBody()).toMatchObject({
       type: 'rewrite',
@@ -75,10 +75,10 @@ describe('ai-gateway rules create', () => {
     client.setArgv(
       'ai-gateway',
       'rules',
-      'create',
+      'add',
       '--type',
       'deny',
-      '--model',
+      '--source',
       'openai/gpt-4o'
     );
 
@@ -88,7 +88,7 @@ describe('ai-gateway rules create', () => {
     expect(await exitCodePromise).toBe(0);
   });
 
-  it('creates a deny rule', async () => {
+  it('adds a deny rule', async () => {
     const team = useTeam();
     useUser();
     const getBody = useCreateRule({
@@ -102,10 +102,10 @@ describe('ai-gateway rules create', () => {
     client.setArgv(
       'ai-gateway',
       'rules',
-      'create',
+      'add',
       '--type',
       'deny',
-      '--model',
+      '--source',
       'openai/gpt-4o'
     );
 
@@ -127,12 +127,12 @@ describe('ai-gateway rules create', () => {
     client.setArgv(
       'ai-gateway',
       'rules',
-      'create',
+      'add',
       '--type',
       'rewrite',
-      '--model',
+      '--source',
       'anthropic/claude-fable-5',
-      '--rewrite-model',
+      '--destination',
       'anthropic/claude-opus-4.8',
       '--format',
       'json'
@@ -144,7 +144,7 @@ describe('ai-gateway rules create', () => {
     expect(await exitCodePromise).toBe(0);
   });
 
-  it('creates a deny rule with a reason', async () => {
+  it('adds a deny rule with a reason', async () => {
     const team = useTeam();
     useUser();
     const getBody = useCreateRule({
@@ -158,10 +158,10 @@ describe('ai-gateway rules create', () => {
     client.setArgv(
       'ai-gateway',
       'rules',
-      'create',
+      'add',
       '--type',
       'deny',
-      '--model',
+      '--source',
       'openai/gpt-4o',
       '--reason',
       'cost control'
@@ -190,10 +190,10 @@ describe('ai-gateway rules create', () => {
     client.setArgv(
       'ai-gateway',
       'rules',
-      'create',
+      'add',
       '--type',
       'deny',
-      '--model',
+      '--source',
       'openai/gpt-4o'
     );
 
@@ -206,7 +206,7 @@ describe('ai-gateway rules create', () => {
   describe('validation', () => {
     it('requires --type', async () => {
       useUser();
-      client.setArgv('ai-gateway', 'rules', 'create', '--model', 'm');
+      client.setArgv('ai-gateway', 'rules', 'add', '--source', 'm');
       const exitCodePromise = aiGateway(client);
       await expect(client.stderr).toOutput('--type flag is required');
       expect(await exitCodePromise).toBe(1);
@@ -217,10 +217,10 @@ describe('ai-gateway rules create', () => {
       client.setArgv(
         'ai-gateway',
         'rules',
-        'create',
+        'add',
         '--type',
         'bogus',
-        '--model',
+        '--source',
         'm'
       );
       const exitCodePromise = aiGateway(client);
@@ -228,48 +228,48 @@ describe('ai-gateway rules create', () => {
       expect(await exitCodePromise).toBe(1);
     });
 
-    it('requires --model', async () => {
+    it('requires --source', async () => {
       useUser();
-      client.setArgv('ai-gateway', 'rules', 'create', '--type', 'deny');
+      client.setArgv('ai-gateway', 'rules', 'add', '--type', 'deny');
       const exitCodePromise = aiGateway(client);
-      await expect(client.stderr).toOutput('--model flag is required');
+      await expect(client.stderr).toOutput('--source flag is required');
       expect(await exitCodePromise).toBe(1);
     });
 
-    it('requires --rewrite-model for a rewrite rule', async () => {
+    it('requires --destination for a rewrite rule', async () => {
       useUser();
       client.setArgv(
         'ai-gateway',
         'rules',
-        'create',
+        'add',
         '--type',
         'rewrite',
-        '--model',
+        '--source',
         'm'
       );
       const exitCodePromise = aiGateway(client);
       await expect(client.stderr).toOutput(
-        'rewrite rule requires --rewrite-model'
+        'rewrite rule requires --destination'
       );
       expect(await exitCodePromise).toBe(1);
     });
 
-    it('rejects --rewrite-model on a deny rule', async () => {
+    it('rejects --destination on a deny rule', async () => {
       useUser();
       client.setArgv(
         'ai-gateway',
         'rules',
-        'create',
+        'add',
         '--type',
         'deny',
-        '--model',
+        '--source',
         'm',
-        '--rewrite-model',
+        '--destination',
         'n'
       );
       const exitCodePromise = aiGateway(client);
       await expect(client.stderr).toOutput(
-        'deny rule cannot set --rewrite-model'
+        'deny rule cannot set --destination'
       );
       expect(await exitCodePromise).toBe(1);
     });

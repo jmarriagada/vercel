@@ -3,16 +3,16 @@ import { parseArguments } from '../../util/get-args';
 import getInvalidSubcommand from '../../util/get-invalid-subcommand';
 import getSubcommand from '../../util/get-subcommand';
 import { type Command, help } from '../help';
-import create from './rules-create';
+import add from './rules-add';
 import list from './rules-list';
-import update from './rules-update';
-import remove from './rules-delete';
+import edit from './rules-edit';
+import remove from './rules-remove';
 import {
   rulesSubcommand,
-  rulesCreateSubcommand,
+  rulesAddSubcommand,
   rulesListSubcommand,
-  rulesUpdateSubcommand,
-  rulesDeleteSubcommand,
+  rulesEditSubcommand,
+  rulesRemoveSubcommand,
 } from './command';
 import { getFlagsSpecification } from '../../util/get-flags-specification';
 import output from '../../output-manager';
@@ -21,10 +21,10 @@ import { AiGatewayRulesTelemetryClient } from '../../util/telemetry/commands/ai-
 import { printError } from '../../util/error';
 
 const COMMAND_CONFIG = {
-  create: getCommandAliases(rulesCreateSubcommand),
+  add: getCommandAliases(rulesAddSubcommand),
   list: getCommandAliases(rulesListSubcommand),
-  update: getCommandAliases(rulesUpdateSubcommand),
-  delete: getCommandAliases(rulesDeleteSubcommand),
+  edit: getCommandAliases(rulesEditSubcommand),
+  remove: getCommandAliases(rulesRemoveSubcommand),
 };
 
 export default async function rules(client: Client) {
@@ -75,14 +75,14 @@ export default async function rules(client: Client) {
   }
 
   switch (subcommand) {
-    case 'create':
+    case 'add':
       if (needHelp) {
         telemetry.trackCliFlagHelp('ai-gateway rules', subcommandOriginal);
-        printHelp(rulesCreateSubcommand);
+        printHelp(rulesAddSubcommand);
         return 2;
       }
-      telemetry.trackCliSubcommandCreate(subcommandOriginal);
-      return create(client, args);
+      telemetry.trackCliSubcommandAdd(subcommandOriginal);
+      return add(client, args);
     case 'list':
       if (needHelp) {
         telemetry.trackCliFlagHelp('ai-gateway rules', subcommandOriginal);
@@ -91,21 +91,21 @@ export default async function rules(client: Client) {
       }
       telemetry.trackCliSubcommandList(subcommandOriginal);
       return list(client, args);
-    case 'update':
+    case 'edit':
       if (needHelp) {
         telemetry.trackCliFlagHelp('ai-gateway rules', subcommandOriginal);
-        printHelp(rulesUpdateSubcommand);
+        printHelp(rulesEditSubcommand);
         return 2;
       }
-      telemetry.trackCliSubcommandUpdate(subcommandOriginal);
-      return update(client, args);
-    case 'delete':
+      telemetry.trackCliSubcommandEdit(subcommandOriginal);
+      return edit(client, args);
+    case 'remove':
       if (needHelp) {
         telemetry.trackCliFlagHelp('ai-gateway rules', subcommandOriginal);
-        printHelp(rulesDeleteSubcommand);
+        printHelp(rulesRemoveSubcommand);
         return 2;
       }
-      telemetry.trackCliSubcommandDelete(subcommandOriginal);
+      telemetry.trackCliSubcommandRemove(subcommandOriginal);
       return remove(client, args);
     default:
       output.error(getInvalidSubcommand(COMMAND_CONFIG));

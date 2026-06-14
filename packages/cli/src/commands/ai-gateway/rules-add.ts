@@ -8,8 +8,8 @@ import {
 import { ensureTeam } from '../../util/ai-gateway/ensure-team';
 import stamp from '../../util/output/stamp';
 import output from '../../output-manager';
-import { AiGatewayRulesCreateTelemetryClient } from '../../util/telemetry/commands/ai-gateway/rules-create';
-import { rulesCreateSubcommand } from './command';
+import { AiGatewayRulesAddTelemetryClient } from '../../util/telemetry/commands/ai-gateway/rules-add';
+import { rulesAddSubcommand } from './command';
 import { parseArguments } from '../../util/get-args';
 import { getFlagsSpecification } from '../../util/get-flags-specification';
 import { printError } from '../../util/error';
@@ -18,17 +18,15 @@ import { validateJsonOutput } from '../../util/output-format';
 
 const RULE_TYPES: RuleType[] = ['rewrite', 'deny'];
 
-export default async function create(client: Client, argv: string[]) {
-  const telemetry = new AiGatewayRulesCreateTelemetryClient({
+export default async function add(client: Client, argv: string[]) {
+  const telemetry = new AiGatewayRulesAddTelemetryClient({
     opts: {
       store: client.telemetryEventStore,
     },
   });
 
   let parsedArgs;
-  const flagsSpecification = getFlagsSpecification(
-    rulesCreateSubcommand.options
-  );
+  const flagsSpecification = getFlagsSpecification(rulesAddSubcommand.options);
   try {
     parsedArgs = parseArguments(argv, flagsSpecification);
   } catch (error) {
@@ -38,14 +36,14 @@ export default async function create(client: Client, argv: string[]) {
   const { flags: opts } = parsedArgs;
 
   const type = opts['--type'] as string | undefined;
-  const model = opts['--model'] as string | undefined;
-  const rewriteModel = opts['--rewrite-model'] as string | undefined;
+  const source = opts['--source'] as string | undefined;
+  const destination = opts['--destination'] as string | undefined;
   const reason = opts['--reason'] as string | undefined;
   const description = opts['--description'] as string | undefined;
 
   telemetry.trackCliOptionType(type);
-  telemetry.trackCliOptionModel(model);
-  telemetry.trackCliOptionRewriteModel(rewriteModel);
+  telemetry.trackCliOptionSource(source);
+  telemetry.trackCliOptionDestination(destination);
   telemetry.trackCliOptionReason(reason);
   telemetry.trackCliOptionDescription(description);
   telemetry.trackCliOptionFormat(opts['--format']);
@@ -63,24 +61,24 @@ export default async function create(client: Client, argv: string[]) {
     );
     return 1;
   }
-  if (!model) {
-    output.error('The --model flag is required (the model the rule matches).');
+  if (!source) {
+    output.error('The --source flag is required (the model the rule matches).');
     return 1;
   }
-  if (type === 'rewrite' && !rewriteModel) {
+  if (type === 'rewrite' && !destination) {
     output.error(
-      'A rewrite rule requires --rewrite-model (the model to route to).'
+      'A rewrite rule requires --destination (the model to route to).'
     );
     return 1;
   }
-  if (type === 'deny' && rewriteModel) {
-    output.error('A deny rule cannot set --rewrite-model.');
+  if (type === 'deny' && destination) {
+    output.error('A deny rule cannot set --destination.');
     return 1;
   }
 
   let action: RuleAction | undefined;
-  if (type === 'rewrite' && rewriteModel) {
-    action = { rewriteModel, ...(reason ? { reason } : {}) };
+  if (type === 'rewrite' && destination) {
+    action = { rewriteModel: destination, ...(reason ? { reason } : {}) };
   } else if (reason) {
     action = { reason };
   }
@@ -89,13 +87,13 @@ export default async function create(client: Client, argv: string[]) {
     return 1;
   }
 
-  const createStamp = stamp();
-  output.spinner('Creating routing rule');
+  const addStamp = stamp();
+  output.spinner('Adding routing rule');
 
   try {
     const rule = await createRule(client, {
       type: type as RuleType,
-      match: { model },
+      match: { model: source },
       ...(action ? { action } : {}),
       ...(description ? { description } : {}),
     });
@@ -107,7 +105,7 @@ export default async function create(client: Client, argv: string[]) {
     } else {
       client.stdout.write(`${rule.ruleId}\n`);
       output.success(
-        `Routing rule ${chalk.bold(rule.ruleId)} created ${createStamp()}`
+        `Routing rule ${chalk.bold(rule.ruleId)} added ${addStamp()}`
       );
     }
 

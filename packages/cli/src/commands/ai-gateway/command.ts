@@ -62,10 +62,10 @@ export const apiKeysSubcommand = {
   examples: [],
 } as const;
 
-export const rulesCreateSubcommand = {
-  name: 'create',
+export const rulesAddSubcommand = {
+  name: 'add',
   aliases: [],
-  description: 'Create an AI Gateway routing rule',
+  description: 'Add an AI Gateway routing rule',
   arguments: [],
   options: [
     {
@@ -77,7 +77,7 @@ export const rulesCreateSubcommand = {
       description: 'Rule type: rewrite or deny',
     },
     {
-      name: 'model',
+      name: 'source',
       shorthand: null,
       type: String,
       argument: 'MODEL',
@@ -85,12 +85,12 @@ export const rulesCreateSubcommand = {
       description: 'Model the rule matches (e.g. anthropic/claude-sonnet-4.5)',
     },
     {
-      name: 'rewrite-model',
+      name: 'destination',
       shorthand: null,
       type: String,
       argument: 'MODEL',
       deprecated: false,
-      description: 'Target model for a rewrite rule',
+      description: 'Target model a rewrite rule routes to',
     },
     {
       name: 'reason',
@@ -113,11 +113,11 @@ export const rulesCreateSubcommand = {
   examples: [
     {
       name: 'Rewrite one model to another',
-      value: `${packageName} ai-gateway rules create --type rewrite --model anthropic/claude-fable-5 --rewrite-model anthropic/claude-opus-4.8`,
+      value: `${packageName} ai-gateway rules add --type rewrite --source anthropic/claude-fable-5 --destination anthropic/claude-opus-4.8`,
     },
     {
       name: 'Deny a model',
-      value: `${packageName} ai-gateway rules create --type deny --model openai/gpt-4o`,
+      value: `${packageName} ai-gateway rules add --type deny --source openai/gpt-4o`,
     },
   ],
 } as const;
@@ -145,10 +145,10 @@ export const rulesListSubcommand = {
   ],
 } as const;
 
-export const rulesUpdateSubcommand = {
-  name: 'update',
+export const rulesEditSubcommand = {
+  name: 'edit',
   aliases: [],
-  description: 'Update an AI Gateway routing rule',
+  description: 'Edit an AI Gateway routing rule',
   arguments: [{ name: 'ruleId', required: true }],
   options: [
     {
@@ -166,12 +166,12 @@ export const rulesUpdateSubcommand = {
       description: 'Disable the rule',
     },
     {
-      name: 'rewrite-model',
+      name: 'destination',
       shorthand: null,
       type: String,
       argument: 'MODEL',
       deprecated: false,
-      description: 'Target model for a rewrite rule',
+      description: 'Target model a rewrite rule routes to',
     },
     {
       name: 'reason',
@@ -194,20 +194,20 @@ export const rulesUpdateSubcommand = {
   examples: [
     {
       name: 'Disable a rule',
-      value: `${packageName} ai-gateway rules update rule_123 --disable`,
+      value: `${packageName} ai-gateway rules edit rule_123 --disable`,
     },
   ],
 } as const;
 
-export const rulesDeleteSubcommand = {
-  name: 'delete',
+export const rulesRemoveSubcommand = {
+  name: 'remove',
   aliases: ['rm'],
-  description: 'Delete an AI Gateway routing rule',
+  description: 'Remove an AI Gateway routing rule',
   arguments: [{ name: 'ruleId', required: true }],
   options: [yesOption, formatOption],
   examples: [
     {
-      name: 'Delete a rule',
+      name: 'Remove a rule',
       value: `${packageName} ai-gateway rules rm rule_123`,
     },
   ],
@@ -220,10 +220,10 @@ export const rulesSubcommand = {
     'Manage AI Gateway routing rules (Beta).\n\nAI Gateway routing rules are in beta and may change before general availability. Avoid relying on them in production.',
   arguments: [],
   subcommands: [
-    rulesCreateSubcommand,
+    rulesAddSubcommand,
     rulesListSubcommand,
-    rulesUpdateSubcommand,
-    rulesDeleteSubcommand,
+    rulesEditSubcommand,
+    rulesRemoveSubcommand,
   ],
   options: [],
   examples: [],

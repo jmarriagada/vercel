@@ -4,8 +4,8 @@ import { updateRule, type RuleAction } from '../../util/ai-gateway/rules';
 import { ensureTeam } from '../../util/ai-gateway/ensure-team';
 import stamp from '../../util/output/stamp';
 import output from '../../output-manager';
-import { AiGatewayRulesUpdateTelemetryClient } from '../../util/telemetry/commands/ai-gateway/rules-update';
-import { rulesUpdateSubcommand } from './command';
+import { AiGatewayRulesEditTelemetryClient } from '../../util/telemetry/commands/ai-gateway/rules-edit';
+import { rulesEditSubcommand } from './command';
 import { parseArguments } from '../../util/get-args';
 import { getFlagsSpecification } from '../../util/get-flags-specification';
 import { printError } from '../../util/error';
@@ -13,17 +13,15 @@ import { isAPIError } from '../../util/errors-ts';
 import { getCommandName } from '../../util/pkg-name';
 import { validateJsonOutput } from '../../util/output-format';
 
-export default async function update(client: Client, argv: string[]) {
-  const telemetry = new AiGatewayRulesUpdateTelemetryClient({
+export default async function edit(client: Client, argv: string[]) {
+  const telemetry = new AiGatewayRulesEditTelemetryClient({
     opts: {
       store: client.telemetryEventStore,
     },
   });
 
   let parsedArgs;
-  const flagsSpecification = getFlagsSpecification(
-    rulesUpdateSubcommand.options
-  );
+  const flagsSpecification = getFlagsSpecification(rulesEditSubcommand.options);
   try {
     parsedArgs = parseArguments(argv, flagsSpecification);
   } catch (error) {
@@ -35,14 +33,14 @@ export default async function update(client: Client, argv: string[]) {
   const [ruleId] = args;
   const enable = opts['--enable'] as boolean | undefined;
   const disable = opts['--disable'] as boolean | undefined;
-  const rewriteModel = opts['--rewrite-model'] as string | undefined;
+  const destination = opts['--destination'] as string | undefined;
   const reason = opts['--reason'] as string | undefined;
   const description = opts['--description'] as string | undefined;
 
   telemetry.trackCliArgumentRuleId(ruleId);
   telemetry.trackCliFlagEnable(enable);
   telemetry.trackCliFlagDisable(disable);
-  telemetry.trackCliOptionRewriteModel(rewriteModel);
+  telemetry.trackCliOptionDestination(destination);
   telemetry.trackCliOptionReason(reason);
   telemetry.trackCliOptionDescription(description);
   telemetry.trackCliOptionFormat(opts['--format']);
@@ -56,7 +54,7 @@ export default async function update(client: Client, argv: string[]) {
 
   if (!ruleId) {
     output.error(
-      `${getCommandName('ai-gateway rules update <ruleId>')} expects a rule id.`
+      `${getCommandName('ai-gateway rules edit <ruleId>')} expects a rule id.`
     );
     return 1;
   }
@@ -66,9 +64,9 @@ export default async function update(client: Client, argv: string[]) {
   }
 
   const action: RuleAction | undefined =
-    rewriteModel || reason
+    destination || reason
       ? {
-          ...(rewriteModel ? { rewriteModel } : {}),
+          ...(destination ? { rewriteModel: destination } : {}),
           ...(reason ? { reason } : {}),
         }
       : undefined;
@@ -76,7 +74,7 @@ export default async function update(client: Client, argv: string[]) {
 
   if (enabled === undefined && description === undefined && !action) {
     output.error(
-      'Nothing to update. Pass --enable/--disable, --rewrite-model, --reason, or --description.'
+      'Nothing to edit. Pass --enable/--disable, --destination, --reason, or --description.'
     );
     return 1;
   }
@@ -85,8 +83,8 @@ export default async function update(client: Client, argv: string[]) {
     return 1;
   }
 
-  const updateStamp = stamp();
-  output.spinner('Updating routing rule');
+  const editStamp = stamp();
+  output.spinner('Editing routing rule');
 
   try {
     const rule = await updateRule(client, {
@@ -102,7 +100,7 @@ export default async function update(client: Client, argv: string[]) {
       client.stdout.write(`${JSON.stringify(rule, null, 2)}\n`);
     } else {
       output.success(
-        `Routing rule ${chalk.bold(rule.ruleId)} updated ${updateStamp()}`
+        `Routing rule ${chalk.bold(rule.ruleId)} edited ${editStamp()}`
       );
     }
 

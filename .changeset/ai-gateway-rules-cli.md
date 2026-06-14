@@ -2,4 +2,4 @@
 'vercel': minor
 ---
 
-[cli] Add `vercel ai-gateway rules` create/list/update/delete commands
+[cli] Add `vercel ai-gateway rules` add/list/edit/remove commands

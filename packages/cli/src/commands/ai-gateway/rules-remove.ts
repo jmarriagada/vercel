@@ -4,8 +4,8 @@ import { deleteRule } from '../../util/ai-gateway/rules';
 import { ensureTeam } from '../../util/ai-gateway/ensure-team';
 import stamp from '../../util/output/stamp';
 import output from '../../output-manager';
-import { AiGatewayRulesDeleteTelemetryClient } from '../../util/telemetry/commands/ai-gateway/rules-delete';
-import { rulesDeleteSubcommand } from './command';
+import { AiGatewayRulesRemoveTelemetryClient } from '../../util/telemetry/commands/ai-gateway/rules-remove';
+import { rulesRemoveSubcommand } from './command';
 import { parseArguments } from '../../util/get-args';
 import { getFlagsSpecification } from '../../util/get-flags-specification';
 import { printError } from '../../util/error';
@@ -14,7 +14,7 @@ import { getCommandName } from '../../util/pkg-name';
 import { validateJsonOutput } from '../../util/output-format';
 
 export default async function remove(client: Client, argv: string[]) {
-  const telemetry = new AiGatewayRulesDeleteTelemetryClient({
+  const telemetry = new AiGatewayRulesRemoveTelemetryClient({
     opts: {
       store: client.telemetryEventStore,
     },
@@ -22,7 +22,7 @@ export default async function remove(client: Client, argv: string[]) {
 
   let parsedArgs;
   const flagsSpecification = getFlagsSpecification(
-    rulesDeleteSubcommand.options
+    rulesRemoveSubcommand.options
   );
   try {
     parsedArgs = parseArguments(argv, flagsSpecification);
@@ -59,11 +59,11 @@ export default async function remove(client: Client, argv: string[]) {
 
   if (!yes) {
     if (!client.stdin.isTTY) {
-      output.error('To delete in non-interactive mode, re-run with --yes.');
+      output.error('To remove in non-interactive mode, re-run with --yes.');
       return 1;
     }
     const confirmed = await client.input.confirm(
-      `Delete routing rule ${chalk.bold(ruleId)}?`,
+      `Remove routing rule ${chalk.bold(ruleId)}?`,
       false
     );
     if (!confirmed) {
@@ -72,19 +72,19 @@ export default async function remove(client: Client, argv: string[]) {
     }
   }
 
-  const deleteStamp = stamp();
-  output.spinner('Deleting routing rule');
+  const removeStamp = stamp();
+  output.spinner('Removing routing rule');
 
   try {
     await deleteRule(client, ruleId);
     output.stopSpinner();
     if (asJson) {
       client.stdout.write(
-        `${JSON.stringify({ ruleId, deleted: true }, null, 2)}\n`
+        `${JSON.stringify({ ruleId, removed: true }, null, 2)}\n`
       );
     } else {
       output.success(
-        `Routing rule ${chalk.bold(ruleId)} deleted ${deleteStamp()}`
+        `Routing rule ${chalk.bold(ruleId)} removed ${removeStamp()}`
       );
     }
     return 0;

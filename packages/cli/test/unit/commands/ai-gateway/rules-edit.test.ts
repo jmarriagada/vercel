@@ -32,16 +32,16 @@ function useUpdateNotFound() {
   });
 }
 
-describe('ai-gateway rules update', () => {
+describe('ai-gateway rules edit', () => {
   describe('--help', () => {
     it('returns exit code 2', async () => {
-      client.setArgv('ai-gateway', 'rules', 'update', '--help');
+      client.setArgv('ai-gateway', 'rules', 'edit', '--help');
       const exitCode = await aiGateway(client);
       expect(exitCode).toBe(2);
 
       expect(client.telemetryEventStore).toHaveTelemetryEvents([
         { key: 'subcommand:rules', value: 'rules' },
-        { key: 'flag:help', value: 'ai-gateway rules:update' },
+        { key: 'flag:help', value: 'ai-gateway rules:edit' },
       ]);
     });
   });
@@ -51,18 +51,18 @@ describe('ai-gateway rules update', () => {
     useUser();
     const getBody = useUpdateRule();
     client.config.currentTeam = team.id;
-    client.setArgv('ai-gateway', 'rules', 'update', 'rule_1', '--disable');
+    client.setArgv('ai-gateway', 'rules', 'edit', 'rule_1', '--disable');
 
     const exitCodePromise = aiGateway(client);
 
-    await expect(client.stderr).toOutput('updated');
+    await expect(client.stderr).toOutput('edited');
     expect(await exitCodePromise).toBe(0);
     expect(getBody()).toMatchObject({ ruleId: 'rule_1', enabled: false });
   });
 
   it('requires a rule id', async () => {
     useUser();
-    client.setArgv('ai-gateway', 'rules', 'update', '--disable');
+    client.setArgv('ai-gateway', 'rules', 'edit', '--disable');
     const exitCodePromise = aiGateway(client);
     await expect(client.stderr).toOutput('expects a rule id');
     expect(await exitCodePromise).toBe(1);
@@ -73,7 +73,7 @@ describe('ai-gateway rules update', () => {
     client.setArgv(
       'ai-gateway',
       'rules',
-      'update',
+      'edit',
       'rule_1',
       '--enable',
       '--disable'
@@ -83,11 +83,11 @@ describe('ai-gateway rules update', () => {
     expect(await exitCodePromise).toBe(1);
   });
 
-  it('requires at least one field to update', async () => {
+  it('requires at least one field to edit', async () => {
     useUser();
-    client.setArgv('ai-gateway', 'rules', 'update', 'rule_1');
+    client.setArgv('ai-gateway', 'rules', 'edit', 'rule_1');
     const exitCodePromise = aiGateway(client);
-    await expect(client.stderr).toOutput('Nothing to update');
+    await expect(client.stderr).toOutput('Nothing to edit');
     expect(await exitCodePromise).toBe(1);
   });
 
@@ -96,7 +96,7 @@ describe('ai-gateway rules update', () => {
     useUser();
     useUpdateNotFound();
     client.config.currentTeam = team.id;
-    client.setArgv('ai-gateway', 'rules', 'update', 'missing', '--disable');
+    client.setArgv('ai-gateway', 'rules', 'edit', 'missing', '--disable');
 
     const exitCodePromise = aiGateway(client);
 
@@ -112,7 +112,7 @@ describe('ai-gateway rules update', () => {
     client.setArgv(
       'ai-gateway',
       'rules',
-      'update',
+      'edit',
       'rule_1',
       '--disable',
       '--format',
@@ -125,7 +125,7 @@ describe('ai-gateway rules update', () => {
     expect(await exitCodePromise).toBe(0);
   });
 
-  it('updates the rewrite target and description', async () => {
+  it('edits the rewrite target and description', async () => {
     const team = useTeam();
     useUser();
     const getBody = useUpdateRule();
@@ -133,9 +133,9 @@ describe('ai-gateway rules update', () => {
     client.setArgv(
       'ai-gateway',
       'rules',
-      'update',
+      'edit',
       'rule_1',
-      '--rewrite-model',
+      '--destination',
       'anthropic/claude-opus-4.8',
       '--description',
       'route legacy model'
@@ -143,7 +143,7 @@ describe('ai-gateway rules update', () => {
 
     const exitCodePromise = aiGateway(client);
 
-    await expect(client.stderr).toOutput('updated');
+    await expect(client.stderr).toOutput('edited');
     expect(await exitCodePromise).toBe(0);
     expect(getBody()).toMatchObject({
       ruleId: 'rule_1',

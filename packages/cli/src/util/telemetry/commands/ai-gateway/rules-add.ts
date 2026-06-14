@@ -1,33 +1,27 @@
 import { TelemetryClient } from '../..';
 import type { TelemetryMethods } from '../../types';
-import type { rulesUpdateSubcommand } from '../../../../commands/ai-gateway/command';
+import type { rulesAddSubcommand } from '../../../../commands/ai-gateway/command';
 
-export class AiGatewayRulesUpdateTelemetryClient
+export class AiGatewayRulesAddTelemetryClient
   extends TelemetryClient
-  implements TelemetryMethods<typeof rulesUpdateSubcommand>
+  implements TelemetryMethods<typeof rulesAddSubcommand>
 {
-  trackCliArgumentRuleId(ruleId: string | undefined) {
-    if (ruleId) {
-      this.trackCliArgument({ arg: 'ruleId', value: this.redactedValue });
+  trackCliOptionType(type: string | undefined) {
+    if (type) {
+      this.trackCliOption({ option: 'type', value: type });
     }
   }
 
-  trackCliFlagEnable(enable: boolean | undefined) {
-    if (enable) {
-      this.trackCliFlag('enable');
+  trackCliOptionSource(source: string | undefined) {
+    if (source) {
+      this.trackCliOption({ option: 'source', value: this.redactedValue });
     }
   }
 
-  trackCliFlagDisable(disable: boolean | undefined) {
-    if (disable) {
-      this.trackCliFlag('disable');
-    }
-  }
-
-  trackCliOptionRewriteModel(rewriteModel: string | undefined) {
-    if (rewriteModel) {
+  trackCliOptionDestination(destination: string | undefined) {
+    if (destination) {
       this.trackCliOption({
-        option: 'rewrite-model',
+        option: 'destination',
         value: this.redactedValue,
       });
     }

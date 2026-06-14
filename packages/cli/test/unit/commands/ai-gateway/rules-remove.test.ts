@@ -21,21 +21,21 @@ function useDeleteNotFound() {
   });
 }
 
-describe('ai-gateway rules delete', () => {
+describe('ai-gateway rules remove', () => {
   describe('--help', () => {
     it('returns exit code 2', async () => {
-      client.setArgv('ai-gateway', 'rules', 'delete', '--help');
+      client.setArgv('ai-gateway', 'rules', 'remove', '--help');
       const exitCode = await aiGateway(client);
       expect(exitCode).toBe(2);
 
       expect(client.telemetryEventStore).toHaveTelemetryEvents([
         { key: 'subcommand:rules', value: 'rules' },
-        { key: 'flag:help', value: 'ai-gateway rules:delete' },
+        { key: 'flag:help', value: 'ai-gateway rules:remove' },
       ]);
     });
   });
 
-  it('deletes a rule with --yes', async () => {
+  it('removes a rule with --yes', async () => {
     const team = useTeam();
     useUser();
     const getQuery = useDeleteRule();
@@ -44,7 +44,7 @@ describe('ai-gateway rules delete', () => {
 
     const exitCodePromise = aiGateway(client);
 
-    await expect(client.stderr).toOutput('deleted');
+    await expect(client.stderr).toOutput('removed');
     expect(await exitCodePromise).toBe(0);
     expect(getQuery()).toMatchObject({ ruleId: 'rule_1' });
   });
@@ -66,7 +66,7 @@ describe('ai-gateway rules delete', () => {
 
     const exitCodePromise = aiGateway(client);
 
-    await expect(client.stdout).toOutput('"deleted": true');
+    await expect(client.stdout).toOutput('"removed": true');
     expect(await exitCodePromise).toBe(0);
   });
 
@@ -104,7 +104,7 @@ describe('ai-gateway rules delete', () => {
     expect(await exitCodePromise).toBe(1);
   });
 
-  it('deletes after interactive confirmation', async () => {
+  it('removes after interactive confirmation', async () => {
     const team = useTeam();
     useUser();
     useDeleteRule();
@@ -113,10 +113,10 @@ describe('ai-gateway rules delete', () => {
 
     const exitCodePromise = aiGateway(client);
 
-    await expect(client.stderr).toOutput('Delete routing rule');
+    await expect(client.stderr).toOutput('Remove routing rule');
     client.stdin.write('y\n');
 
-    await expect(client.stderr).toOutput('deleted');
+    await expect(client.stderr).toOutput('removed');
     expect(await exitCodePromise).toBe(0);
   });
 
@@ -129,7 +129,7 @@ describe('ai-gateway rules delete', () => {
 
     const exitCodePromise = aiGateway(client);
 
-    await expect(client.stderr).toOutput('Delete routing rule');
+    await expect(client.stderr).toOutput('Remove routing rule');
     client.stdin.write('n\n');
 
     await expect(client.stderr).toOutput('Canceled');

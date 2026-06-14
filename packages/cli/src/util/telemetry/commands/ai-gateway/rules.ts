@@ -6,19 +6,19 @@ export class AiGatewayRulesTelemetryClient
   extends TelemetryClient
   implements TelemetryMethods<typeof rulesSubcommand>
 {
-  trackCliSubcommandCreate(actual: string) {
-    this.trackCliSubcommand({ subcommand: 'create', value: actual });
+  trackCliSubcommandAdd(actual: string) {
+    this.trackCliSubcommand({ subcommand: 'add', value: actual });
   }
 
   trackCliSubcommandList(actual: string) {
     this.trackCliSubcommand({ subcommand: 'list', value: actual });
   }
 
-  trackCliSubcommandUpdate(actual: string) {
-    this.trackCliSubcommand({ subcommand: 'update', value: actual });
+  trackCliSubcommandEdit(actual: string) {
+    this.trackCliSubcommand({ subcommand: 'edit', value: actual });
   }
 
-  trackCliSubcommandDelete(actual: string) {
-    this.trackCliSubcommand({ subcommand: 'delete', value: actual });
+  trackCliSubcommandRemove(actual: string) {
+    this.trackCliSubcommand({ subcommand: 'remove', value: actual });
   }
 }
