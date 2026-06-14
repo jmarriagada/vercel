@@ -2297,6 +2297,7 @@ describe('pyproject subscribers', () => {
     expect(output.index.environment.VERCEL_HAS_WORKER_SERVICES).toBe('1');
 
     const celery = output[celeryPath];
+    expect(celery.handler).toBe('vc__handler__python.vc_handler');
     expect(celery.environment.VERCEL_SERVICE_TYPE).toBe('worker');
     expect(celery.experimentalTriggers).toEqual([
       {
@@ -2319,7 +2320,7 @@ describe('pyproject subscribers', () => {
       },
     ]);
 
-    const handler = celery.files?.['vc__handler__python_celery_worker.py'];
+    const handler = celery.files?.['vc__handler__python.py'];
     if (!handler || !('data' in handler)) {
       throw new Error('subscriber handler bootstrap not found');
     }

@@ -1147,9 +1147,6 @@ export const build: BuildVX = async ({
   for (const subscriber of subscribers) {
     const safeName = safePathSegment(subscriber.name);
     const outputPath = `_py_subscribers/${safeName}`;
-    // Python module names cannot contain hyphens, so normalize them for the
-    // generated handler module that the Lambda imports.
-    const handlerFilename = `vc__handler__python_${safeName.replace(/-/g, '_')}`;
     const consumer = sanitizeConsumerName(outputPath);
     const experimentalTriggers: TriggerEvent[] = subscriber.topics.map(
       topic => ({
@@ -1163,7 +1160,7 @@ export const build: BuildVX = async ({
     subscriberLambdas[outputPath] = new Lambda({
       files: {
         ...files,
-        [`${handlerFilename}.py`]: new FileBlob({
+        [`${handlerPyFilename}.py`]: new FileBlob({
           data: createRuntimeTrampoline({
             moduleName: subscriber.moduleName,
             entrypoint: subscriber.entrypoint,
@@ -1172,7 +1169,7 @@ export const build: BuildVX = async ({
           }),
         }),
       },
-      handler: `${handlerFilename}.vc_handler`,
+      handler: `${handlerPyFilename}.vc_handler`,
       runtime: pythonVersion.runtime,
       architecture: target.architecture,
       environment: {
