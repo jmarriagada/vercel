@@ -10,8 +10,26 @@ import chalk from 'chalk';
 import output from '../../output-manager';
 import { buildConditionValue } from './parse-conditions';
 import { REDIRECT_STATUS_CODES } from './interactive';
-import type { AddRouteInput, HasField, Transform, RoutingRule } from './types';
+import type {
+  AddRouteInput,
+  HasField,
+  TargetTransform,
+  Transform,
+  RoutingRule,
+} from './types';
+import { isTargetTransform } from './types';
 import type { GeneratedRoute, CurrentRouteInput } from './generate-route';
+
+function isTargetTransformType<T extends TargetTransform['type']>(
+  transform: Transform,
+  type: T
+): transform is TargetTransform & { type: T } {
+  return transform.type === type && isTargetTransform(transform);
+}
+
+function stringifyTransformArgs(args: string | string[] | undefined): string {
+  return Array.isArray(args) ? args.join(', ') : (args ?? '');
+}
 
 /**
  * Converts an AI-generated route to the CLI's AddRouteInput format.
@@ -217,19 +235,14 @@ export function routingRuleToCurrentRoute(
     : [];
 
   // Convert transforms
-  const allTransforms = (rule.route.transforms ?? []) as Array<{
-    type: string;
-    op: string;
-    target: { key: string };
-    args?: string;
-  }>;
+  const allTransforms = (rule.route.transforms ?? []) as Transform[];
 
   const responseHeaderTransforms = allTransforms
-    .filter(t => t.type === 'response.headers')
+    .filter(t => isTargetTransformType(t, 'response.headers'))
     .map(t => ({
       key:
         typeof t.target.key === 'string' ? t.target.key : String(t.target.key),
-      value: t.args,
+      value: stringifyTransformArgs(t.args),
       op: t.op,
     }));
 
@@ -243,11 +256,11 @@ export function routingRuleToCurrentRoute(
   }
 
   const requestHeaders = allTransforms
-    .filter(t => t.type === 'request.headers')
+    .filter(t => isTargetTransformType(t, 'request.headers'))
     .map(t => ({
       key:
         typeof t.target.key === 'string' ? t.target.key : String(t.target.key),
-      value: t.args,
+      value: stringifyTransformArgs(t.args),
       op: t.op,
     }));
 
@@ -260,11 +273,11 @@ export function routingRuleToCurrentRoute(
   }
 
   const requestQuery = allTransforms
-    .filter(t => t.type === 'request.query')
+    .filter(t => isTargetTransformType(t, 'request.query'))
     .map(t => ({
       key:
         typeof t.target.key === 'string' ? t.target.key : String(t.target.key),
-      value: t.args,
+      value: stringifyTransformArgs(t.args),
       op: t.op,
     }));
 
