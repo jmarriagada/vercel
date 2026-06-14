@@ -27,8 +27,10 @@ function isTargetTransformType<T extends TargetTransform['type']>(
   return transform.type === type && isTargetTransform(transform);
 }
 
-function stringifyTransformArgs(args: string | string[] | undefined): string {
-  return Array.isArray(args) ? args.join(', ') : (args ?? '');
+function stringifyTransformArgs(
+  args: string | string[] | undefined
+): string | undefined {
+  return Array.isArray(args) ? args.join(', ') : args;
 }
 
 /**

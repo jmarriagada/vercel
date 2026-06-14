@@ -259,10 +259,10 @@ export interface TransformTarget {
 }
 
 /**
- * Transform defines a single transformation operation on request or response data.
+ * A transform that targets a specific request/response header or query key.
  * Supports environment variables (e.g., $BEARER_TOKEN) and path parameters (e.g., $userId).
  */
-export interface Transform {
+export interface TargetTransform {
   /** The scope of what the transform will apply to */
   type: TransformType;
   /** The operation to perform */
@@ -274,6 +274,40 @@ export interface Transform {
   /** List of environment variable names that are used in args (without the $ prefix) */
   env?: string[];
 }
+
+/**
+ * A transform that overrides the request path observed by the target runtime
+ * (its `req.url`), independent of how the route was selected.
+ *
+ * Unlike header/query transforms there is no `target`/key: the path is a single
+ * scalar value and only the `set` operation is supported. The value must be an
+ * origin-form path (a leading `/`, no query string or fragment) and may include
+ * path parameters (e.g. `/$path`) and environment variables (e.g. `/$LOCALE`).
+ *
+ * @example
+ * {
+ *   type: 'request.path',
+ *   op: 'set',
+ *   args: '/$path'
+ * }
+ */
+export interface RequestPathTransform {
+  /** Discriminator. Always `request.path`. */
+  type: 'request.path';
+  /** Only `set` is supported for request path transforms. */
+  op: 'set';
+  /** The runtime-visible request path. Must be an origin-form path (leading `/`, no query or fragment). */
+  args: string;
+  /** List of environment variable names that are used in args (without the $ prefix) */
+  env?: string[];
+}
+
+/**
+ * Transform defines a single transformation operation on request or response data.
+ * It is either a header/query {@link TargetTransform} or a path-rewriting
+ * {@link RequestPathTransform}.
+ */
+export type Transform = TargetTransform | RequestPathTransform;
 
 /**
  * Route defines a routing rule with transforms.
@@ -1048,6 +1082,14 @@ export class Router {
    *          args: 'Bearer $BEARER_TOKEN'
    *        }
    *      ]
+   *    });
+   *
+   * @example
+   *    // Override the request path the target runtime observes
+   *    router.route({
+   *      src: '/api/:path*',
+   *      dest: '/internal/$path',
+   *      transforms: [{ type: 'request.path', op: 'set', args: '/$path' }],
    *    });
    */
   public route(config: Route): this {

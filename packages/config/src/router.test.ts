@@ -577,6 +577,39 @@ describe('Router', () => {
 
       expect(route.transforms[0].env).toEqual(['REGION', 'DATACENTER']);
     });
+
+    it('should support request.path transforms', () => {
+      router.route({
+        src: '/api/:path*',
+        dest: '/internal/$path',
+        transforms: [{ type: 'request.path', op: 'set', args: '/$path' }],
+      });
+
+      const config = router.getConfig();
+      expect(config.routes).toContainEqual({
+        src: '/api/:path*',
+        dest: '/internal/$path',
+        transforms: [{ type: 'request.path', op: 'set', args: '/$path' }],
+      });
+    });
+
+    it('should auto-extract env vars from request.path transform args', () => {
+      const route = {
+        src: '/api/:path*',
+        transforms: [
+          {
+            type: 'request.path' as const,
+            op: 'set' as const,
+            args: '/$LOCALE/$path',
+          },
+        ],
+      };
+
+      router.route(route);
+
+      // LOCALE is an env var; the `path` path param is excluded.
+      expect(route.transforms[0].env).toEqual(['LOCALE']);
+    });
   });
 
   describe('route alias validation', () => {
