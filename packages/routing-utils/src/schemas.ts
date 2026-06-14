@@ -177,12 +177,17 @@ const transformsSchema = {
   items: {
     type: 'object',
     additionalProperties: false,
-    required: ['type', 'op', 'target'],
+    required: ['type', 'op'],
     properties: {
       type: {
         description: 'The scope of the transform to apply',
         type: 'string',
-        enum: ['request.headers', 'request.query', 'response.headers'],
+        enum: [
+          'request.headers',
+          'request.query',
+          'response.headers',
+          'request.path',
+        ],
       },
       op: {
         description: 'The operation to perform on the target',
@@ -370,6 +375,49 @@ const transformsSchema = {
                   },
                 },
               ],
+            },
+          },
+        },
+      },
+      {
+        if: {
+          required: ['type'],
+          properties: {
+            type: {
+              enum: ['request.headers', 'request.query', 'response.headers'],
+            },
+          },
+        },
+        // biome-ignore lint/suspicious/noThenProperty: JSON Schema if/then keyword
+        then: {
+          required: ['target'],
+        },
+      },
+      {
+        if: {
+          required: ['type'],
+          properties: {
+            type: {
+              enum: ['request.path'],
+            },
+          },
+        },
+        // biome-ignore lint/suspicious/noThenProperty: JSON Schema if/then keyword
+        then: {
+          required: ['args'],
+          not: {
+            required: ['target'],
+          },
+          properties: {
+            op: {
+              enum: ['set'],
+            },
+            args: {
+              description:
+                'The runtime-visible request path. Must be an origin-form path without query or fragment.',
+              type: 'string',
+              maxLength: 2048,
+              pattern: '^/(?!/)(?!.*[?#\\s\\x00-\\x1F\\x7F]).*$',
             },
           },
         },

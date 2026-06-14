@@ -2038,6 +2038,126 @@ describe('getTransformedRoutes', () => {
     assertValid(routes, routesSchema);
   });
 
+  test('should validate request path transforms', () => {
+    const routes: Route[] = [
+      {
+        src: '^/api/v1/(.*)$',
+        dest: '/api/$1',
+        transforms: [
+          {
+            type: 'request.path',
+            op: 'set',
+            args: '/$1',
+          },
+          {
+            type: 'request.path',
+            op: 'set',
+            args: '/$runtimePath',
+            env: ['runtimePath'],
+          },
+        ],
+      },
+    ];
+
+    assertValid(routes, routesSchema);
+  });
+
+  test('should reject invalid request path transforms', () => {
+    const invalidRoutes: unknown[] = [
+      {
+        src: '^/api/(.*)$',
+        transforms: [
+          {
+            type: 'request.path',
+            op: 'append',
+            args: '/users',
+          },
+        ],
+      },
+      {
+        src: '^/api/(.*)$',
+        transforms: [
+          {
+            type: 'request.path',
+            op: 'set',
+            args: ['/users'],
+          },
+        ],
+      },
+      {
+        src: '^/api/(.*)$',
+        transforms: [
+          {
+            type: 'request.path',
+            op: 'set',
+            args: 'users',
+          },
+        ],
+      },
+      {
+        src: '^/api/(.*)$',
+        transforms: [
+          {
+            type: 'request.path',
+            op: 'set',
+            args: '//users',
+          },
+        ],
+      },
+      {
+        src: '^/api/(.*)$',
+        transforms: [
+          {
+            type: 'request.path',
+            op: 'set',
+            args: '/users?debug=1',
+          },
+        ],
+      },
+      {
+        src: '^/api/(.*)$',
+        transforms: [
+          {
+            type: 'request.path',
+            op: 'set',
+            args: '/users#profile',
+          },
+        ],
+      },
+      {
+        src: '^/api/(.*)$',
+        transforms: [
+          {
+            type: 'request.path',
+            op: 'set',
+            args: '/user path',
+          },
+        ],
+      },
+      {
+        src: '^/api/(.*)$',
+        transforms: [
+          {
+            type: 'request.path',
+            op: 'set',
+            args: '/users',
+            target: {
+              key: 'path',
+            },
+          },
+        ],
+      },
+    ];
+
+    for (const route of invalidRoutes) {
+      const validate = ajv.compile(routesSchema);
+      const valid = validate([route]);
+
+      if (valid) console.log(route);
+      assert.equal(valid, false);
+    }
+  });
+
   test('should fail validation for transforms with regex property', () => {
     const routes: Route[] = [
       {
@@ -2469,9 +2589,17 @@ describe('getTransformedRoutes', () => {
       {
         dataPath: '[0].transforms[0]',
         keyword: 'required',
-        message: "should have required property 'target'",
-        params: { missingProperty: 'target' },
-        schemaPath: '#/items/anyOf/0/properties/transforms/items/required',
+        message: "should have required property '.target'",
+        params: { missingProperty: '.target' },
+        schemaPath:
+          '#/items/anyOf/0/properties/transforms/items/allOf/2/then/required',
+      },
+      {
+        dataPath: '[0].transforms[0]',
+        keyword: 'if',
+        message: 'should match "then" schema',
+        params: { failingKeyword: 'then' },
+        schemaPath: '#/items/anyOf/0/properties/transforms/items/allOf/2/if',
       },
       {
         dataPath: '[0]',
@@ -2560,6 +2688,7 @@ describe('getTransformedRoutes', () => {
             'request.headers',
             'request.query',
             'response.headers',
+            'request.path',
           ],
         },
         schemaPath:
