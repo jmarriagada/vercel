@@ -2251,7 +2251,7 @@ describe('pyproject subscribers', () => {
     }
   });
 
-  it('emits one queue/v2beta worker lambda per subscriber topic', async () => {
+  it('emits one queue/v2beta worker lambda per subscriber with all topics attached', async () => {
     const files = {
       'app.py': new FileBlob({
         data: 'def app(environ, start_response): pass\n',
@@ -2287,12 +2287,13 @@ describe('pyproject subscribers', () => {
     });
 
     const output = getBuildOutputV2(result).output as any;
-    const celeryPath = '_py_subscribers/celery-worker/celery';
-    const emailsPath = '_py_subscribers/celery-worker/emails';
+    const celeryPath = '_py_subscribers/celery-worker';
+    const consumer = sanitizeConsumerName(celeryPath);
 
     expect(output.index).toBeDefined();
     expect(output[celeryPath]).toBeDefined();
-    expect(output[emailsPath]).toBeDefined();
+    expect(output['_py_subscribers/celery-worker/celery']).toBeUndefined();
+    expect(output['_py_subscribers/celery-worker/emails']).toBeUndefined();
     expect(output.index.environment.VERCEL_HAS_WORKER_SERVICES).toBe('1');
 
     const celery = output[celeryPath];
@@ -2301,7 +2302,16 @@ describe('pyproject subscribers', () => {
       {
         type: 'queue/v2beta',
         topic: 'celery',
-        consumer: sanitizeConsumerName(celeryPath),
+        consumer,
+        maxDeliveries: 3,
+        retryAfterSeconds: 10,
+        initialDelaySeconds: 0,
+        maxConcurrency: 5,
+      },
+      {
+        type: 'queue/v2beta',
+        topic: 'emails',
+        consumer,
         maxDeliveries: 3,
         retryAfterSeconds: 10,
         initialDelaySeconds: 0,
@@ -2309,8 +2319,7 @@ describe('pyproject subscribers', () => {
       },
     ]);
 
-    const handler =
-      celery.files?.['vc__handler__python_celery_worker_celery.py'];
+    const handler = celery.files?.['vc__handler__python_celery_worker.py'];
     if (!handler || !('data' in handler)) {
       throw new Error('subscriber handler bootstrap not found');
     }

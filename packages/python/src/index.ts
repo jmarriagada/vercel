@@ -1145,44 +1145,44 @@ export const build: BuildVX = async ({
   const subscriberLambdas: Record<string, Lambda> = {};
 
   for (const subscriber of subscribers) {
-    for (const topic of subscriber.topics) {
-      const safeName = safePathSegment(subscriber.name);
-      const safeTopic = safePathSegment(topic);
-      const outputPath = `_py_subscribers/${safeName}/${safeTopic}`;
-      // Python module names cannot contain hyphens, so normalize them for the
-      // generated handler module that the Lambda imports.
-      const handlerFilename = `vc__handler__python_${`${safeName}_${safeTopic}`.replace(/-/g, '_')}`;
-      const trigger: TriggerEvent = {
+    const safeName = safePathSegment(subscriber.name);
+    const outputPath = `_py_subscribers/${safeName}`;
+    // Python module names cannot contain hyphens, so normalize them for the
+    // generated handler module that the Lambda imports.
+    const handlerFilename = `vc__handler__python_${safeName.replace(/-/g, '_')}`;
+    const consumer = sanitizeConsumerName(outputPath);
+    const experimentalTriggers: TriggerEvent[] = subscriber.topics.map(
+      topic => ({
         type: 'queue/v2beta',
         topic,
-        consumer: sanitizeConsumerName(outputPath),
+        consumer,
         ...subscriber.triggerDefaults,
-      };
+      })
+    );
 
-      subscriberLambdas[outputPath] = new Lambda({
-        files: {
-          ...files,
-          [`${handlerFilename}.py`]: new FileBlob({
-            data: createRuntimeTrampoline({
-              moduleName: subscriber.moduleName,
-              entrypoint: subscriber.entrypoint,
-              vendorDir,
-              variableName: subscriber.variableName,
-            }),
+    subscriberLambdas[outputPath] = new Lambda({
+      files: {
+        ...files,
+        [`${handlerFilename}.py`]: new FileBlob({
+          data: createRuntimeTrampoline({
+            moduleName: subscriber.moduleName,
+            entrypoint: subscriber.entrypoint,
+            vendorDir,
+            variableName: subscriber.variableName,
           }),
-        },
-        handler: `${handlerFilename}.vc_handler`,
-        runtime: pythonVersion.runtime,
-        architecture: target.architecture,
-        environment: {
-          ...lambdaEnv,
-          VERCEL_HAS_WORKER_SERVICES: '1',
-          VERCEL_SERVICE_TYPE: 'worker',
-        },
-        experimentalTriggers: [trigger],
-        supportsResponseStreaming: true,
-      });
-    }
+        }),
+      },
+      handler: `${handlerFilename}.vc_handler`,
+      runtime: pythonVersion.runtime,
+      architecture: target.architecture,
+      environment: {
+        ...lambdaEnv,
+        VERCEL_HAS_WORKER_SERVICES: '1',
+        VERCEL_SERVICE_TYPE: 'worker',
+      },
+      experimentalTriggers,
+      supportsResponseStreaming: true,
+    });
   }
 
   // Write project manifest for diagnostics (best-effort, never fails the build).
