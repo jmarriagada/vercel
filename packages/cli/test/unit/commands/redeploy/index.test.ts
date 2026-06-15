@@ -156,7 +156,7 @@ describe('redeploy', () => {
 
     const exitCodePromise = redeploy(client);
     await expect(client.stderr).toOutput(
-      'Aliased     https://my-app.vercel.app'
+      'Aliased         https://my-app.vercel.app'
     );
 
     const exitCode = await exitCodePromise;
@@ -174,7 +174,7 @@ describe('redeploy', () => {
     client.setArgv('redeploy', fromDeployment.id);
 
     const exitCodePromise = redeploy(client);
-    await expect(client.stderr).toOutput('Production  https');
+    await expect(client.stderr).toOutput('Production      https');
 
     // let the status poller observe the alias assignment
     toDeployment.readyState = 'READY';
@@ -182,7 +182,7 @@ describe('redeploy', () => {
     toDeployment.alias = ['my-app.vercel.app'];
 
     await expect(client.stderr).toOutput(
-      'Aliased     https://my-app.vercel.app'
+      'Aliased         https://my-app.vercel.app'
     );
 
     const exitCode = await exitCodePromise;
