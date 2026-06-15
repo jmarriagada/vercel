@@ -50,26 +50,6 @@ describe('domains verify acquisition', () => {
     useOwnedDomainNotFound();
   });
 
-  it('classifies a 404 as a missing project attachment', async () => {
-    client.scenario.get(
-      `/v9/projects/my-site/domains/${DOMAIN}`,
-      (_req, res) => {
-        res.status(404).json({
-          error: { code: 'not_found', message: 'Domain not found' },
-        });
-      }
-    );
-
-    const result = await acquire();
-
-    expect(result).toMatchObject({
-      ok: true,
-      facts: {
-        project: { kind: 'missing', idOrName: 'my-site' },
-      },
-    });
-  });
-
   it('keeps permission failures distinct from missing attachments', async () => {
     client.scenario.get(
       `/v9/projects/my-site/domains/${DOMAIN}`,

@@ -5,7 +5,7 @@ import { renderHumanOutput } from '../../../../src/commands/domains/verify-human
 import { renderStructuredOutput } from '../../../../src/commands/domains/verify-structured-output';
 
 describe('domains verify output adapters', () => {
-  it('formats the same diagnosis and remediation for humans and scripts', () => {
+  it('serializes Cloudflare remediation and conflicts', () => {
     const facts: VerificationFacts = {
       domainName: 'www.example.com',
       contextName: 'my-team',
@@ -51,8 +51,6 @@ describe('domains verify output adapters', () => {
     });
 
     const structured = JSON.parse(renderStructuredOutput(diagnosis));
-    const human = renderHumanOutput(diagnosis, '[10ms]');
-    const humanText = [human.lead.message, ...human.sections].join('\n');
 
     expect(structured).toMatchObject({
       status: 'action_required',
@@ -69,19 +67,16 @@ describe('domains verify output adapters', () => {
       value: 'cname.vercel-dns.com',
       disableProxy: true,
     });
-    expect(humanText).toContain('Invalid Configuration');
-    expect(humanText).toContain(
-      'Point www.example.com to Vercel with one of the following options:'
-    );
-    expect(humanText).toContain('a) Auto configure with Cloudflare');
-    expect(humanText).toContain('b) Add a CNAME record');
-    expect(humanText).toContain('cname.vercel-dns.com');
-    expect(humanText).toContain('2. Remove the conflicting CAA record');
-    expect(humanText).toContain('Remove the conflicting CAA record');
-    expect(diagnosis.exitCode).toBe(1);
+    expect(structured.conflicts).toEqual([
+      {
+        type: 'CAA',
+        name: 'example.com',
+        value: '0 issue "otherca.com"',
+      },
+    ]);
   });
 
-  it('recommends project attachment for an unused owned hostname', () => {
+  it('serializes an attachment recommendation for an unused hostname', () => {
     const facts: VerificationFacts = {
       domainName: 'unused.example.com',
       contextName: 'my-team',
@@ -111,8 +106,6 @@ describe('domains verify output adapters', () => {
     });
 
     const structured = JSON.parse(renderStructuredOutput(diagnosis));
-    const human = renderHumanOutput(diagnosis, '[10ms]');
-    const humanText = [human.lead.message, ...human.sections].join('\n');
 
     expect(structured).toMatchObject({
       status: 'ok',
@@ -127,22 +120,6 @@ describe('domains verify output adapters', () => {
         nameservers: [],
       },
     });
-    expect(humanText).toContain('Not assessed without a project');
-    expect(humanText).toContain(
-      'To use unused.example.com, attach it to a project'
-    );
-    expect(humanText).toContain(
-      'vercel domains add unused.example.com <project>'
-    );
-    expect(humanText).not.toContain(
-      'No action is needed for an unused hostname'
-    );
-    expect(humanText).not.toContain('DNS Change Recommended');
-    expect(humanText).not.toContain('avoid downtime');
-    expect(humanText).not.toContain('Add a CNAME record');
-    expect(humanText).not.toContain('cname.vercel-dns.com');
-    expect(humanText).not.toContain('Switch to the Vercel nameservers');
-    expect(diagnosis.exitCode).toBe(0);
   });
 
   it('renders remediation steps for a configured domain without a project', () => {

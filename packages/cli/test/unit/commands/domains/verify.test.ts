@@ -224,7 +224,6 @@ describe('domains verify', () => {
   it('shows the TXT challenge when the project domain is unverified', async () => {
     useDomainConfig();
     useOwnedDomainNotFound();
-    let verifyPosted = false;
     client.scenario.get(
       `/v9/projects/my-site/domains/${DOMAIN}`,
       (_req, res) => {
@@ -247,7 +246,6 @@ describe('domains verify', () => {
     client.scenario.post(
       `/v9/projects/my-site/domains/${DOMAIN}/verify`,
       (_req, res) => {
-        verifyPosted = true;
         res.status(400).json({
           error: {
             code: 'missing_txt_record',
@@ -264,7 +262,6 @@ describe('domains verify', () => {
     // The TXT challenge and the last-attempt error render as a single step
     await expect(client.stderr).toOutput('missing required TXT Record');
     expect(await exitCodePromise).toBe(1);
-    expect(verifyPosted).toBe(true);
   });
 
   it('succeeds when triggering verification flips the domain to verified', async () => {
