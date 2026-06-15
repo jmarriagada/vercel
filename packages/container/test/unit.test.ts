@@ -162,7 +162,9 @@ describe('@vercel/container', () => {
       process.env.VERCEL_CONTAINER_ENGINE = options.engineOverride;
     }
     process.env.VERCEL_OIDC_TOKEN = fakeOidcToken();
-    existsSyncMock.mockReturnValue(true);
+    // Everything exists except /dev/fuse so storage-driver selection falls
+    // back to vfs deterministically (otherwise fuse-overlayfs may be picked).
+    existsSyncMock.mockImplementation((path: string) => path !== '/dev/fuse');
     const digest = `sha256:${'a'.repeat(64)}`;
     spawnMock.mockImplementation((cmd: string, args: string[]) => {
       if (args.includes('push')) {

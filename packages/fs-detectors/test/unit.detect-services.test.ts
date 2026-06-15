@@ -211,7 +211,7 @@ describe('detectServices', () => {
       });
       expect(result.routes.rewrites).toEqual([
         {
-          src: '^/api(?:/.*)?$',
+          src: '^(?=/api(?:/|$))(?:/api(?:/.*)?$)',
           dest: '/_svc/api/index',
         },
       ]);
