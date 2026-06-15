@@ -174,7 +174,7 @@ export function webSocketEcho(
 
     socket.once('error', reject);
     socket.on('data', chunk => {
-      buffer = Buffer.concat([buffer, chunk]);
+      buffer = appendBuffer(buffer, chunk);
 
       if (!handshakeComplete) {
         const headerEnd = buffer.indexOf('\r\n\r\n');
@@ -225,13 +225,24 @@ export function webSocketEcho(
   });
 }
 
-function maskedTextFrame(message: string): Buffer {
+function appendBuffer(buffer: Buffer, chunk: Buffer): Buffer {
+  const next = Buffer.alloc(buffer.length + chunk.length);
+  for (let i = 0; i < buffer.length; i++) {
+    next[i] = buffer[i];
+  }
+  for (let i = 0; i < chunk.length; i++) {
+    next[buffer.length + i] = chunk[i];
+  }
+  return next;
+}
+
+function maskedTextFrame(message: string): Uint8Array {
   const payload = Buffer.from(message);
   const mask = randomBytes(4);
-  const frame = Buffer.alloc(6 + payload.length);
+  const frame = new Uint8Array(6 + payload.length);
   frame[0] = 0x81;
   frame[1] = 0x80 | payload.length;
-  mask.copy(frame, 2);
+  frame.set(mask, 2);
 
   for (let i = 0; i < payload.length; i++) {
     frame[6 + i] = payload[i] ^ mask[i % 4];
