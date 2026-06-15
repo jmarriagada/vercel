@@ -141,7 +141,6 @@ async function writePackageJson(workPath: string, packageJson: PackageJson) {
   );
 }
 
-console.log('🔥🔥🔥 CUSTOM MARK-LASFAR BUILD IS EXECUTING - INDEX.TS 🔥🔥🔥');
 /**
  * Write .npmrc with npm auth token
  */
@@ -1354,9 +1353,7 @@ export const build: BuildV2 = async buildOptions => {
      * This is a detection for preview mode that's required for the pages
      * router.
      */
-    // 🔥 FORCE PREVIEW MODE TO TRUE - TEMPORARY FIX FOR DRAFT MODE
-    const canUsePreviewMode = true;
-    console.log(`[DRAFT MODE DEBUG] FORCED canUsePreviewMode = true`);
+    const canUsePreviewMode = !!prerenderManifest?.bypassToken;
 
     console.log(
       `[DRAFT MODE DEBUG] canUsePreviewMode = ${canUsePreviewMode}, appDir = ${!!appDir}, hasAppPathRoutesManifest = ${!!appPathRoutesManifest}, hasAppRouterApi = ${!!(appPathRoutesManifest && Object.keys(appPathRoutesManifest).some(r => r.startsWith('/api/')))}`,

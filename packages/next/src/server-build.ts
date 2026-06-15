@@ -69,8 +69,6 @@ import escapeStringRegexp from 'escape-string-regexp';
 import prettyBytes from 'pretty-bytes';
 import { getAppRouterPathnameFilesMap } from './metadata';
 
-console.log('!!! VERCELLL - USING CUSTOM MARK-LASFAR BUILD v2 !!!');
-
 // related PR: https://github.com/vercel/next.js/pull/30046
 const CORRECT_NOT_FOUND_ROUTES_VERSION = 'v12.0.1';
 const CORRECT_MIDDLEWARE_ORDER_VERSION = 'v12.1.7-canary.29';
@@ -1742,23 +1740,6 @@ export async function serverBuild({
       return;
     }
 
-    // ============================================
-    // FIX CORRECT: Keep Lambda for ANY route when Preview Mode is enabled
-    // ============================================
-    // In Draft/Preview Mode (canUsePreviewMode === true), we want EVERY page
-    // that is a potential target of the bypass cookie to be dynamic.
-    // NOT JUST dynamic routes or generateStaticParams routes.
-    // Because: Navigating from a draft-enabled preview to a static page
-    // (e.g. /test) should render it dynamically to preserve the Draft Mode context.
-    // ============================================
-
-    // Check if this route is a standard static page (not dynamic, no generateStaticParams)
-    const isStaticPage =
-      !routesManifest?.dynamicRoutes.some(dr => dr.page === route) && // not dynamic
-      !prerenderManifest.fallbackRoutes[route] && // no fallback
-      !prerenderManifest.omittedRoutes[route] && // not omitted
-      !(prerenderManifest.staticRoutes[route]?.srcRoute != null); // not generated from dynamic source
-
     // We keep lambda if Preview Mode is enabled AND (the route is a candidate for dynamic rendering OR it's a static page)
     // This ensures that in Preview Mode, ALL routes retain their capability to be rendered dynamically.
     const shouldKeepLambda =
@@ -1767,15 +1748,11 @@ export async function serverBuild({
       (routesManifest?.dynamicRoutes.some(dr => dr.page === route) ||
         prerenderManifest.fallbackRoutes[route] !== undefined ||
         prerenderManifest.omittedRoutes[route] !== undefined ||
-        prerenderManifest.staticRoutes[route]?.srcRoute != null ||
-        // ============================================
-        // CRITICAL ADDITION: Keep for STATIC pages when Preview Mode is active
-        // ============================================
-        isStaticPage);
+        prerenderManifest.staticRoutes[route]?.srcRoute != null);
 
     // Debugging to verify the fix
     console.log(
-      `[Draft Mode Fix] route=${route}, previewMode=${canUsePreviewMode}, isStaticPage=${isStaticPage}, keepLambda=${shouldKeepLambda}`
+      `[Draft Mode Fix] route=${route}, previewMode=${canUsePreviewMode}, keepLambda=${shouldKeepLambda}`
     );
 
     if (!shouldKeepLambda) {
