@@ -81,6 +81,7 @@ export async function acquireVerificationFacts(
 ): Promise<VerificationAcquisitionResult> {
   const { domainName } = options;
   const { contextName, team } = await getScope(client);
+  client.config.currentTeam = team?.id;
   const requests = [
     getDomainConfigV6(client, domainName, {
       projectIdOrName: options.project,

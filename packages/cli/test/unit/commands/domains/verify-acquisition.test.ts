@@ -2,11 +2,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { acquireVerificationFacts } from '../../../../src/commands/domains/verify-acquisition';
 import { client } from '../../../mocks/client';
 import { useUser } from '../../../mocks/user';
+import { useTeam } from '../../../mocks/team';
+import type { Request } from 'express';
 
 const DOMAIN = 'www.example.com';
 
-function useDomainConfig() {
-  client.scenario.get(`/v6/domains/${DOMAIN}/config`, (_req, res) => {
+function useDomainConfig(onRequest?: (req: Request) => void) {
+  client.scenario.get(`/v6/domains/${DOMAIN}/config`, (req, res) => {
+    onRequest?.(req);
     res.json({
       configuredBy: 'A',
       misconfigured: false,
@@ -23,8 +26,9 @@ function useDomainConfig() {
   });
 }
 
-function useOwnedDomainNotFound() {
-  client.scenario.get(`/v4/domains/${DOMAIN}`, (_req, res) => {
+function useOwnedDomainNotFound(onRequest?: (req: Request) => void) {
+  client.scenario.get(`/v4/domains/${DOMAIN}`, (req, res) => {
+    onRequest?.(req);
     res.status(404).json({
       error: { code: 'not_found', message: 'Domain not found' },
     });
@@ -152,6 +156,47 @@ describe('domains verify acquisition', () => {
       `/v4/domains/${DOMAIN}`,
       expect.objectContaining({ bailOn429: true })
     );
+  });
+
+  it('uses the northstar default team for verification requests', async () => {
+    client.reset();
+    const team = useTeam('team_default');
+    useUser({
+      version: 'northstar',
+      defaultTeamId: team.id,
+    });
+
+    let configTeamId: unknown;
+    let ownershipTeamId: unknown;
+    let projectTeamId: unknown;
+    useDomainConfig(req => {
+      configTeamId = req.query.teamId;
+    });
+    useOwnedDomainNotFound(req => {
+      ownershipTeamId = req.query.teamId;
+    });
+    client.scenario.get(
+      `/v9/projects/my-site/domains/${DOMAIN}`,
+      (req, res) => {
+        projectTeamId = req.query.teamId;
+        res.status(404).json({
+          error: { code: 'not_found', message: 'Domain not found' },
+        });
+      }
+    );
+
+    const result = await acquire();
+
+    expect(result).toMatchObject({
+      ok: true,
+      facts: {
+        contextName: team.slug,
+        teamId: team.id,
+      },
+    });
+    expect(configTeamId).toBe(team.id);
+    expect(ownershipTeamId).toBe(team.id);
+    expect(projectTeamId).toBe(team.id);
   });
 
   it('refreshes an unverified project domain', async () => {
