@@ -1134,7 +1134,9 @@ describe('deploy', () => {
       expect(mock).toHaveBeenCalledWith(
         ...Object.values({
           ...baseCreateDeployArgs,
-          createArgs: expect.objectContaining({ wantsPublic: true }),
+          createArgs: expect.not.objectContaining({
+            wantsPublic: expect.anything(),
+          }),
         })
       );
       expect(client.telemetryEventStore).toHaveTelemetryEvents([
