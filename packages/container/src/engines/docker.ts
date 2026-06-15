@@ -1,6 +1,5 @@
 import type { Span } from '@vercel/build-utils';
 import { spawn, type ChildProcess } from 'node:child_process';
-import { existsSync } from 'node:fs';
 import {
   DEBUG,
   debug,
@@ -14,6 +13,7 @@ import {
   toTag,
   withSpan,
 } from '../util';
+import { selectStorageDriver } from '../storage-driver';
 import type { BuildPushParams, ContainerEngine } from './types';
 import { TARGET_PLATFORM } from './types';
 
@@ -35,17 +35,6 @@ async function isDockerDaemonReachable(): Promise<boolean> {
   } catch {
     return false;
   }
-}
-
-async function selectStorageDriver(): Promise<string> {
-  const override = readString(process.env.VERCEL_VCR_DOCKER_STORAGE_DRIVER);
-  if (override) {
-    return override;
-  }
-  if ((await hasBinary('fuse-overlayfs')) && existsSync('/dev/fuse')) {
-    return 'fuse-overlayfs';
-  }
-  return 'vfs';
 }
 
 interface ManagedDaemon {

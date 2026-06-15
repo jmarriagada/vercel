@@ -2,6 +2,7 @@ import type { Span } from '@vercel/build-utils';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { buildahStorageArgs, selectStorageDriver } from '../storage-driver';
 import { DEBUG, debug, info, isBuildContainer, run, toTag } from '../util';
 import type { BuildPushParams, ContainerEngine } from './types';
 import { TARGET_PLATFORM } from './types';
@@ -10,13 +11,25 @@ function skopeoImageRef(imageRef: string): string {
   return imageRef.startsWith('docker://') ? imageRef : `docker://${imageRef}`;
 }
 
+async function runBuildah(
+  args: string[],
+  opts: { input?: string; quiet?: boolean } = {}
+) {
+  const storageArgs = await buildahStorageArgs();
+  return run('buildah', [...storageArgs, ...args], opts);
+}
+
 export const buildahEngine: ContainerEngine = {
   name: 'buildah',
 
   async ensureReady(span?: Span): Promise<void> {
     try {
-      const { stdout } = await run('buildah', ['--version'], { quiet: true });
-      span?.setAttributes({ 'buildah.version': stdout.trim().split('\n')[0] });
+      const storageDriver = await selectStorageDriver();
+      const { stdout } = await runBuildah(['--version'], { quiet: true });
+      span?.setAttributes({
+        'buildah.version': stdout.trim().split('\n')[0],
+        'buildah.storage_driver': storageDriver,
+      });
     } catch (err) {
       const message = (err as Error).message;
       if (/Command not found/i.test(message)) {
@@ -34,8 +47,9 @@ export const buildahEngine: ContainerEngine = {
 
   async logDiagnostics(span?: Span): Promise<void> {
     try {
+      const storageDriver = await selectStorageDriver();
       const version = (
-        await run('buildah', ['--version'], { quiet: true })
+        await runBuildah(['--version'], { quiet: true })
       ).stdout.trim();
       let skopeoVersion = 'n/a';
       try {
@@ -46,12 +60,16 @@ export const buildahEngine: ContainerEngine = {
         // skopeo optional for diagnostics
       }
 
-      info(`buildah: ${version.split('\n')[0] ?? version}`);
+      info(
+        `buildah: ${version.split('\n')[0] ?? version} ` +
+          `(storage-driver=${storageDriver})`
+      );
       debug(`skopeo: ${skopeoVersion.split('\n')[0] ?? skopeoVersion}`);
 
       span?.setAttributes({
         'container.engine': 'buildah',
         'buildah.version': toTag(version.split('\n')[0]),
+        'buildah.storage_driver': toTag(storageDriver),
         'skopeo.version': toTag(skopeoVersion.split('\n')[0]),
       });
     } catch (err) {
@@ -67,7 +85,7 @@ export const buildahEngine: ContainerEngine = {
   },
 
   async build(params: BuildPushParams): Promise<void> {
-    await run('buildah', [
+    await runBuildah([
       'build',
       '--platform',
       TARGET_PLATFORM,
@@ -81,8 +99,7 @@ export const buildahEngine: ContainerEngine = {
 
   async login(params: BuildPushParams): Promise<void> {
     try {
-      await run(
-        'buildah',
+      await runBuildah(
         [
           'login',
           params.registry,
@@ -114,12 +131,7 @@ export const buildahEngine: ContainerEngine = {
     const digestDir = mkdtempSync(join(tmpdir(), 'vercel-container-digest-'));
     const digestFile = join(digestDir, 'digest');
     try {
-      await run('buildah', [
-        'push',
-        '--digestfile',
-        digestFile,
-        params.imageRef,
-      ]);
+      await runBuildah(['push', '--digestfile', digestFile, params.imageRef]);
       const digest = readFileSync(digestFile, 'utf8').trim();
       return digest.match(/sha256:[a-f0-9]{64}/)?.[0] ?? (digest || undefined);
     } catch (err) {

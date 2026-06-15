@@ -219,9 +219,10 @@ describe('@vercel/container', () => {
     const commands = await runDockerfileBuild({
       buildImageEnv: 'al2023',
     });
-    expect(commands.some(c => c.startsWith('buildah build'))).toBe(true);
-    expect(commands.some(c => c.startsWith('buildah login'))).toBe(true);
-    expect(commands.some(c => c.startsWith('buildah push'))).toBe(true);
+    expect(commands.some(c => /\bbuildah\b.*\bbuild\b/.test(c))).toBe(true);
+    expect(commands.some(c => /\bbuildah\b.*\blogin\b/.test(c))).toBe(true);
+    expect(commands.some(c => /\bbuildah\b.*\bpush\b/.test(c))).toBe(true);
+    expect(commands.some(c => c.includes('--storage-driver vfs'))).toBe(true);
     expect(commands.some(c => c.startsWith('docker build'))).toBe(false);
   });
 
