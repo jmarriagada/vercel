@@ -152,10 +152,8 @@ function isEdgeFunction(v: any): v is EdgeFunction {
 }
 
 function isContainerImage(v: any): v is ContainerImage {
-  // Container image functions are emitted as Lambda-typed outputs with
-  // `runtime: 'container'` to match the build container's collection contract
-  // (vercel/api#74661). Detect by runtime so they are handled before the
-  // generic Lambda path.
+  // Container image outputs use `runtime: 'container'`. Detect by runtime so
+  // they are handled before the generic Lambda path.
   return v?.runtime === 'container';
 }
 
