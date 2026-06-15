@@ -19,10 +19,12 @@ import {
   isAPIError,
   type APIError,
 } from '../../util/errors-ts';
+import { isPublicSuffix } from '../../util/domains/is-public-suffix';
 
 export type DomainOwnership =
   | 'current-scope'
   | 'other-scope'
+  | 'platform-managed'
   | 'not-found'
   | null;
 
@@ -243,6 +245,9 @@ async function lookupOwnership(
   contextName: string,
   domainName: string
 ): Promise<{ ownership: DomainOwnership; intendedNameservers: string[] }> {
+  if (isPublicSuffix(domainName)) {
+    return { ownership: 'platform-managed', intendedNameservers: [] };
+  }
   try {
     const domain = await getDomainByName(client, contextName, domainName, {
       ignoreWait: true,

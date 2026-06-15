@@ -295,6 +295,124 @@ describe('domains verify diagnosis', () => {
     );
   });
 
+  it('recommends an IP migration for an owned hostname without a project', () => {
+    const domainName = 'unused.example.com';
+    const facts = verificationFacts({
+      domainName,
+      ownership: 'current-scope',
+      intendedNameservers: ['ns1.vercel-dns.com', 'ns2.vercel-dns.com'],
+      config: {
+        configuredBy: 'http',
+        serviceType: 'zeit.world',
+        nameservers: ['ns2.vercel-dns.com', 'ns1.vercel-dns.com'],
+        aValues: ['64.29.17.65', '216.198.79.1'],
+        ipStatus: 'required-change',
+      },
+    });
+
+    const diagnosis = diagnose(facts);
+
+    expect(diagnosis).toMatchObject({
+      status: 'dns-change-recommended',
+      configurationStatus: 'dns-change-recommended',
+      exitCode: 0,
+      remediation: {
+        pointing: {
+          kind: 'recommended-change',
+        },
+      },
+    });
+    expect(diagnosis.remediation.pointing?.options).toEqual([
+      {
+        kind: 'cname-records',
+        records: [
+          {
+            type: 'CNAME',
+            name: 'unused',
+            value: 'cname.vercel-dns.com',
+          },
+        ],
+      },
+    ]);
+  });
+
+  it('ignores infrastructure migrations for a Vercel-managed project domain', () => {
+    const domainName = 'my-site.vercel.app';
+    const facts = verificationFacts({
+      domainName,
+      ownership: 'platform-managed',
+      config: {
+        configuredBy: 'A',
+        serviceType: 'zeit.world',
+        nameservers: ['ns1.vercel-dns-3.com', 'ns2.vercel-dns-3.com'],
+        aValues: ['64.29.17.1', '216.198.79.1'],
+        recommendedCNAME: [
+          { rank: 1, value: 'project-specific.vercel-dns-017.com.' },
+        ],
+        ipStatus: 'optional-change',
+      },
+      project: attachedProject({
+        name: domainName,
+        apexName: 'vercel.app',
+      }),
+    });
+
+    const diagnosis = diagnose(facts);
+
+    expect(diagnosis).toMatchObject({
+      status: 'configured-correctly',
+      configurationStatus: 'configured-correctly',
+      exitCode: 0,
+      details: {
+        reason: 'configured_correctly',
+      },
+      remediation: {
+        pointing: null,
+      },
+      next: [],
+    });
+    expect(diagnosis.recommendedDnsRecords).toEqual([]);
+  });
+
+  it('defers DNS diagnosis until the domain is checked in its owning scope', () => {
+    const domainName = 'unused.example.com';
+    const facts = verificationFacts({
+      domainName,
+      ownership: 'other-scope',
+      config: {
+        configuredBy: 'http',
+        serviceType: 'zeit.world',
+        nameservers: ['ns2.vercel-dns.com', 'ns1.vercel-dns.com'],
+        aValues: ['64.29.17.1', '216.198.79.1'],
+        ipStatus: 'required-change',
+      },
+    });
+
+    const diagnosis = diagnose(facts);
+
+    expect(diagnosis).toMatchObject({
+      status: 'scope-resolution-required',
+      configurationStatus: 'scope-resolution-required',
+      exitCode: 1,
+      details: {
+        reason: 'scope_not_accessible',
+        userActionRequired: true,
+      },
+      remediation: {
+        domainConnect: null,
+        pointing: null,
+        disableDnssec: false,
+        conflicts: [],
+        verification: null,
+        attachProject: null,
+      },
+    });
+    expect(diagnosis.issues.map(issue => issue.domainStatus)).toEqual([
+      'scope-resolution-required',
+    ]);
+    expect(diagnosis.recommendedDnsRecords).toEqual([]);
+  });
+
   it('resolves scope before project mutations', () => {
     const facts = verificationFacts({
       ownership: 'other-scope',

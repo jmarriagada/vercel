@@ -12,6 +12,9 @@ export interface StructuredVerificationError {
 export function renderStructuredOutput(diagnosis: DomainDiagnosis): string {
   const { facts } = diagnosis;
   const { config } = facts;
+  const canRecommendDns =
+    diagnosis.configurationStatus !== 'scope-resolution-required' &&
+    facts.ownership !== 'platform-managed';
   const payload = {
     status: diagnosis.ok ? AGENT_STATUS.OK : AGENT_STATUS.ACTION_REQUIRED,
     ...diagnosis.details,
@@ -36,12 +39,12 @@ export function renderStructuredOutput(diagnosis: DomainDiagnosis): string {
       aValues: config.aValues ?? [],
     },
     recommended: {
-      ipv4: config.recommendedIPv4 ?? [],
-      cname: config.recommendedCNAME ?? [],
+      ipv4: canRecommendDns ? (config.recommendedIPv4 ?? []) : [],
+      cname: canRecommendDns ? (config.recommendedCNAME ?? []) : [],
       records: diagnosis.recommendedDnsRecords,
-      nameservers: facts.intendedNameservers,
+      nameservers: getRecommendedNameservers(diagnosis),
     },
-    conflicts: config.conflicts ?? [],
+    conflicts: diagnosis.remediation.conflicts,
     domainOwnership: facts.ownership,
     project: serializeProject(facts.project),
   };
@@ -62,6 +65,15 @@ export function renderStructuredError(
     null,
     2
   )}\n`;
+}
+
+function getRecommendedNameservers(diagnosis: DomainDiagnosis): string[] {
+  const nameserverOption = diagnosis.remediation.pointing?.options.find(
+    option => option.kind === 'nameservers'
+  );
+  return nameserverOption?.kind === 'nameservers'
+    ? nameserverOption.nameservers
+    : [];
 }
 
 function serializeProject(project: ProjectStatus) {

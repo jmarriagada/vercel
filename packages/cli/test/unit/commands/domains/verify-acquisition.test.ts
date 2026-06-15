@@ -199,6 +199,58 @@ describe('domains verify acquisition', () => {
     expect(projectTeamId).toBe(team.id);
   });
 
+  it('treats Vercel project domains as platform-managed', async () => {
+    const domainName = 'my-site.vercel.app';
+    client.reset();
+    useUser();
+    client.scenario.get(`/v6/domains/${domainName}/config`, (_req, res) => {
+      res.json({
+        configuredBy: 'A',
+        misconfigured: false,
+        serviceType: 'zeit.world',
+        nameservers: ['ns1.vercel-dns-3.com'],
+        cnames: [],
+        aValues: ['64.29.17.1'],
+        conflicts: [],
+        ipStatus: 'optional-change',
+      });
+    });
+    let ownershipRequests = 0;
+    client.scenario.get(`/v4/domains/${domainName}`, (_req, res) => {
+      ownershipRequests++;
+      res.status(403).json({
+        error: { code: 'forbidden', message: 'Domain access denied' },
+      });
+    });
+    client.scenario.get(
+      `/v9/projects/my-site/domains/${domainName}`,
+      (_req, res) => {
+        res.json({
+          name: domainName,
+          apexName: 'vercel.app',
+          projectId: 'prj_123',
+          verified: true,
+        });
+      }
+    );
+
+    const result = await acquireVerificationFacts(client, {
+      domainName,
+      project: 'my-site',
+      strict: false,
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      facts: {
+        ownership: 'platform-managed',
+        intendedNameservers: [],
+        project: { kind: 'attached' },
+      },
+    });
+    expect(ownershipRequests).toBe(0);
+  });
+
   it('refreshes an unverified project domain', async () => {
     client.scenario.get(
       `/v9/projects/my-site/domains/${DOMAIN}`,

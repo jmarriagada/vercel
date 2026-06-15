@@ -26,6 +26,7 @@ export const AGENT_REASON = {
   NOT_FOUND: 'not_found',
   PROJECT_NOT_FOUND: 'project_not_found',
   MISSING_SCOPE: 'missing_scope',
+  SCOPE_NOT_ACCESSIBLE: 'scope_not_accessible',
   API_ERROR: 'api_error',
   // Env
   MISSING_REQUIREMENTS: 'missing_requirements',

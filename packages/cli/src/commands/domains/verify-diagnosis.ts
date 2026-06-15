@@ -14,6 +14,7 @@ export type DomainStatus =
   | 'dnssec-needs-to-be-disabled'
   | 'dns-change-required'
   | 'dns-change-recommended'
+  | 'scope-resolution-required'
   | 'project-domain-missing';
 
 export type ConfigurationStatus = Exclude<
@@ -109,10 +110,18 @@ export function diagnoseDomain(
   facts: VerificationFacts,
   commands: DomainDiagnosisCommands
 ): DomainDiagnosis {
-  const configurationStatus = getConfigurationStatus(facts.config);
+  const configurationStatus = getConfigurationStatus(facts);
   const status = getDomainStatus(configurationStatus, facts.project);
-  const recommendedDnsRecords = getRecommendedDnsRecords(facts);
-  const domainConnect = getDomainConnectConfiguration(facts);
+  const recommendedDnsRecords =
+    configurationStatus === 'scope-resolution-required' ||
+    isPlatformManagedDomain(facts)
+      ? []
+      : getRecommendedDnsRecords(facts);
+  const domainConnect =
+    configurationStatus === 'scope-resolution-required' ||
+    isPlatformManagedDomain(facts)
+      ? null
+      : getDomainConnectConfiguration(facts);
   const remediation = buildRemediation(
     facts,
     commands,
@@ -143,7 +152,16 @@ export function diagnoseDomain(
   };
 }
 
-function getConfigurationStatus(config: DomainConfigV6): ConfigurationStatus {
+function getConfigurationStatus(facts: VerificationFacts): ConfigurationStatus {
+  const { config } = facts;
+  if (requiresScopeResolution(facts)) {
+    return 'scope-resolution-required';
+  }
+  if (isPlatformManagedDomain(facts)) {
+    return config.misconfigured
+      ? 'invalid-configuration'
+      : 'configured-correctly';
+  }
   if (config.serviceType === 'zeit.world' && config.dnssecEnabled) {
     return 'dnssec-needs-to-be-disabled';
   }
@@ -154,7 +172,9 @@ function getConfigurationStatus(config: DomainConfigV6): ConfigurationStatus {
     config.ipStatus === 'required-change' &&
     hasRecommendedDnsUpdate(config)
   ) {
-    return 'dns-change-required';
+    return isOwnedUnattachedHostname(facts)
+      ? 'dns-change-recommended'
+      : 'dns-change-required';
   }
   if (
     config.ipStatus === 'optional-change' &&
@@ -198,14 +218,16 @@ function getDomainIssues(
   };
 
   addStatus(status);
-  addStatus(configurationStatus);
-  if (facts.project.kind === 'missing') {
-    addStatus('project-domain-missing');
-  } else if (
-    facts.project.kind === 'attached' &&
-    !facts.project.domain.verified
-  ) {
-    addStatus('verification-needed');
+  if (status !== 'scope-resolution-required') {
+    addStatus(configurationStatus);
+    if (facts.project.kind === 'missing') {
+      addStatus('project-domain-missing');
+    } else if (
+      facts.project.kind === 'attached' &&
+      !facts.project.domain.verified
+    ) {
+      addStatus('verification-needed');
+    }
   }
 
   return statuses.map(domainStatus => ({
@@ -244,6 +266,14 @@ function statusDetails(
         ),
       };
     case 'invalid-configuration':
+      if (isPlatformManagedDomain(facts)) {
+        return {
+          reason: AGENT_REASON.INVALID_CONFIGURATION,
+          message: `${domainName} has an invalid Vercel-managed DNS configuration.`,
+          userActionRequired: true,
+          hint: 'No DNS changes are required from you. Retry the check, then contact Vercel Support if the configuration remains invalid.',
+        };
+      }
       return {
         reason: AGENT_REASON.INVALID_CONFIGURATION,
         message: `${domainName} has an invalid DNS configuration. Apply the recommended DNS changes, then retry verification.`,
@@ -273,6 +303,13 @@ function statusDetails(
         ),
       };
     case 'dns-change-recommended':
+      if (isOwnedUnattachedHostname(facts)) {
+        return {
+          reason: AGENT_REASON.DNS_CHANGE_RECOMMENDED,
+          message: `${domainName} is not attached to a project. If the hostname is intentionally in use, Vercel recommends updating its DNS records.`,
+          hint: 'No action is needed for an unused hostname. If it is in use, apply the recommended DNS update, then re-check.',
+        };
+      }
       return {
         reason: AGENT_REASON.DNS_CHANGE_RECOMMENDED,
         message: `${domainName} has a valid configuration, but Vercel recommends updating its DNS records.`,
@@ -281,6 +318,13 @@ function statusDetails(
           domainConnect,
           'The domain is working. Apply the recommended DNS update when convenient, then re-check.'
         ),
+      };
+    case 'scope-resolution-required':
+      return {
+        reason: AGENT_REASON.SCOPE_NOT_ACCESSIBLE,
+        message: `${domainName} exists on Vercel but is not accessible under ${facts.contextName}. Retry under the owning team before evaluating its DNS or project status.`,
+        userActionRequired: true,
+        hint: 'Use next[] to find the team that owns the domain, then retry in that scope.',
       };
     case 'project-domain-missing':
       return {
@@ -316,14 +360,24 @@ function buildRemediation(
   recommendedDnsRecords: RecommendedDnsRecord[],
   domainConnect: DomainConnectConfiguration | null
 ): DomainRemediation {
-  const scope =
-    facts.ownership === 'other-scope' && facts.project.kind !== 'attached'
-      ? {
-          contextName: facts.contextName,
-          teamsCommand: commands.teamsList,
-          verifyCommand: commands.verify('<team>'),
-        }
-      : null;
+  const scope = requiresScopeResolution(facts)
+    ? {
+        contextName: facts.contextName,
+        teamsCommand: commands.teamsList,
+        verifyCommand: commands.verify('<team>'),
+      }
+    : null;
+  if (scope) {
+    return {
+      scope,
+      domainConnect: null,
+      pointing: null,
+      disableDnssec: false,
+      conflicts: [],
+      verification: null,
+      attachProject: null,
+    };
+  }
   const pointing = buildPointingRemediation(facts, recommendedDnsRecords);
   const verification =
     facts.project.kind === 'attached' && !facts.project.domain.verified
@@ -348,9 +402,12 @@ function buildRemediation(
     domainConnect,
     pointing,
     disableDnssec:
+      !isPlatformManagedDomain(facts) &&
       facts.config.serviceType === 'zeit.world' &&
       Boolean(facts.config.dnssecEnabled),
-    conflicts: facts.config.conflicts ?? [],
+    conflicts: isPlatformManagedDomain(facts)
+      ? []
+      : (facts.config.conflicts ?? []),
     verification,
     attachProject,
   };
@@ -360,7 +417,11 @@ function buildPointingRemediation(
   facts: VerificationFacts,
   recommendedDnsRecords: RecommendedDnsRecord[]
 ): PointingRemediation | null {
-  if (!needsDnsRecordChange(facts.config)) {
+  if (
+    requiresScopeResolution(facts) ||
+    isPlatformManagedDomain(facts) ||
+    !needsDnsRecordChange(facts.config)
+  ) {
     return null;
   }
 
@@ -375,7 +436,10 @@ function buildPointingRemediation(
   if (cnameRecords.length) {
     options.push({ kind: 'cname-records', records: cnameRecords });
   }
-  if (facts.intendedNameservers.length) {
+  if (
+    facts.intendedNameservers.length &&
+    !nameserversMatch(facts.config.nameservers, facts.intendedNameservers)
+  ) {
     options.push({
       kind: 'nameservers',
       nameservers: [...facts.intendedNameservers],
@@ -386,7 +450,8 @@ function buildPointingRemediation(
     kind:
       facts.config.misconfigured && facts.config.configuredBy === null
         ? 'point-domain'
-        : facts.config.ipStatus === 'optional-change'
+        : facts.config.ipStatus === 'optional-change' ||
+            isOwnedUnattachedHostname(facts)
           ? 'recommended-change'
           : 'required-change',
     options,
@@ -399,7 +464,7 @@ function buildNextSteps(
   status: DomainStatus,
   domainConnect: DomainConnectConfiguration | null
 ): NextStep[] {
-  if (facts.ownership === 'other-scope' && facts.project.kind !== 'attached') {
+  if (requiresScopeResolution(facts)) {
     return [
       {
         command: commands.teamsList,
@@ -480,6 +545,7 @@ function getDomainConnectConfiguration(
   facts: VerificationFacts
 ): DomainConnectConfiguration | null {
   if (
+    isPlatformManagedDomain(facts) ||
     facts.project.kind !== 'attached' ||
     isWildcardDomain(facts.domainName) ||
     !needsDnsRecordChange(facts.config) ||
@@ -544,6 +610,35 @@ function isCloudflareDns(config: DomainConfigV6): boolean {
 
 function isWildcardDomain(domainName: string): boolean {
   return domainName.startsWith('*.');
+}
+
+function isOwnedUnattachedHostname(facts: VerificationFacts): boolean {
+  return facts.ownership === 'current-scope' && facts.project.kind === 'none';
+}
+
+function requiresScopeResolution(facts: VerificationFacts): boolean {
+  return facts.ownership === 'other-scope' && facts.project.kind !== 'attached';
+}
+
+function isPlatformManagedDomain(facts: VerificationFacts): boolean {
+  return facts.ownership === 'platform-managed';
+}
+
+function nameserversMatch(current: string[], intended: string[]): boolean {
+  const normalize = (nameservers: string[]) =>
+    [...new Set(nameservers.map(normalizeNameserver))].sort();
+  const normalizedCurrent = normalize(current);
+  const normalizedIntended = normalize(intended);
+  return (
+    normalizedCurrent.length === normalizedIntended.length &&
+    normalizedCurrent.every(
+      (nameserver, index) => nameserver === normalizedIntended[index]
+    )
+  );
+}
+
+function normalizeNameserver(nameserver: string): string {
+  return nameserver.toLowerCase().replace(/\.$/, '');
 }
 
 function getDnsRecordName(

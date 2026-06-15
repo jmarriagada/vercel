@@ -91,8 +91,13 @@ function renderStatus(diagnosis: DomainDiagnosis): string {
       chalk.cyan('Ownership'),
       bad(`Not accessible under ${chalk.bold(facts.contextName)}`),
     ]);
+  } else if (facts.ownership === 'platform-managed') {
+    rows.push([chalk.cyan('Ownership'), good('Managed by Vercel')]);
   }
-  if (facts.config.dnssecEnabled) {
+  if (
+    facts.config.dnssecEnabled &&
+    diagnosis.configurationStatus !== 'scope-resolution-required'
+  ) {
     rows.push([chalk.cyan('DNSSEC'), chalk.yellow('Enabled')]);
   }
 
@@ -111,6 +116,8 @@ function dnsStatus(diagnosis: DomainDiagnosis): string {
       return bad('DNSSEC Needs to be Disabled');
     case 'dns-change-recommended':
       return warning('DNS Change Recommended');
+    case 'scope-resolution-required':
+      return chalk.gray('Not assessed in this scope');
     case 'configured-correctly':
       break;
   }
@@ -122,6 +129,9 @@ function dnsStatus(diagnosis: DomainDiagnosis): string {
 
 function projectStatus(diagnosis: DomainDiagnosis): string {
   const { facts } = diagnosis;
+  if (diagnosis.configurationStatus === 'scope-resolution-required') {
+    return chalk.gray('Not assessed in this scope');
+  }
   switch (facts.project.kind) {
     case 'attached':
       return facts.project.domain.verified
@@ -203,7 +213,10 @@ function pointingStep(diagnosis: DomainDiagnosis): string | null {
     pointing.kind === 'point-domain'
       ? `Point ${diagnosis.facts.domainName} to Vercel with one of the following options:`
       : pointing.kind === 'recommended-change'
-        ? `Vercel recommends updating the DNS records for ${diagnosis.facts.domainName} with one of the following options:`
+        ? diagnosis.facts.ownership === 'current-scope' &&
+          diagnosis.facts.project.kind === 'none'
+          ? `No action is needed for an unused hostname. If ${diagnosis.facts.domainName} is intentionally in use, update its DNS records with one of the following options:`
+          : `Vercel recommends updating the DNS records for ${diagnosis.facts.domainName} with one of the following options:`
         : `To avoid downtime, update the DNS records for ${diagnosis.facts.domainName} with one of the following options:`;
   const lines = [intro];
   pointing.options.forEach((option, index) => {

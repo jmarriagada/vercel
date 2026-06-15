@@ -310,6 +310,50 @@ describe('domains verify', () => {
     expect(byNameRequested).toBe(true);
   });
 
+  it('reports a Vercel-managed project domain as configured', async () => {
+    const domainName = 'my-site.vercel.app';
+    useDomainConfigFor(domainName, {
+      configuredBy: 'A',
+      serviceType: 'zeit.world',
+      nameservers: ['ns1.vercel-dns-3.com', 'ns2.vercel-dns-3.com'],
+      aValues: ['64.29.17.1', '216.198.79.1'],
+      recommendedIPv4: [{ rank: 1, value: ['216.150.1.1'] }],
+      recommendedCNAME: [
+        { rank: 1, value: 'project-specific.vercel-dns-017.com.' },
+      ],
+      ipStatus: 'optional-change',
+    });
+    let ownershipRequests = 0;
+    client.scenario.get(`/v4/domains/${domainName}`, (_req, res) => {
+      ownershipRequests++;
+      res.status(403).json({
+        error: { code: 'forbidden', message: 'Domain access denied' },
+      });
+    });
+    client.scenario.get(`/project-domains/${domainName}`, (_req, res) => {
+      res.json({
+        name: domainName,
+        apexName: 'vercel.app',
+        projectId: 'prj_123',
+        verified: true,
+      });
+    });
+    client.scenario.get('/v9/projects/prj_123', (_req, res) => {
+      res.json({ ...defaultProject, id: 'prj_123', name: 'my-site' });
+    });
+
+    client.setArgv('domains', 'verify', domainName);
+    expect(await domains(client)).toBe(0);
+
+    const commandOutput = client.stderr.getFullOutput();
+    expect(commandOutput).toContain('Valid Configuration');
+    expect(commandOutput).toContain('verified for project my-site');
+    expect(commandOutput).not.toContain('DNS Change Recommended');
+    expect(commandOutput).not.toContain('Ownership');
+    expect(commandOutput).not.toContain('CNAME');
+    expect(ownershipRequests).toBe(0);
+  });
+
   it('passes --strict to the config endpoint', async () => {
     let configQuery: Request['query'] | undefined;
     useDomainConfig({}, req => {
@@ -598,6 +642,13 @@ describe('domains verify', () => {
     // `--scope <team>` and `teams ls` are part of the same printed step
     await expect(client.stderr).toOutput('--scope <team>');
     expect(await exitCodePromise).toBe(1);
+    expect(client.stderr.getFullOutput()).toContain(
+      'Not assessed in this scope'
+    );
+    expect(client.stderr.getFullOutput()).not.toContain(
+      'Invalid Configuration'
+    );
+    expect(client.stderr.getFullOutput()).not.toContain('avoid downtime');
   });
 
   it('reports domain ownership in JSON output', async () => {
@@ -614,6 +665,14 @@ describe('domains verify', () => {
 
     const payload = JSON.parse(client.stdout.getFullOutput());
     expect(payload.domainOwnership).toBe('other-scope');
+    expect(payload.reason).toBe('scope_not_accessible');
+    expect(payload.configurationStatus).toBe('scope-resolution-required');
+    expect(payload.recommended).toEqual({
+      ipv4: [],
+      cname: [],
+      records: [],
+      nameservers: [],
+    });
   });
 
   it('maps invalid_name to a friendly error', async () => {
