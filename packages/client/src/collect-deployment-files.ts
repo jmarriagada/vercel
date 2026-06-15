@@ -11,6 +11,7 @@ type CollectDeploymentFilesOptions = Pick<
   VercelClientOptions,
   | 'archive'
   | 'bulkRedirectsPath'
+  | 'isDirectory'
   | 'prebuilt'
   | 'projectName'
   | 'rootDirectory'
@@ -25,11 +26,10 @@ export interface CollectedDeploymentFiles {
   ignoreList: string[];
 }
 
-export async function collectDeploymentFiles(
+export function assertDeploymentPath(
   path: VercelClientOptions['path'] | undefined,
-  clientOptions: CollectDeploymentFilesOptions,
   debug: Debug
-): Promise<CollectedDeploymentFiles> {
+): asserts path is VercelClientOptions['path'] {
   if (typeof path !== 'string' && !Array.isArray(path)) {
     debug(
       `Error: 'path' is expected to be a string or an array. Received ${typeof path}`
@@ -39,8 +39,17 @@ export async function collectDeploymentFiles(
       message: 'Path not provided',
     });
   }
+}
+
+export async function collectDeploymentFiles(
+  path: VercelClientOptions['path'] | undefined,
+  clientOptions: CollectDeploymentFilesOptions,
+  debug: Debug
+): Promise<CollectedDeploymentFiles> {
+  assertDeploymentPath(path, debug);
 
   const isDirectory = !Array.isArray(path) && lstatSync(path).isDirectory();
+  clientOptions.isDirectory = isDirectory;
 
   if (Array.isArray(path)) {
     for (const filePath of path) {
@@ -68,7 +77,7 @@ export async function collectDeploymentFiles(
 
   const { fileList, ignoreList } = await buildFileTree(
     path,
-    { ...clientOptions, isDirectory },
+    clientOptions,
     debug
   );
   const workPath = typeof path === 'string' ? path : path[0];

@@ -8,7 +8,10 @@ import {
   DeploymentOptions,
   DeploymentEventType,
 } from './types';
-import { collectDeploymentFiles } from './collect-deployment-files';
+import {
+  assertDeploymentPath,
+  collectDeploymentFiles,
+} from './collect-deployment-files';
 
 export default function buildCreateDeployment() {
   return async function* createDeployment(
@@ -20,6 +23,8 @@ export default function buildCreateDeployment() {
     const debug = createDebug(clientOptions.debug);
 
     debug('Creating deployment...');
+
+    assertDeploymentPath(path, debug);
 
     if (typeof clientOptions.token !== 'string') {
       debug(
@@ -57,12 +62,11 @@ export default function buildCreateDeployment() {
       return;
     }
 
-    const {
-      fileList,
-      filesMap: files,
-      isDirectory,
-    } = await collectDeploymentFiles(path, clientOptions, debug);
-    clientOptions.isDirectory = isDirectory;
+    const { fileList, filesMap: files } = await collectDeploymentFiles(
+      path,
+      clientOptions,
+      debug
+    );
 
     // This is a useful warning because it prevents people
     // from getting confused about a deployment that renders 404.

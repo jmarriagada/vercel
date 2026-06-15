@@ -35,7 +35,7 @@ export async function inspectDeploymentFiles(
   const { path } = clientOptions;
   const debug = createDebug(clientOptions.debug);
   const { filesMap, workPath, isDirectory, ignoreList } =
-    await collectDeploymentFiles(path, clientOptions, debug);
+    await collectDeploymentFiles(path, { ...clientOptions }, debug);
 
   const files: DeploymentFileItem[] = [];
   let totalSize = 0;
