@@ -7,17 +7,6 @@ import output from '../output-manager';
 
 const execFileAsync = promisify(execFile);
 
-/**
- * Reads the currently-installed CLI version by invoking the global `--version`
- * fast path.
- *
- * Used after an upgrade to determine the resulting version. This works for both
- * the Node.js CLI and the native binary, since both ship `vercel` and `vc` bins
- * that print the bare semver to stdout — the same detection `vc --version`
- * already relies on.
- *
- * @returns The installed version, or `undefined` if it can't be determined.
- */
 async function getInstalledVersion(): Promise<string | undefined> {
   for (const bin of ['vercel', 'vc']) {
     try {
@@ -29,9 +18,7 @@ async function getInstalledVersion(): Promise<string | undefined> {
       if (version) {
         return version;
       }
-    } catch {
-      // bin not found on PATH; try the next name
-    }
+    } catch {}
   }
   return undefined;
 }
@@ -101,8 +88,6 @@ export async function executeUpgrade(targetVersion?: string): Promise<number> {
         return;
       }
 
-      // The caller already knows the target version (update notifier) — there
-      // is always a newer version in that flow, so just report it.
       if (targetVersion) {
         output.success(
           `Vercel CLI has been upgraded to v${targetVersion} successfully!`
@@ -111,9 +96,6 @@ export async function executeUpgrade(targetVersion?: string): Promise<number> {
         return;
       }
 
-      // No known target (e.g. `vercel upgrade`). Package managers exit 0 even
-      // when nothing changed, so read the now-installed version to report what
-      // actually happened, including when no upgrade was available.
       getInstalledVersion().then(versionAfter => {
         if (versionAfter && versionAfter === versionBefore) {
           output.log(
