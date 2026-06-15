@@ -1,5 +1,8 @@
 import { existsSync } from 'node:fs';
-import { readString, run } from './util';
+import { isBuildContainer, readString, run } from './util';
+
+const BUILDAH_GRAPH_ROOT = '/var/lib/containers/storage';
+const BUILDAH_RUN_ROOT = '/run/containers/storage';
 
 async function hasBinary(name: string): Promise<boolean> {
   try {
@@ -15,9 +18,8 @@ let cachedStorageDriver: Promise<string> | undefined;
 /**
  * Pick a storage driver for container image builds in the build cell. The cell
  * rootfs is overlay-backed, so the default overlay driver fails unless image
- * storage lives on the cell volume (`/var/lib/containers`). When overlay still
- * cannot stack, prefer fuse-overlayfs (if `/dev/fuse` is available) or fall
- * back to vfs.
+ * storage lives on the cell volume (`/var/lib/containers`) with vfs (or
+ * fuse-overlayfs when `/dev/fuse` is available).
  */
 export function selectStorageDriver(): Promise<string> {
   if (!cachedStorageDriver) {
@@ -25,6 +27,12 @@ export function selectStorageDriver(): Promise<string> {
       const override = readString(process.env.VERCEL_VCR_DOCKER_STORAGE_DRIVER);
       if (override) {
         return override;
+      }
+      if (isBuildContainer()) {
+        if ((await hasBinary('fuse-overlayfs')) && existsSync('/dev/fuse')) {
+          return 'fuse-overlayfs';
+        }
+        return 'vfs';
       }
       if ((await hasBinary('fuse-overlayfs')) && existsSync('/dev/fuse')) {
         return 'fuse-overlayfs';
@@ -38,16 +46,21 @@ export function selectStorageDriver(): Promise<string> {
 /** Global buildah CLI flags for the selected storage driver. */
 export async function buildahStorageArgs(): Promise<string[]> {
   const driver = await selectStorageDriver();
+  const rootArgs = isBuildContainer()
+    ? ['--root', BUILDAH_GRAPH_ROOT, '--runroot', BUILDAH_RUN_ROOT]
+    : [];
+
   if (driver === 'vfs') {
-    return ['--storage-driver', 'vfs'];
+    return [...rootArgs, '--storage-driver', 'vfs'];
   }
   if (driver === 'fuse-overlayfs') {
     return [
+      ...rootArgs,
       '--storage-driver',
       'overlay',
       '--storage-opt',
       'overlay.mount_program=/usr/bin/fuse-overlayfs',
     ];
   }
-  return ['--storage-driver', driver];
+  return [...rootArgs, '--storage-driver', driver];
 }

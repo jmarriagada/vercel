@@ -225,6 +225,9 @@ describe('@vercel/container', () => {
     expect(commands.some(c => /\bbuildah\b.*\blogin\b/.test(c))).toBe(true);
     expect(commands.some(c => /\bbuildah\b.*\bpush\b/.test(c))).toBe(true);
     expect(commands.some(c => c.includes('--storage-driver vfs'))).toBe(true);
+    expect(
+      commands.some(c => c.includes('--root /var/lib/containers/storage'))
+    ).toBe(true);
     expect(commands.some(c => c.startsWith('docker build'))).toBe(false);
   });
 
