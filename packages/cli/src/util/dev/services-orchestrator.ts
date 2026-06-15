@@ -735,16 +735,11 @@ export class ServicesOrchestrator {
         `Starting ${chalk.bold(name)} using ${chalk.cyan.bold(spec.builderSpec)}`
       );
 
-      const shimPath = injectNextDevWebSocketShimIfNeeded(
+      injectNextDevWebSocketShimIfNeeded(
         spec.env,
         spec.framework?.settings.devCommand?.value || '',
         { framework: spec.framework?.slug }
       );
-      if (shimPath) {
-        output.debug(
-          `Injecting Next.js dev WebSocket shim for service "${name}": ${shimPath}`
-        );
-      }
 
       const result = await builder.startDevServer({
         entrypoint: spec.entrypoint,
@@ -841,14 +836,9 @@ export class ServicesOrchestrator {
       env.COLUMNS = `${process.stdout.columns}`;
     }
 
-    const shimPath = injectNextDevWebSocketShimIfNeeded(env, devCommand, {
+    injectNextDevWebSocketShimIfNeeded(env, devCommand, {
       framework: framework?.slug,
     });
-    if (shimPath) {
-      output.debug(
-        `Injecting Next.js dev WebSocket shim for service "${name}": ${shimPath}`
-      );
-    }
 
     const child = spawnCommand(devCommand, {
       cwd: workspacePath,

@@ -2812,14 +2812,7 @@ export default class DevServer {
       .replace(/\$PORT/g, `${port}`)
       .replace(/%PORT%/g, `${port}`);
 
-    const shimPath = injectNextDevWebSocketShimIfNeeded(
-      env,
-      command,
-      this.projectSettings
-    );
-    if (shimPath) {
-      output.debug(`Injecting Next.js dev WebSocket shim: ${shimPath}`);
-    }
+    injectNextDevWebSocketShimIfNeeded(env, command, this.projectSettings);
 
     output.debug(
       `Starting dev command with parameters: ${JSON.stringify({
