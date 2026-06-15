@@ -89,7 +89,8 @@ export default async function addStore(
       ],
     });
   }
-  if (!accessFlag && client.nonInteractive) {
+  if (!accessFlag) {
+    // No-op interactively; emits JSON and exits in non-interactive mode.
     outputAgentError(client, {
       status: 'error',
       reason: 'missing_arguments',
@@ -123,22 +124,21 @@ export default async function addStore(
         },
       });
     } else {
-      if (client.nonInteractive) {
-        outputAgentError(client, {
-          status: 'error',
-          reason: 'missing_arguments',
-          message: 'Missing required argument: name.',
-          next: [
-            {
-              command: buildCommandWithGlobalFlags(
-                client.argv,
-                `blob create-store <name> --access ${access} --yes`
-              ),
-              when: 'create the blob store and link it to the project',
-            },
-          ],
-        });
-      }
+      // No-op interactively; emits JSON and exits in non-interactive mode.
+      outputAgentError(client, {
+        status: 'error',
+        reason: 'missing_arguments',
+        message: 'Missing required argument: name.',
+        next: [
+          {
+            command: buildCommandWithGlobalFlags(
+              client.argv,
+              `blob create-store <name> --access ${access} --yes`
+            ),
+            when: 'create the blob store and link it to the project',
+          },
+        ],
+      });
       output.error('Missing required argument: name');
       return 1;
     }

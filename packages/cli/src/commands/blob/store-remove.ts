@@ -59,22 +59,21 @@ export default async function removeStore(
         },
       });
     } else {
-      if (client.nonInteractive) {
-        outputAgentError(client, {
-          status: 'error',
-          reason: 'missing_arguments',
-          message: 'Missing required argument: storeId.',
-          next: [
-            {
-              command: buildCommandWithGlobalFlags(
-                client.argv,
-                'blob delete-store <storeId> --yes'
-              ),
-              when: 'delete the blob store',
-            },
-          ],
-        });
-      }
+      // No-op interactively; emits JSON and exits in non-interactive mode.
+      outputAgentError(client, {
+        status: 'error',
+        reason: 'missing_arguments',
+        message: 'Missing required argument: storeId.',
+        next: [
+          {
+            command: buildCommandWithGlobalFlags(
+              client.argv,
+              'blob delete-store <storeId> --yes'
+            ),
+            when: 'delete the blob store',
+          },
+        ],
+      });
       output.error('Missing required argument: storeId');
       return 1;
     }
@@ -107,19 +106,18 @@ export default async function removeStore(
 
     if (!yes) {
       if (!interactive) {
-        if (client.nonInteractive) {
-          outputAgentError(client, {
-            status: 'error',
-            reason: 'confirmation_required',
-            message: `Removing ${label} cannot be undone and requires confirmation. Re-run with --yes.`,
-            next: [
-              {
-                command: buildCommandWithYes(client.argv),
-                when: 'remove the blob store without prompting',
-              },
-            ],
-          });
-        }
+        // No-op interactively; emits JSON and exits in non-interactive mode.
+        outputAgentError(client, {
+          status: 'error',
+          reason: 'confirmation_required',
+          message: `Removing ${label} cannot be undone and requires confirmation. Re-run with --yes.`,
+          next: [
+            {
+              command: buildCommandWithYes(client.argv),
+              when: 'remove the blob store without prompting',
+            },
+          ],
+        });
         output.error(
           'Confirmation required. Use --yes to skip confirmation in non-interactive environments.'
         );

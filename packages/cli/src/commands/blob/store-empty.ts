@@ -91,19 +91,18 @@ export default async function emptyStore(
 
     if (!yes) {
       if (!interactive) {
-        if (client.nonInteractive) {
-          outputAgentError(client, {
-            status: 'error',
-            reason: 'confirmation_required',
-            message: `Deleting all files in ${label} cannot be undone and requires confirmation. Re-run with --yes.`,
-            next: [
-              {
-                command: buildCommandWithYes(client.argv),
-                when: 'empty the blob store without prompting',
-              },
-            ],
-          });
-        }
+        // No-op interactively; emits JSON and exits in non-interactive mode.
+        outputAgentError(client, {
+          status: 'error',
+          reason: 'confirmation_required',
+          message: `Deleting all files in ${label} cannot be undone and requires confirmation. Re-run with --yes.`,
+          next: [
+            {
+              command: buildCommandWithYes(client.argv),
+              when: 'empty the blob store without prompting',
+            },
+          ],
+        });
         output.error(
           'Missing --yes flag. This is a destructive operation, use --yes to confirm.'
         );

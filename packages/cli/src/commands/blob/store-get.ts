@@ -63,22 +63,21 @@ export default async function getStore(
         },
       });
     } else {
-      if (client.nonInteractive) {
-        outputAgentError(client, {
-          status: 'error',
-          reason: 'missing_arguments',
-          message: 'Missing required argument: storeId.',
-          next: [
-            {
-              command: buildCommandWithGlobalFlags(
-                client.argv,
-                'blob get-store <storeId>'
-              ),
-              when: 'get the blob store details',
-            },
-          ],
-        });
-      }
+      // No-op interactively; emits JSON and exits in non-interactive mode.
+      outputAgentError(client, {
+        status: 'error',
+        reason: 'missing_arguments',
+        message: 'Missing required argument: storeId.',
+        next: [
+          {
+            command: buildCommandWithGlobalFlags(
+              client.argv,
+              'blob get-store <storeId>'
+            ),
+            when: 'get the blob store details',
+          },
+        ],
+      });
       output.error('Missing required argument: storeId');
       return 1;
     }
