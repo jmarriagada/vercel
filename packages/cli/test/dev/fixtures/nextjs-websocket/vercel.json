@@ -1,0 +1,4 @@
+{
+  "framework": "nextjs",
+  "rewrites": [{ "source": "/support", "destination": "/contact" }]
+}

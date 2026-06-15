@@ -1,4 +1,6 @@
 import fs from 'fs-extra';
+import net from 'net';
+import { createHash, randomBytes } from 'crypto';
 import { join, resolve } from 'path';
 import type { ExecaChildProcess } from 'execa';
 import _execa, { type Options } from 'execa';
@@ -150,6 +152,106 @@ export function validateResponseHeaders(res: Response, podId?: string) {
   }
 }
 
+export function webSocketEcho(
+  port: number,
+  path: string,
+  message: string
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const socket = net.connect(port, '127.0.0.1');
+    const key = randomBytes(16).toString('base64');
+    let buffer = Buffer.alloc(0);
+    let handshakeComplete = false;
+
+    const fail = (error: Error) => {
+      socket.destroy();
+      reject(error);
+    };
+
+    socket.setTimeout(10_000, () => {
+      fail(new Error('Timed out waiting for WebSocket response'));
+    });
+
+    socket.once('error', reject);
+    socket.on('data', chunk => {
+      buffer = Buffer.concat([buffer, chunk]);
+
+      if (!handshakeComplete) {
+        const headerEnd = buffer.indexOf('\r\n\r\n');
+        if (headerEnd === -1) return;
+
+        const headers = buffer.subarray(0, headerEnd).toString('utf8');
+        if (!headers.startsWith('HTTP/1.1 101 Switching Protocols')) {
+          fail(new Error(`Unexpected WebSocket handshake:\n${headers}`));
+          return;
+        }
+
+        const accept = createHash('sha1')
+          .update(`${key}258EAFA5-E914-47DA-95CA-C5AB0DC85B11`)
+          .digest('base64');
+        if (
+          !headers
+            .toLowerCase()
+            .includes(`sec-websocket-accept: ${accept.toLowerCase()}`)
+        ) {
+          fail(new Error(`Unexpected Sec-WebSocket-Accept:\n${headers}`));
+          return;
+        }
+
+        handshakeComplete = true;
+        buffer = buffer.subarray(headerEnd + 4);
+        socket.write(maskedTextFrame(message));
+      }
+
+      const text = readTextFrame(buffer);
+      if (text !== undefined) {
+        socket.end();
+        resolve(text);
+      }
+    });
+
+    socket.write(
+      [
+        `GET ${path} HTTP/1.1`,
+        `Host: 127.0.0.1:${port}`,
+        'Upgrade: websocket',
+        'Connection: Upgrade',
+        `Sec-WebSocket-Key: ${key}`,
+        'Sec-WebSocket-Version: 13',
+        '',
+        '',
+      ].join('\r\n')
+    );
+  });
+}
+
+function maskedTextFrame(message: string): Buffer {
+  const payload = Buffer.from(message);
+  const mask = randomBytes(4);
+  const frame = Buffer.alloc(6 + payload.length);
+  frame[0] = 0x81;
+  frame[1] = 0x80 | payload.length;
+  mask.copy(frame, 2);
+
+  for (let i = 0; i < payload.length; i++) {
+    frame[6 + i] = payload[i] ^ mask[i % 4];
+  }
+
+  return frame;
+}
+
+function readTextFrame(buffer: Buffer): string | undefined {
+  if (buffer.length < 2) return undefined;
+
+  const length = buffer[1] & 0x7f;
+  if (length > 125) {
+    throw new Error('Test WebSocket client only supports small frames');
+  }
+  if (buffer.length < 2 + length) return undefined;
+
+  return buffer.subarray(2, 2 + length).toString('utf8');
+}
+
 export async function exec(directory: string, args: string[] = []) {
   const token = await fetchCachedToken();
 
@@ -248,35 +350,29 @@ function getEnvironmentMessage(isDev: boolean): string {
 
 export async function testFixture(
   directory: string,
-  opts: Options<null> & { skipNpmInstall?: boolean } = {},
+  opts: Options<null> & { skipDeploy?: boolean; skipNpmInstall?: boolean } = {},
   args: string[] = []
 ) {
-  const { skipNpmInstall, ...execaOpts } = opts;
+  const { skipDeploy, skipNpmInstall, ...execaOpts } = opts;
   if (!skipNpmInstall) {
     await runNpmInstall(directory);
   }
 
-  const token = await fetchCachedToken();
+  const token = skipDeploy ? undefined : await fetchCachedToken();
+  const tokenArgs = token ? ['-t', token] : [];
+  const scopeArgs =
+    token && process.env.VERCEL_TEAM_ID
+      ? ['--scope', process.env.VERCEL_TEAM_ID]
+      : [];
 
   console.log(
-    `testFixture() ${binaryPath} dev ${directory} -t ***${
-      process.env.VERCEL_TEAM_ID ? ' --scope ***' : ''
-    } -l ${port} ${args.join(' ')}`
+    `testFixture() ${binaryPath} dev ${directory}${
+      token ? ' -t ***' : ''
+    }${scopeArgs.length ? ' --scope ***' : ''} -l ${port} ${args.join(' ')}`
   );
   const dev = execa(
     binaryPath,
-    [
-      'dev',
-      directory,
-      '-t',
-      token,
-      ...(process.env.VERCEL_TEAM_ID
-        ? ['--scope', process.env.VERCEL_TEAM_ID]
-        : []),
-      '-l',
-      String(port),
-      ...args,
-    ],
+    ['dev', directory, ...tokenArgs, ...scopeArgs, '-l', String(port), ...args],
     {
       reject: false,
       shell: true,

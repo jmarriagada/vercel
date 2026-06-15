@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  maybeInjectNextDevWebSocketShim,
+  injectNextDevWebSocketShimIfNeeded,
   prependNodeRequireOption,
   shouldInjectNextDevWebSocketShim,
 } from '../../../../src/util/dev/next-dev-websocket-shim';
@@ -30,7 +30,7 @@ describe('Next.js dev WebSocket shim injection', () => {
   it('mutates NODE_OPTIONS when injection is needed', () => {
     const env = { NODE_OPTIONS: '--trace-warnings' };
 
-    const shimPath = maybeInjectNextDevWebSocketShim(env, 'pnpm dev', {
+    const shimPath = injectNextDevWebSocketShimIfNeeded(env, 'pnpm dev', {
       framework: 'nextjs',
     });
 
@@ -43,7 +43,7 @@ describe('Next.js dev WebSocket shim injection', () => {
   it('leaves NODE_OPTIONS unchanged when injection is not needed', () => {
     const env = { NODE_OPTIONS: '--trace-warnings' };
 
-    expect(maybeInjectNextDevWebSocketShim(env, 'vite dev')).toBeUndefined();
+    expect(injectNextDevWebSocketShimIfNeeded(env, 'vite dev')).toBeUndefined();
     expect(env.NODE_OPTIONS).toBe('--trace-warnings');
   });
 });

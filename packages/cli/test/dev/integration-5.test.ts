@@ -7,6 +7,7 @@ import {
   testFixture,
   testFixtureStdio,
   validateResponseHeaders,
+  webSocketEcho,
 } from './utils';
 import assert from 'assert';
 import nodeFetch from 'node-fetch';
@@ -605,6 +606,7 @@ describe('[vercel dev] Multi-service with experimentalServices', () => {
     const { dev, port, readyResolver } = await testFixture(
       dir,
       {
+        skipDeploy: true,
         skipNpmInstall: true,
         env: {
           VERCEL_USE_EXPERIMENTAL_SERVICES: '1',
@@ -638,6 +640,30 @@ describe('[vercel dev] Multi-service with experimentalServices', () => {
       expect(frontendRes.status).toBe(200);
       const frontendHtml = await frontendRes.text();
       expect(frontendHtml).toContain('Frontend - Explicit Config (Next.js)');
+    } finally {
+      await dev.kill();
+    }
+  });
+
+  test('[vercel dev] Next.js service experimental_upgradeWebSocket', async () => {
+    const dir = fixture('services-nextjs-websocket');
+    const { dev, port, readyResolver } = await testFixture(
+      dir,
+      {
+        skipDeploy: true,
+        env: {
+          VERCEL_USE_EXPERIMENTAL_SERVICES: '1',
+          VERCEL_USE_EXPERIMENTAL_FRAMEWORKS: '1',
+        },
+      },
+      ['--local']
+    );
+
+    try {
+      await readyResolver;
+      await expect(webSocketEcho(port, '/api/ws', 'hello')).resolves.toBe(
+        'echo:hello'
+      );
     } finally {
       await dev.kill();
     }

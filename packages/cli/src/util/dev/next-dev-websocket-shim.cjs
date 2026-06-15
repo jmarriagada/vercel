@@ -56,66 +56,87 @@ if (!globalThis[PATCHED_SYMBOL]) {
       return originalEmit.call(this, event, req, socket, head, ...args);
     }
 
-    socket.setTimeout(0);
-    socket.setNoDelay(true);
-
     const response = new http.ServerResponse(req);
-    if (typeof response.assignSocket === 'function') {
-      response.assignSocket(socket);
-    }
 
-    const abortController = new AbortController();
-    let consumed = false;
-    const context = {
-      waitUntil: promiseOrFunc => {
-        const promise =
-          typeof promiseOrFunc === 'function' ? promiseOrFunc() : promiseOrFunc;
-        Promise.resolve(promise).catch(() => {});
-      },
-      headers: Object.fromEntries(
-        Object.entries(req.headers).map(([key, value]) => [
-          key,
-          Array.isArray(value) ? value.join(',') : value,
-        ])
-      ),
-      method: req.method || 'GET',
-      url: new URL(req.url || '/', getRequestOrigin(req)).toString(),
-      signal: abortController.signal,
-      upgradeWebSocket: () => {
-        if (consumed) {
-          throw new Error(
-            'ctx.upgradeWebSocket() can only be called once per request'
-          );
-        }
-        consumed = true;
-
-        if (typeof response.detachSocket === 'function') {
-          response.detachSocket(socket);
-        }
-        suppressFrameworkResponse(response);
-        preserveAsyncContextOnSocket(socket, requestContext);
-
-        socket.once('close', () => {
-          requestContext.run(context, () => {
-            req.emit('aborted');
-            abortController.abort();
-          });
-        });
-
-        return { req, socket, head: head || Buffer.alloc(0) };
-      },
-    };
-
-    requestContext.run(context, () => {
-      try {
-        originalEmit.call(this, 'request', req, response);
-      } catch (error) {
-        socket.destroy(error);
-      }
+    return emitWebSocketRequest({
+      server: this,
+      req,
+      response,
+      socket,
+      head: head || Buffer.alloc(0),
+      requestContext,
+      originalEmit,
     });
-
-    return true;
   };
+}
+
+function emitWebSocketRequest({
+  server,
+  req,
+  response,
+  socket,
+  head,
+  requestContext,
+  originalEmit,
+}) {
+  socket.setTimeout(0);
+  socket.setNoDelay(true);
+
+  if (typeof response.assignSocket === 'function' && !response.socket) {
+    response.assignSocket(socket);
+  }
+
+  const abortController = new AbortController();
+  let consumed = false;
+  const context = {
+    waitUntil: promiseOrFunc => {
+      const promise =
+        typeof promiseOrFunc === 'function' ? promiseOrFunc() : promiseOrFunc;
+      Promise.resolve(promise).catch(() => {});
+    },
+    headers: Object.fromEntries(
+      Object.entries(req.headers).map(([key, value]) => [
+        key,
+        Array.isArray(value) ? value.join(',') : value,
+      ])
+    ),
+    method: req.method || 'GET',
+    url: new URL(req.url || '/', getRequestOrigin(req)).toString(),
+    signal: abortController.signal,
+    upgradeWebSocket: () => {
+      if (consumed) {
+        throw new Error(
+          'ctx.upgradeWebSocket() can only be called once per request'
+        );
+      }
+      consumed = true;
+
+      if (typeof response.detachSocket === 'function') {
+        response.detachSocket(socket);
+      }
+      suppressFrameworkResponse(response);
+      preserveAsyncContextOnSocket(socket, requestContext);
+
+      socket.once('close', () => {
+        requestContext.run(context, () => {
+          req.emit('aborted');
+          abortController.abort();
+        });
+      });
+
+      return { req, socket, head };
+    },
+  };
+
+  requestContext.run(context, () => {
+    try {
+      originalEmit.call(server, 'request', req, response);
+    } catch (error) {
+      socket.destroy(error);
+    }
+  });
+
+  return true;
 }
 
 function isWebSocketUpgrade(req) {

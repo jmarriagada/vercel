@@ -40,7 +40,7 @@ import { importBuilders } from '../build/import-builders';
 import { getStaticServiceSchedules } from '../service-schedules';
 import output from '../../output-manager';
 import { treeKill } from '../tree-kill';
-import { maybeInjectNextDevWebSocketShim } from './next-dev-websocket-shim';
+import { injectNextDevWebSocketShimIfNeeded } from './next-dev-websocket-shim';
 
 const STARTUP_TIMEOUT = ms('5m');
 
@@ -735,6 +735,17 @@ export class ServicesOrchestrator {
         `Starting ${chalk.bold(name)} using ${chalk.cyan.bold(spec.builderSpec)}`
       );
 
+      const shimPath = injectNextDevWebSocketShimIfNeeded(
+        spec.env,
+        spec.framework?.settings.devCommand?.value || '',
+        { framework: spec.framework?.slug }
+      );
+      if (shimPath) {
+        output.debug(
+          `Injecting Next.js dev WebSocket shim for service "${name}": ${shimPath}`
+        );
+      }
+
       const result = await builder.startDevServer({
         entrypoint: spec.entrypoint,
         workPath: spec.rootPath,
@@ -830,7 +841,7 @@ export class ServicesOrchestrator {
       env.COLUMNS = `${process.stdout.columns}`;
     }
 
-    const shimPath = maybeInjectNextDevWebSocketShim(env, devCommand, {
+    const shimPath = injectNextDevWebSocketShimIfNeeded(env, devCommand, {
       framework: framework?.slug,
     });
     if (shimPath) {

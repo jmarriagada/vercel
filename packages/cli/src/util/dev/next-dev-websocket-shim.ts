@@ -6,7 +6,7 @@ const NEXT_DEV_WEBSOCKET_SHIM = path.join(
   'next-dev-websocket-shim.cjs'
 );
 
-export function maybeInjectNextDevWebSocketShim(
+export function injectNextDevWebSocketShimIfNeeded(
   env: NodeJS.ProcessEnv,
   command: string,
   projectSettings?: Pick<ProjectSettings, 'framework'>

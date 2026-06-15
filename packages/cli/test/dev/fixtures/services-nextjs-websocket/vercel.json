@@ -1,0 +1,9 @@
+{
+  "experimentalServices": {
+    "web": {
+      "framework": "nextjs",
+      "entrypoint": ".",
+      "mount": "/"
+    }
+  }
+}
