@@ -90,7 +90,6 @@ export default async function addStore(
     });
   }
   if (!accessFlag) {
-    // No-op interactively; emits JSON and exits in non-interactive mode.
     outputAgentError(client, {
       status: 'error',
       reason: 'missing_arguments',
@@ -124,7 +123,6 @@ export default async function addStore(
         },
       });
     } else {
-      // No-op interactively; emits JSON and exits in non-interactive mode.
       outputAgentError(client, {
         status: 'error',
         reason: 'missing_arguments',

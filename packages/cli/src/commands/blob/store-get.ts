@@ -63,7 +63,6 @@ export default async function getStore(
         },
       });
     } else {
-      // No-op interactively; emits JSON and exits in non-interactive mode.
       outputAgentError(client, {
         status: 'error',
         reason: 'missing_arguments',

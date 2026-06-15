@@ -91,7 +91,6 @@ export default async function emptyStore(
 
     if (!yes) {
       if (!interactive) {
-        // No-op interactively; emits JSON and exits in non-interactive mode.
         outputAgentError(client, {
           status: 'error',
           reason: 'confirmation_required',

@@ -59,7 +59,6 @@ export default async function removeStore(
         },
       });
     } else {
-      // No-op interactively; emits JSON and exits in non-interactive mode.
       outputAgentError(client, {
         status: 'error',
         reason: 'missing_arguments',
@@ -106,7 +105,6 @@ export default async function removeStore(
 
     if (!yes) {
       if (!interactive) {
-        // No-op interactively; emits JSON and exits in non-interactive mode.
         outputAgentError(client, {
           status: 'error',
           reason: 'confirmation_required',
