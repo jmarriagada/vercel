@@ -386,6 +386,9 @@ describe('domains verify', () => {
       `vercel domains add ${domainName} <project>`
     );
     expect(commandOutput).toContain(
+      `To use ${domainName}, attach it to a project`
+    );
+    expect(commandOutput).not.toContain(
       'No action is needed for an unused hostname'
     );
     expect(commandOutput).not.toContain('DNS Change Recommended');

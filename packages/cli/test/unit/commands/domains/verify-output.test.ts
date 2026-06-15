@@ -123,9 +123,14 @@ describe('domains verify output adapters', () => {
       },
     });
     expect(humanText).toContain('Not assessed without a project');
-    expect(humanText).toContain('No action is needed for an unused hostname');
+    expect(humanText).toContain(
+      'To use unused.example.com, attach it to a project'
+    );
     expect(humanText).toContain(
       'vercel domains add unused.example.com <project>'
+    );
+    expect(humanText).not.toContain(
+      'No action is needed for an unused hostname'
     );
     expect(humanText).not.toContain('DNS Change Recommended');
     expect(humanText).not.toContain('avoid downtime');

@@ -305,9 +305,9 @@ function verificationSteps(diagnosis: DomainDiagnosis): string[] {
 function attachProjectStep(diagnosis: DomainDiagnosis): string | null {
   const attachProject = diagnosis.remediation.attachProject;
   if (attachProject && diagnosis.status === 'project-attachment-recommended') {
-    return `No action is needed for an unused hostname. To use ${diagnosis.facts.domainName}, replace ${code(
-      '<project>'
-    )} with the target project and run ${code(attachProject.command)}.`;
+    return `To use ${diagnosis.facts.domainName}, attach it to a project by running ${code(
+      attachProject.command
+    )}.`;
   }
   return attachProject
     ? `Add the domain to the project by running ${code(attachProject.command)}.`

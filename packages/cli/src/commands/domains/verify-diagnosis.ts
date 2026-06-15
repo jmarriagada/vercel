@@ -322,7 +322,7 @@ function statusDetails(
       return {
         reason: AGENT_REASON.PROJECT_ATTACHMENT_RECOMMENDED,
         message: `${domainName} is owned by ${facts.contextName} but is not attached to a project.`,
-        hint: 'No action is needed for an unused hostname. To use it, replace <project> in next[] with the project that should serve the domain.',
+        hint: 'To use the domain, replace <project> in next[] with the project that should serve it.',
       };
     case 'scope-resolution-required':
       return {
