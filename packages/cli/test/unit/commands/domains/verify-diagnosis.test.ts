@@ -500,7 +500,7 @@ describe('domains verify diagnosis', () => {
     expect(diagnosis.recommendedDnsRecords).toEqual([]);
   });
 
-  it('resolves scope before project mutations', () => {
+  it('resolves scope before reporting a missing project domain', () => {
     const facts = verificationFacts({
       ownership: 'other-scope',
       project: { kind: 'missing', idOrName: 'other-site' },
@@ -508,6 +508,16 @@ describe('domains verify diagnosis', () => {
 
     const diagnosis = diagnose(facts);
 
+    expect(diagnosis).toMatchObject({
+      status: 'scope-resolution-required',
+      configurationStatus: 'scope-resolution-required',
+      details: {
+        reason: 'scope_not_accessible',
+      },
+    });
+    expect(diagnosis.issues.map(issue => issue.domainStatus)).toEqual([
+      'scope-resolution-required',
+    ]);
     expect(diagnosis.next).toEqual([
       {
         command: 'vercel teams ls',

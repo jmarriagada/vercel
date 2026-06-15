@@ -193,6 +193,9 @@ function getDomainStatus(
   configurationStatus: ConfigurationStatus,
   project: ProjectStatus
 ): DomainStatus {
+  if (configurationStatus === 'scope-resolution-required') {
+    return configurationStatus;
+  }
   if (project.kind === 'missing') {
     return 'project-domain-missing';
   }

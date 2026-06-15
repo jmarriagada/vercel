@@ -695,6 +695,56 @@ describe('domains verify', () => {
     });
   });
 
+  it('prioritizes scope resolution for an explicit project', async () => {
+    useDomainConfig();
+    useOwnedDomainForbidden();
+    client.scenario.get(
+      `/v9/projects/my-site/domains/${DOMAIN}`,
+      (_req, res) => {
+        res.status(404).json({
+          error: { code: 'not_found', message: 'Domain not found' },
+        });
+      }
+    );
+
+    client.setArgv(
+      'domains',
+      'verify',
+      DOMAIN,
+      '--project',
+      'my-site',
+      '--format',
+      'json'
+    );
+    expect(await domains(client)).toBe(1);
+
+    const payload = JSON.parse(client.stdout.getFullOutput());
+    expect(payload).toMatchObject({
+      reason: 'scope_not_accessible',
+      domainStatus: 'scope-resolution-required',
+      configurationStatus: 'scope-resolution-required',
+      project: {
+        idOrName: 'my-site',
+        attached: false,
+      },
+    });
+    expect(
+      payload.issues.map(
+        (issue: { domainStatus: string }) => issue.domainStatus
+      )
+    ).toEqual(['scope-resolution-required']);
+    expect(payload.next).toEqual([
+      {
+        command: 'vercel teams ls',
+        when: 'List teams to find the scope that owns the domain',
+      },
+      {
+        command: `vercel domains verify ${DOMAIN} --project my-site --format=json --scope <team>`,
+        when: 'Replace <team> with the owning team and retry',
+      },
+    ]);
+  });
+
   it('maps invalid_name to a friendly error', async () => {
     client.scenario.get(`/v6/domains/${DOMAIN}/config`, (_req, res) => {
       res.status(400).json({
