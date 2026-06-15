@@ -395,15 +395,11 @@ describe('blob empty-store', () => {
   });
 
   describe('non-interactive mode (agents)', () => {
-    let exitSpy: ReturnType<typeof vi.spyOn>;
-
     beforeEach(() => {
       client.nonInteractive = true;
       // The mock throws to simulate process.exit terminating; the command's
       // try/catch may swallow it, so we assert on the spy, not a rejection.
-      exitSpy = vi.spyOn(process, 'exit').mockImplementation(((
-        _code?: number
-      ) => {
+      vi.spyOn(process, 'exit').mockImplementation(((_code?: number) => {
         throw new Error('exit');
       }) as () => never);
     });
@@ -411,7 +407,7 @@ describe('blob empty-store', () => {
     it('requires --yes and emits confirmation_required instead of prompting', async () => {
       await emptyStore(client, [], fullToken).catch(() => {});
 
-      expect(exitSpy).toHaveBeenCalledWith(1);
+      expect(vi.mocked(process.exit)).toHaveBeenCalledWith(1);
       expect(confirmInputMock).not.toHaveBeenCalled();
       expect(mockedBlob.del).not.toHaveBeenCalled();
       const payload = JSON.parse(client.stdout.getFullOutput());

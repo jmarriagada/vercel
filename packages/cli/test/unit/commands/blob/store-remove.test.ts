@@ -699,15 +699,11 @@ describe('blob store remove', () => {
   });
 
   describe('non-interactive mode (agents)', () => {
-    let exitSpy: ReturnType<typeof vi.spyOn>;
-
     beforeEach(() => {
       client.nonInteractive = true;
       // The mock throws to simulate process.exit terminating; the command's
       // try/catch may swallow it, so we assert on the spy, not a rejection.
-      exitSpy = vi.spyOn(process, 'exit').mockImplementation(((
-        _code?: number
-      ) => {
+      vi.spyOn(process, 'exit').mockImplementation(((_code?: number) => {
         throw new Error('exit');
       }) as () => never);
     });
@@ -717,7 +713,7 @@ describe('blob store remove', () => {
         () => {}
       );
 
-      expect(exitSpy).toHaveBeenCalledWith(1);
+      expect(vi.mocked(process.exit)).toHaveBeenCalledWith(1);
       expect(confirmInputMock).not.toHaveBeenCalled();
       const payload = JSON.parse(client.stdout.getFullOutput());
       expect(payload).toMatchObject({
@@ -735,7 +731,7 @@ describe('blob store remove', () => {
     it('emits missing_arguments when no store id is available', async () => {
       await removeStore(client, [], noToken).catch(() => {});
 
-      expect(exitSpy).toHaveBeenCalledWith(1);
+      expect(vi.mocked(process.exit)).toHaveBeenCalledWith(1);
       const payload = JSON.parse(client.stdout.getFullOutput());
       expect(payload).toMatchObject({
         status: 'error',
