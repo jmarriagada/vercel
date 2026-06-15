@@ -25,7 +25,11 @@ import { teamPromise, userPromise } from './helpers/get-account';
 import { apiFetch } from './helpers/api-fetch';
 
 const TEST_TIMEOUT = 3 * 60 * 1000;
-vi.setConfig({ testTimeout: TEST_TIMEOUT, hookTimeout: TEST_TIMEOUT });
+vi.setConfig({
+  testTimeout: TEST_TIMEOUT,
+  hookTimeout: TEST_TIMEOUT,
+  retry: 2,
+});
 
 const binaryPath = path.resolve(__dirname, `../scripts/start.js`);
 

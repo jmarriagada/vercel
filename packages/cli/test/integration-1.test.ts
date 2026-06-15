@@ -16,7 +16,13 @@ import type { CLIProcess } from './helpers/types';
 import { randomBytes } from 'crypto';
 
 const TEST_TIMEOUT = 3 * 60 * 1000;
-vi.setConfig({ testTimeout: TEST_TIMEOUT, hookTimeout: TEST_TIMEOUT });
+// retry: these tests drive the real CLI against the live API and occasionally
+// stall on startup; per-test retries de-flake without masking real failures.
+vi.setConfig({
+  testTimeout: TEST_TIMEOUT,
+  hookTimeout: TEST_TIMEOUT,
+  retry: 2,
+});
 
 const binaryPath = path.resolve(__dirname, '../scripts/start.js');
 
