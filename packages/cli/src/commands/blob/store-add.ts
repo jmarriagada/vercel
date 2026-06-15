@@ -43,6 +43,13 @@ export default async function addStore(
   const yes = flags['--yes'] ?? false;
   const environmentFlags = flags['--environment'];
 
+  // Only prompt when there's an interactive terminal AND the user hasn't opted
+  // out — either explicitly via `--non-interactive` or because an agent was
+  // auto-detected. Mirrors how `teams add` and other commands gate prompts on
+  // `client.nonInteractive` rather than on `isTTY` alone (agents often run with
+  // a pseudo-TTY, so `isTTY` can't be trusted on its own).
+  const canPrompt = client.stdin.isTTY && !client.nonInteractive;
+
   // Validate --environment values early
   if (environmentFlags?.length) {
     const envValidation = validateEnvironments(environmentFlags);
@@ -55,7 +62,7 @@ export default async function addStore(
   }
 
   let accessFlag = flags['--access'];
-  if (!accessFlag && client.stdin.isTTY) {
+  if (!accessFlag && canPrompt) {
     accessFlag = await client.input.select<'public' | 'private'>({
       message: 'Choose the access type for the blob store',
       choices: [
@@ -81,7 +88,7 @@ export default async function addStore(
 
   let name = nameArg;
   if (!name) {
-    if (!client.stdin.isTTY) {
+    if (!canPrompt) {
       output.error('Missing required argument: name');
       return 1;
     }
@@ -137,8 +144,10 @@ export default async function addStore(
   output.log(`Access: ${access}. Learn more: ${output.link(docsUrl, docsUrl)}`);
 
   if (link.status === 'linked') {
+    // In non-interactive mode we never prompt to link; require an explicit
+    // `--yes` to opt into connecting the store (and pulling env vars).
     let shouldLink = yes;
-    if (!shouldLink) {
+    if (!shouldLink && canPrompt) {
       shouldLink = await client.input.confirm(
         `Would you like to link this blob store to ${link.project.name}?`,
         true
@@ -149,7 +158,7 @@ export default async function addStore(
       let environments: string[];
       if (environmentFlags?.length) {
         environments = environmentFlags;
-      } else if (yes) {
+      } else if (yes || !canPrompt) {
         environments = [...VALID_ENVIRONMENTS];
       } else {
         environments = await client.input.checkbox({

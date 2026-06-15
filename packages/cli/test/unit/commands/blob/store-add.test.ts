@@ -797,4 +797,72 @@ describe('blob store add', () => {
       expect(mockedOutput.stopSpinner).not.toHaveBeenCalled();
     });
   });
+
+  describe('non-interactive mode', () => {
+    beforeEach(() => {
+      // Simulate an agent / `--non-interactive` run: a TTY may be present, but
+      // the CLI has been told not to prompt.
+      client.nonInteractive = true;
+      client.input.select = vi.fn();
+    });
+
+    it('errors on a missing name instead of prompting', async () => {
+      const exitCode = await addStore(client, ['--access', 'public']);
+
+      expect(exitCode).toBe(1);
+      expect(mockedOutput.error).toHaveBeenCalledWith(
+        'Missing required argument: name'
+      );
+      expect(client.input.text).not.toHaveBeenCalled();
+      expect(client.fetch).not.toHaveBeenCalled();
+    });
+
+    it('errors on a missing --access instead of prompting', async () => {
+      const exitCode = await addStore(client, ['test-store']);
+
+      expect(exitCode).toBe(1);
+      expect(mockedOutput.error).toHaveBeenCalledWith(
+        "Missing required --access flag. Must be 'public' or 'private'."
+      );
+      expect(client.input.select).not.toHaveBeenCalled();
+      expect(client.fetch).not.toHaveBeenCalled();
+    });
+
+    it('creates the store without prompting to link when --yes is absent', async () => {
+      const exitCode = await addStore(client, [
+        '--access',
+        'public',
+        'test-store',
+      ]);
+
+      expect(exitCode).toBe(0);
+      expect(client.fetch).toHaveBeenCalledWith(
+        '/v1/storage/stores/blob',
+        expect.objectContaining({ method: 'POST' })
+      );
+      expect(client.input.confirm).not.toHaveBeenCalled();
+      expect(mockedConnectResourceToProject).not.toHaveBeenCalled();
+      expect(mockedEnvPullCommandLogic).not.toHaveBeenCalled();
+    });
+
+    it('links to all environments with --yes without prompting', async () => {
+      const exitCode = await addStore(client, [
+        '--access',
+        'public',
+        '--yes',
+        'test-store',
+      ]);
+
+      expect(exitCode).toBe(0);
+      expect(client.input.confirm).not.toHaveBeenCalled();
+      expect(client.input.checkbox).not.toHaveBeenCalled();
+      expect(mockedConnectResourceToProject).toHaveBeenCalledWith(
+        client,
+        'proj_123',
+        'store_test123',
+        ['production', 'preview', 'development'],
+        { accountId: 'org_123' }
+      );
+    });
+  });
 });
