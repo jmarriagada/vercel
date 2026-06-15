@@ -173,7 +173,7 @@ describe('deploy', () => {
     expect(output).toContain('src');
     expect(output).toContain('Largest Files');
     expect(output).toContain('public/hero.png');
-    expect(output).toContain(
+    expect(output).not.toContain(
       'No files were uploaded and no deployment was created.'
     );
     expect(client.telemetryEventStore).toHaveTelemetryEvents([
@@ -224,6 +224,75 @@ describe('deploy', () => {
         expect.objectContaining({ path: 'public/logo.svg' }),
       ])
     );
+  });
+
+  it('should print every dry-run file as JSON when stdout is non-TTY', async () => {
+    const cwd = setupTmpDir('deploy-dry-run-non-tty');
+    useUser();
+    useTeams('team_dummy');
+    useProject({
+      ...defaultProject,
+      id: 'deploy-dry-run-non-tty',
+      name: 'deploy-dry-run-non-tty',
+    });
+    await Promise.all(
+      Array.from({ length: 12 }, (_, index) =>
+        fs.outputFile(join(cwd, `src/file-${index}.js`), String(index))
+      )
+    );
+    await fs.outputFile(
+      join(cwd, '.vercel/project.json'),
+      JSON.stringify({
+        orgId: 'team_dummy',
+        projectId: 'deploy-dry-run-non-tty',
+      })
+    );
+
+    client.stdout.isTTY = false;
+    client.setArgv('deploy', cwd, '--dry-run');
+    const exitCode = await deploy(client);
+    const payload = JSON.parse(client.stdout.getFullOutput());
+
+    expect(exitCode).toEqual(0);
+    expect(payload.fileCount).toEqual(12);
+    expect(payload.files).toHaveLength(12);
+    expect(payload.largestFiles).toHaveLength(10);
+    expect(payload.files).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ path: 'src/file-0.js' }),
+        expect.objectContaining({ path: 'src/file-11.js' }),
+      ])
+    );
+  });
+
+  it('should inspect the archive payload when `--archive=tgz` is used', async () => {
+    const cwd = setupTmpDir('deploy-dry-run-archive');
+    useUser();
+    useTeams('team_dummy');
+    useProject({
+      ...defaultProject,
+      id: 'deploy-dry-run-archive',
+      name: 'deploy-dry-run-archive',
+    });
+    await fs.outputFile(join(cwd, 'src/index.js'), 'export default 1;');
+    await fs.outputFile(
+      join(cwd, '.vercel/project.json'),
+      JSON.stringify({
+        orgId: 'team_dummy',
+        projectId: 'deploy-dry-run-archive',
+      })
+    );
+
+    client.setArgv('deploy', cwd, '--dry-run', '--archive=tgz', '--json');
+    const exitCode = await deploy(client);
+    const payload = JSON.parse(client.stdout.getFullOutput());
+
+    expect(exitCode).toEqual(0);
+    expect(payload.files).toEqual([
+      expect.objectContaining({
+        path: '.vercel/source.tgz.part1',
+      }),
+    ]);
   });
 
   it('should reject deploying when `--prebuilt` is used and `vc build` failed before Builders', async () => {

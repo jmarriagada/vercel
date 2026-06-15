@@ -1254,6 +1254,7 @@ async function handleDefaultDeploy(
     try {
       const summary = await inspectDeploymentFiles({
         path: cwd,
+        archive: parsedArchive ? 'tgz' : undefined,
         debug: output.isDebugEnabled(),
         prebuilt: parsedArguments.flags['--prebuilt'],
         vercelOutputDir,
@@ -1262,7 +1263,7 @@ async function handleDefaultDeploy(
         bulkRedirectsPath: localConfig.bulkRedirectsPath,
       });
 
-      printDeploymentDryRun(client, summary, asJson);
+      printDeploymentDryRun(client, summary, asJson || !client.stdout.isTTY);
       return 0;
     } catch (err: unknown) {
       printError(err);
@@ -1989,6 +1990,7 @@ function printDeploymentDryRun(
           fileCount: summary.fileCount,
           totalSize: summary.totalSize,
           ignoredCount: summary.ignoredCount,
+          ignored: summary.ignored,
           directories,
           largestFiles,
           files: summary.files,
@@ -2040,7 +2042,6 @@ function printDeploymentDryRun(
     );
   }
 
-  lines.push('No files were uploaded and no deployment was created.');
   output.print(`${lines.join('\n')}\n`);
 }
 

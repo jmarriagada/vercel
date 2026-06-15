@@ -1,10 +1,7 @@
-import { lstatSync } from 'fs-extra';
-import { isAbsolute, relative, sep } from 'path';
-import { DeploymentError } from './errors';
+import { relative, sep } from 'path';
+import { collectDeploymentFiles } from './collect-deployment-files';
 import type { VercelClientOptions } from './types';
-import { createTgzFiles } from './utils/archive';
-import { hashes } from './utils/hashes';
-import { buildFileTree, createDebug } from './utils';
+import { createDebug } from './utils';
 
 export interface DeploymentFileItem {
   path: string;
@@ -37,40 +34,8 @@ export async function inspectDeploymentFiles(
 ): Promise<DeploymentFileSummary> {
   const { path } = clientOptions;
   const debug = createDebug(clientOptions.debug);
-
-  if (typeof path !== 'string' && !Array.isArray(path)) {
-    throw new DeploymentError({
-      code: 'missing_path',
-      message: 'Path not provided',
-    });
-  }
-
-  const isDirectory = !Array.isArray(path) && lstatSync(path).isDirectory();
-
-  if (Array.isArray(path)) {
-    for (const filePath of path) {
-      if (!isAbsolute(filePath)) {
-        throw new DeploymentError({
-          code: 'invalid_path',
-          message: `Provided path ${filePath} is not absolute`,
-        });
-      }
-    }
-  } else if (!isAbsolute(path)) {
-    throw new DeploymentError({
-      code: 'invalid_path',
-      message: `Provided path ${path} is not absolute`,
-    });
-  }
-
-  const options = { ...clientOptions, isDirectory };
-  const { fileList, ignoreList } = await buildFileTree(path, options, debug);
-  const workPath = typeof path === 'string' ? path : path[0];
-
-  const filesMap =
-    clientOptions.archive === 'tgz'
-      ? await createTgzFiles(workPath, fileList, debug)
-      : await hashes(fileList);
+  const { filesMap, workPath, isDirectory, ignoreList } =
+    await collectDeploymentFiles(path, clientOptions, debug);
 
   const files: DeploymentFileItem[] = [];
   let totalSize = 0;
