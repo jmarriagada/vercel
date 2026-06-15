@@ -66,6 +66,7 @@ import { executeUpgrade } from './util/upgrade';
 import {
   canAutoUpdate,
   hasAutoUpdatePreference,
+  isNativeBinaryInstall,
   setAutoUpdate,
 } from './util/updates';
 import { getCommandName, getTitleName } from './util/pkg-name';
@@ -252,7 +253,9 @@ const main = async () => {
 
   // If empty, leave this code here for easy adding of beta commands later
   const betaCommands: string[] = ['api', 'crons', 'curl', 'webhooks'];
-  const versionBanner = `${getTitleName()} CLI ${pkg.version} (Node.js ${process.versions.node})`;
+  const versionBanner = isNativeBinaryInstall()
+    ? `${getTitleName()} CLI ${pkg.version}`
+    : `${getTitleName()} CLI ${pkg.version} (Node.js ${process.versions.node})`;
   const msg = betaCommands.includes(targetOrSubcommand)
     ? `${versionBanner} | ${targetOrSubcommand} is in beta — https://vercel.com/feedback`
     : versionBanner;
@@ -1309,7 +1312,7 @@ main()
             resolvedCommandForUpdate
           )
         ) {
-          const upgradeExitCode = await executeUpgrade();
+          const upgradeExitCode = await executeUpgrade(latest);
           process.exitCode = originalExitCode;
           if (upgradeExitCode !== 0) {
             output.log(
@@ -1346,7 +1349,7 @@ main()
             );
 
             if (shouldUpgrade) {
-              const upgradeExitCode = await executeUpgrade();
+              const upgradeExitCode = await executeUpgrade(latest);
               if (
                 upgradeExitCode === 0 &&
                 !hasAutoUpdatePreference(client.config)
