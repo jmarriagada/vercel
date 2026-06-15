@@ -1,5 +1,136 @@
 # vercel
 
+## 54.14.0
+
+### Minor Changes
+
+- 210748e: [cli] Add `vercel ai-gateway rules` add/list/edit/remove commands
+
+### Patch Changes
+
+- Updated dependencies [d712d41]
+- Updated dependencies [dbb31fc]
+- Updated dependencies [f7f0003]
+  - @vercel/python@6.45.0
+
+## 54.13.0
+
+### Minor Changes
+
+- 128ad88: Add `--category` / `-c` filter to `vercel integration discover` and a new `vercel integration categories` subcommand. The filter scopes marketplace integrations to a single category (e.g. `storage`, `ai`, `monitoring`) — filtering happens server-side. The new `categories` subcommand lists the valid slugs (`Slug | Title` table or `--json` for scripts/agents).
+
+### Patch Changes
+
+- Updated dependencies [c453e66]
+  - @vercel/backends@0.8.14
+  - @vercel/static-build@2.10.3
+  - @vercel/express@0.1.105
+
+## 54.12.2
+
+### Patch Changes
+
+- Updated dependencies [4421ad9]
+  - @vercel/backends@0.8.13
+  - @vercel/static-build@2.10.3
+  - @vercel/express@0.1.104
+
+## 54.12.1
+
+### Patch Changes
+
+- 800286e: `vercel connect create --data` now accepts `@<path>` to read the JSON from a file and `@-` to read it from stdin, so non-managed connector credentials (e.g. client secrets) no longer have to be passed inline where they leak into shell history and process listings. Inline `--data` still works but now warns when it looks like it contains a secret.
+- 800286e: Strip ANSI escape sequences from team-controlled connector names, UIDs, and project names in all `vercel connect` command output (`attach`, `detach`, `remove`, `revoke-tokens`, and the `list` table's type/projects cells), not just the `list` UID/name cells. Prevents terminal escape injection from maliciously-named connectors visible across a team.
+- 1e64d1f: Added `vc api --spec-url <url>` for loading endpoints from a custom OpenAPI spec instead of the default public Vercel spec. Custom specs are fetched fresh, can use the current CLI token to pass Vercel deployment protection via the SSO handshake, and replace the public spec entirely for listing, interactive selection, and tag/operation resolution.
+- Updated dependencies [52f005f]
+- Updated dependencies [2d2aad9]
+- Updated dependencies [01e18e8]
+  - @vercel/backends@0.8.12
+  - @vercel/build-utils@13.30.0
+  - @vercel/next@4.19.0
+  - @vercel/elysia@0.1.93
+  - @vercel/express@0.1.103
+  - @vercel/fastify@0.1.96
+  - @vercel/go@3.9.0
+  - @vercel/h3@0.1.102
+  - @vercel/hono@0.2.96
+  - @vercel/hydrogen@1.4.0
+  - @vercel/koa@0.1.76
+  - @vercel/nestjs@0.2.97
+  - @vercel/node@5.8.17
+  - @vercel/python@6.44.1
+  - @vercel/redwood@2.5.0
+  - @vercel/remix-builder@5.9.1
+  - @vercel/ruby@2.4.0
+  - @vercel/rust@1.3.0
+  - @vercel/static-build@2.10.3
+
+## 54.12.0
+
+### Minor Changes
+
+- 5757bca: [services] add support to `vc dev` for `experimentalServicesV2`.
+
+### Patch Changes
+
+- 663307f: Fix CLI self-upgrade failing with `EUNSUPPORTEDPROTOCOL` inside pnpm/yarn workspaces
+- 32a730e: Elevate maximum maxDuration to 1800s
+- Updated dependencies [4637f0a]
+- Updated dependencies [32a730e]
+- Updated dependencies [c5d53d7]
+- Updated dependencies [a5034c1]
+- Updated dependencies [0c4ea01]
+  - @vercel/python@6.44.1
+  - @vercel/build-utils@13.29.1
+  - @vercel/remix-builder@5.9.1
+  - @vercel/go@3.9.0
+  - @vercel/node@5.8.16
+  - @vercel/static-build@2.10.2
+  - @vercel/backends@0.8.11
+  - @vercel/elysia@0.1.92
+  - @vercel/express@0.1.102
+  - @vercel/fastify@0.1.95
+  - @vercel/h3@0.1.101
+  - @vercel/hono@0.2.95
+  - @vercel/hydrogen@1.4.0
+  - @vercel/koa@0.1.75
+  - @vercel/nestjs@0.2.96
+  - @vercel/next@4.18.0
+  - @vercel/redwood@2.5.0
+  - @vercel/ruby@2.4.0
+  - @vercel/rust@1.3.0
+
+## 54.11.1
+
+### Patch Changes
+
+- 8d8e871: Evaluate the `maxDuration` upper bound at validation time so `VERCEL_CLI_SKIP_MAX_DURATION_LIMIT` works regardless of import order.
+
+  The gate was read when `@vercel/build-utils`' `functionsSchema` was constructed and when the CLI compiled its `vercel.json` validator — both at module load. Any process that imports these modules before setting the env var baked in the default 900-second maximum and ignored the flag, failing with `Invalid vercel.json - functions[...].maxDuration should be <= 900`.
+
+  `@vercel/build-utils` now exposes `getFunctionsSchema()`, which reads the limit at call time (the existing `functionsSchema` const is kept but deprecated). The CLI builds and compiles its config validator lazily, caching one validator per resolved limit, so setting the variable after import takes effect. Default behavior is unchanged — the 900s maximum, the lower bound, and the integer check are all still enforced when the variable is unset.
+
+- Updated dependencies [8d8e871]
+  - @vercel/build-utils@13.29.0
+  - @vercel/backends@0.8.10
+  - @vercel/elysia@0.1.91
+  - @vercel/express@0.1.101
+  - @vercel/fastify@0.1.94
+  - @vercel/go@3.8.0
+  - @vercel/h3@0.1.100
+  - @vercel/hono@0.2.94
+  - @vercel/hydrogen@1.4.0
+  - @vercel/koa@0.1.74
+  - @vercel/nestjs@0.2.95
+  - @vercel/next@4.18.0
+  - @vercel/node@5.8.15
+  - @vercel/python@6.44.0
+  - @vercel/redwood@2.5.0
+  - @vercel/remix-builder@5.9.0
+  - @vercel/ruby@2.4.0
+  - @vercel/rust@1.3.0
+  - @vercel/static-build@2.10.1
+
 ## 54.11.0
 
 ### Minor Changes

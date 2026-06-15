@@ -1,5 +1,50 @@
 # @vercel/fs-detectors
 
+## 6.9.0
+
+### Minor Changes
+
+- 3d8df16: Add bun preset.
+
+### Patch Changes
+
+- Updated dependencies [2fd14e0]
+- Updated dependencies [68c2fd7]
+- Updated dependencies [3d8df16]
+  - @vercel/frameworks@3.29.0
+
+## 6.8.5
+
+### Patch Changes
+
+- Updated dependencies [4421ad9]
+  - @vercel/frameworks@3.28.1
+
+## 6.8.4
+
+### Patch Changes
+
+- Updated dependencies [01e18e8]
+  - @vercel/build-utils@13.30.0
+
+## 6.8.3
+
+### Patch Changes
+
+- 32a730e: Elevate maximum maxDuration to 1800s
+- Updated dependencies [32a730e]
+  - @vercel/build-utils@13.29.1
+
+## 6.8.2
+
+### Patch Changes
+
+- Updated dependencies [8d8e871]
+- Updated dependencies [90a7cc1]
+  - @vercel/build-utils@13.29.0
+  - @vercel/routing-utils@6.3.0
+  - @vercel/frameworks@3.28.0
+
 ## 6.8.1
 
 ### Patch Changes

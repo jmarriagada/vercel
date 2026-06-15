@@ -1,5 +1,33 @@
 # @vercel/build-utils
 
+## 13.30.0
+
+### Minor Changes
+
+- 01e18e8: Add `hasFallback`, `htmlSize`, and `isDynamicRoute` to `Prerender`
+
+  These optional fields surface per-route PPR shell metadata in the Build Output so consumers can classify prerenders (e.g. full shell vs. empty shell vs. concrete prerender):
+
+  - `hasFallback` — whether a dynamic route template had a static fallback (`undefined` for concrete prerenders)
+  - `htmlSize` — byte size of the prerendered `.html` shell (`0` for an empty shell, `undefined` when there's no `.html`)
+  - `isDynamicRoute` — whether the entry came from a dynamic route template rather than a concrete prerender
+
+## 13.29.1
+
+### Patch Changes
+
+- 32a730e: Elevate maximum maxDuration to 1800s
+
+## 13.29.0
+
+### Minor Changes
+
+- 8d8e871: Evaluate the `maxDuration` upper bound at validation time so `VERCEL_CLI_SKIP_MAX_DURATION_LIMIT` works regardless of import order.
+
+  The gate was read when `@vercel/build-utils`' `functionsSchema` was constructed and when the CLI compiled its `vercel.json` validator — both at module load. Any process that imports these modules before setting the env var baked in the default 900-second maximum and ignored the flag, failing with `Invalid vercel.json - functions[...].maxDuration should be <= 900`.
+
+  `@vercel/build-utils` now exposes `getFunctionsSchema()`, which reads the limit at call time (the existing `functionsSchema` const is kept but deprecated). The CLI builds and compiles its config validator lazily, caching one validator per resolved limit, so setting the variable after import takes effect. Default behavior is unchanged — the 900s maximum, the lower bound, and the integer check are all still enforced when the variable is unset.
+
 ## 13.28.0
 
 ### Minor Changes
