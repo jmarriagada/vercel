@@ -78,7 +78,7 @@ describe('pull', () => {
       `Downloading \`development\` environment variables for ${teams[0].slug}/vercel-pull-next`
     );
     await expect(client.stderr).toOutput(
-      `Created .vercel${path.sep}.env.development.local file`
+      `✓ Created         .vercel${path.sep}.env.development.local file`
     );
     await expect(client.stderr).toOutput(
       `Downloaded project settings to ${cwd}${path.sep}.vercel${path.sep}project.json`
@@ -157,7 +157,7 @@ describe('pull', () => {
         `Downloading \`development\` environment variables for ${teams[0].slug}/vercel-pull-next`
       );
       await expect(client.stderr).toOutput(
-        `Created .vercel${path.sep}.env.development.local file`
+        `✓ Created         .vercel${path.sep}.env.development.local file`
       );
       await expect(client.stderr).toOutput(
         `Downloaded project settings to ${cwd}${path.sep}.vercel${path.sep}project.json`
@@ -198,7 +198,7 @@ describe('pull', () => {
       `Downloading \`preview\` environment variables for ${teams[0].slug}/vercel-pull-next`
     );
     await expect(client.stderr).toOutput(
-      `Created .vercel${path.sep}.env.preview.local file`
+      `✓ Created         .vercel${path.sep}.env.preview.local file`
     );
     await expect(client.stderr).toOutput(
       `Downloaded project settings to ${cwd}${path.sep}.vercel${path.sep}project.json`
@@ -243,7 +243,7 @@ describe('pull', () => {
       `Downloading \`production\` environment variables for ${teams[0].slug}/vercel-pull-next`
     );
     await expect(client.stderr).toOutput(
-      `Created .vercel${path.sep}.env.production.local file`
+      `✓ Created         .vercel${path.sep}.env.production.local file`
     );
     await expect(client.stderr).toOutput(
       `Downloaded project settings to ${cwd}${path.sep}.vercel${path.sep}project.json`
@@ -294,7 +294,7 @@ describe('pull', () => {
       `Downloading \`development\` environment variables for ${teams[0].slug}/dashboard`
     );
     await expect(client.stderr).toOutput(
-      `Created .vercel${path.sep}.env.development.local file`
+      `✓ Created         .vercel${path.sep}.env.development.local file`
     );
     await expect(client.stderr).toOutput(
       `Downloaded project settings to ${cwd}${path.sep}dashboard${path.sep}.vercel${path.sep}project.json`
