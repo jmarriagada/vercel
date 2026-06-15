@@ -251,57 +251,55 @@ function statusDetails(
   const { domainName, project } = facts;
   const domainConnect = getDomainConnect(steps);
   const attachProject = steps.find(step => step.kind === 'attach-project');
-  switch (status) {
-    case 'configured-correctly':
+  if (status === 'configured-correctly') {
+    return {
+      reason: AGENT_REASON.CONFIGURED_CORRECTLY,
+      message:
+        project.kind === 'attached'
+          ? `${domainName} has a valid configuration and is verified for project ${project.label}.`
+          : `${domainName} has a valid configuration.`,
+    };
+  } else if (status === 'verification-needed') {
+    return {
+      reason: AGENT_REASON.VERIFICATION_NEEDED,
+      message:
+        project.kind === 'attached'
+          ? `${domainName} needs ownership verification for project ${project.label}.`
+          : `${domainName} needs ownership verification.`,
+      userActionRequired: true,
+      hint: dnsActionHint(
+        facts,
+        domainConnect,
+        'Add one of the project verification records at the DNS provider, then run the suggested verify command.'
+      ),
+    };
+  } else if (status === 'invalid-configuration') {
+    if (isPlatformManagedDomain(facts)) {
       return {
-        reason: AGENT_REASON.CONFIGURED_CORRECTLY,
-        message:
-          project.kind === 'attached'
-            ? `${domainName} has a valid configuration and is verified for project ${project.label}.`
-            : `${domainName} has a valid configuration.`,
-      };
-    case 'verification-needed':
-      return {
-        reason: AGENT_REASON.VERIFICATION_NEEDED,
-        message:
-          project.kind === 'attached'
-            ? `${domainName} needs ownership verification for project ${project.label}.`
-            : `${domainName} needs ownership verification.`,
+        reason: AGENT_REASON.INVALID_CONFIGURATION,
+        message: `${domainName} has an invalid Vercel-managed DNS configuration.`,
         userActionRequired: true,
-        hint: dnsActionHint(
-          facts,
-          domainConnect,
-          'Add one of the project verification records at the DNS provider, then run the suggested verify command.'
-        ),
+        hint: 'No DNS changes are required from you. Retry the check, then contact Vercel Support if the configuration remains invalid.',
       };
-    case 'invalid-configuration':
-      if (isPlatformManagedDomain(facts)) {
-        return {
-          reason: AGENT_REASON.INVALID_CONFIGURATION,
-          message: `${domainName} has an invalid Vercel-managed DNS configuration.`,
-          userActionRequired: true,
-          hint: 'No DNS changes are required from you. Retry the check, then contact Vercel Support if the configuration remains invalid.',
-        };
-      }
-      if (attachProject?.kind === 'attach-project') {
-        const target =
+    } else if (attachProject?.kind === 'attach-project') {
+      const target =
+        attachProject.project === '<project>'
+          ? 'a project'
+          : `project ${attachProject.project}`;
+      const attachInstruction =
+        attachProject.project === '<project>'
+          ? 'Attach it to a project'
+          : 'Attach it';
+      return {
+        reason: AGENT_REASON.INVALID_CONFIGURATION,
+        message: `${domainName} is not attached to ${target} and has an invalid DNS configuration. ${attachInstruction} and apply the recommended DNS changes, then retry verification.`,
+        userActionRequired: true,
+        hint:
           attachProject.project === '<project>'
-            ? 'a project'
-            : `project ${attachProject.project}`;
-        const attachInstruction =
-          attachProject.project === '<project>'
-            ? 'Attach it to a project'
-            : 'Attach it';
-        return {
-          reason: AGENT_REASON.INVALID_CONFIGURATION,
-          message: `${domainName} is not attached to ${target} and has an invalid DNS configuration. ${attachInstruction} and apply the recommended DNS changes, then retry verification.`,
-          userActionRequired: true,
-          hint:
-            attachProject.project === '<project>'
-              ? 'Replace <project> in next[] with the project that should serve the domain, attach it, apply the recommended records or nameservers at the DNS provider, then run the suggested verify command.'
-              : 'Run the domains add command in next[], apply the recommended records or nameservers at the DNS provider, then run the suggested verify command.',
-        };
-      }
+            ? 'Replace <project> in next[] with the project that should serve the domain, attach it, apply the recommended records or nameservers at the DNS provider, then run the suggested verify command.'
+            : 'Run the domains add command in next[], apply the recommended records or nameservers at the DNS provider, then run the suggested verify command.',
+      };
+    } else {
       return {
         reason: AGENT_REASON.INVALID_CONFIGURATION,
         message: `${domainName} has an invalid DNS configuration. Apply the recommended DNS changes, then retry verification.`,
@@ -312,59 +310,60 @@ function statusDetails(
           'Apply the recommended records or nameservers at the DNS provider, then run the suggested verify command.'
         ),
       };
-    case 'dnssec-needs-to-be-disabled':
-      return {
-        reason: AGENT_REASON.DNSSEC_NEEDS_TO_BE_DISABLED,
-        message: `${domainName} uses Vercel nameservers, but DNSSEC must be disabled with the domain registrar so the nameservers can resolve globally.`,
-        userActionRequired: true,
-        hint: 'Disable DNSSEC with the domain registrar, then run the suggested verify command.',
-      };
-    case 'dns-change-required':
-      return {
-        reason: AGENT_REASON.DNS_CHANGE_REQUIRED,
-        message: `${domainName} requires a DNS change to avoid downtime.`,
-        userActionRequired: true,
-        hint: dnsActionHint(
-          facts,
-          domainConnect,
-          'Apply the recommended records or nameservers at the DNS provider, then run the suggested verify command.'
-        ),
-      };
-    case 'dns-change-recommended':
-      return {
-        reason: AGENT_REASON.DNS_CHANGE_RECOMMENDED,
-        message: `${domainName} has a valid configuration, but Vercel recommends updating its DNS records.`,
-        hint: dnsActionHint(
-          facts,
-          domainConnect,
-          'The domain is working. Apply the recommended DNS update when convenient, then re-check.'
-        ),
-      };
-    case 'project-attachment-recommended':
-      return {
-        reason: AGENT_REASON.PROJECT_ATTACHMENT_RECOMMENDED,
-        message: `${domainName} is owned by ${facts.contextName} but is not attached to a project.`,
-        hint: 'To use the domain, replace <project> in next[] with the project that should serve it.',
-      };
-    case 'scope-resolution-required':
-      return {
-        reason: AGENT_REASON.SCOPE_NOT_ACCESSIBLE,
-        message: `${domainName} exists on Vercel but is not accessible under ${facts.contextName}. Retry under the owning team before evaluating its DNS or project status.`,
-        userActionRequired: true,
-        hint: 'Use next[] to find the team that owns the domain, then retry in that scope.',
-      };
-    case 'project-domain-missing':
-      return {
-        reason: AGENT_REASON.PROJECT_DOMAIN_MISSING,
-        message:
-          project.kind === 'missing'
-            ? `${domainName} is not attached to project ${project.idOrName}.`
-            : `${domainName} is not attached to the requested project.`,
-        hint:
-          facts.ownership === 'other-scope'
-            ? 'Find the team that owns the domain using next[], then retry in that scope before changing project attachments.'
-            : 'Run the domains add command in next[], then retry verification.',
-      };
+    }
+  } else if (status === 'dnssec-needs-to-be-disabled') {
+    return {
+      reason: AGENT_REASON.DNSSEC_NEEDS_TO_BE_DISABLED,
+      message: `${domainName} uses Vercel nameservers, but DNSSEC must be disabled with the domain registrar so the nameservers can resolve globally.`,
+      userActionRequired: true,
+      hint: 'Disable DNSSEC with the domain registrar, then run the suggested verify command.',
+    };
+  } else if (status === 'dns-change-required') {
+    return {
+      reason: AGENT_REASON.DNS_CHANGE_REQUIRED,
+      message: `${domainName} requires a DNS change to avoid downtime.`,
+      userActionRequired: true,
+      hint: dnsActionHint(
+        facts,
+        domainConnect,
+        'Apply the recommended records or nameservers at the DNS provider, then run the suggested verify command.'
+      ),
+    };
+  } else if (status === 'dns-change-recommended') {
+    return {
+      reason: AGENT_REASON.DNS_CHANGE_RECOMMENDED,
+      message: `${domainName} has a valid configuration, but Vercel recommends updating its DNS records.`,
+      hint: dnsActionHint(
+        facts,
+        domainConnect,
+        'The domain is working. Apply the recommended DNS update when convenient, then re-check.'
+      ),
+    };
+  } else if (status === 'project-attachment-recommended') {
+    return {
+      reason: AGENT_REASON.PROJECT_ATTACHMENT_RECOMMENDED,
+      message: `${domainName} is owned by ${facts.contextName} but is not attached to a project.`,
+      hint: 'To use the domain, replace <project> in next[] with the project that should serve it.',
+    };
+  } else if (status === 'scope-resolution-required') {
+    return {
+      reason: AGENT_REASON.SCOPE_NOT_ACCESSIBLE,
+      message: `${domainName} exists on Vercel but is not accessible under ${facts.contextName}. Retry under the owning team before evaluating its DNS or project status.`,
+      userActionRequired: true,
+      hint: 'Use next[] to find the team that owns the domain, then retry in that scope.',
+    };
+  } else {
+    return {
+      reason: AGENT_REASON.PROJECT_DOMAIN_MISSING,
+      message:
+        project.kind === 'missing'
+          ? `${domainName} is not attached to project ${project.idOrName}.`
+          : `${domainName} is not attached to the requested project.`,
+      hint:
+        facts.ownership === 'other-scope'
+          ? 'Find the team that owns the domain using next[], then retry in that scope before changing project attachments.'
+          : 'Run the domains add command in next[], then retry verification.',
+    };
   }
 }
 
@@ -529,46 +528,35 @@ function buildNextSteps(
 ): NextStep[] {
   const next: NextStep[] = [];
   for (const step of steps) {
-    switch (step.kind) {
-      case 'resolve-scope':
-        next.push(
-          {
-            command: step.teamsCommand,
-            when: 'List teams to find the scope that owns the domain',
-          },
-          {
-            command: step.verifyCommand,
-            when: 'Replace <team> with the owning team and retry',
-          }
-        );
-        break;
-      case 'attach-project':
-        next.push({
-          command: step.command,
-          when:
-            step.project === '<project>'
-              ? 'Replace <project> with the project that should serve the domain'
-              : 'Attach the domain to the requested project',
-        });
-        break;
-      case 'configure-dns': {
-        const domainConnectMethod = step.methods.find(
-          method => method.kind === 'domain-connect'
-        );
-        if (domainConnectMethod?.kind === 'domain-connect') {
-          next.push({
-            command: commands.openUrl(
-              domainConnectMethod.configuration.applyUrl
-            ),
-            when: 'Open Cloudflare to review and apply the DNS changes automatically with Domain Connect',
-          });
+    if (step.kind === 'resolve-scope') {
+      next.push(
+        {
+          command: step.teamsCommand,
+          when: 'List teams to find the scope that owns the domain',
+        },
+        {
+          command: step.verifyCommand,
+          when: 'Replace <team> with the owning team and retry',
         }
-        break;
+      );
+    } else if (step.kind === 'attach-project') {
+      next.push({
+        command: step.command,
+        when:
+          step.project === '<project>'
+            ? 'Replace <project> with the project that should serve the domain'
+            : 'Attach the domain to the requested project',
+      });
+    } else if (step.kind === 'configure-dns') {
+      const domainConnectMethod = step.methods.find(
+        method => method.kind === 'domain-connect'
+      );
+      if (domainConnectMethod?.kind === 'domain-connect') {
+        next.push({
+          command: commands.openUrl(domainConnectMethod.configuration.applyUrl),
+          when: 'Open Cloudflare to review and apply the DNS changes automatically with Domain Connect',
+        });
       }
-      case 'disable-dnssec':
-      case 'remove-conflict':
-      case 'verify-ownership':
-        break;
     }
   }
 

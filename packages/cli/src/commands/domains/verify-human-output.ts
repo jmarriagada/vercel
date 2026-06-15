@@ -66,17 +66,16 @@ function successMessage(diagnosis: DomainDiagnosis): string {
 function describeConfiguredBy(
   configuredBy: DomainDiagnosis['facts']['config']['configuredBy']
 ): string | null {
-  switch (configuredBy) {
-    case 'A':
-      return 'A record';
-    case 'CNAME':
-      return 'CNAME record';
-    case 'http':
-      return 'HTTP resolution, possibly behind a proxy';
-    case 'dns-01':
-      return 'DNS-01 challenge only, not yet resolving to Vercel';
-    default:
-      return null;
+  if (configuredBy === 'A') {
+    return 'A record';
+  } else if (configuredBy === 'CNAME') {
+    return 'CNAME record';
+  } else if (configuredBy === 'http') {
+    return 'HTTP resolution, possibly behind a proxy';
+  } else if (configuredBy === 'dns-01') {
+    return 'DNS-01 challenge only, not yet resolving to Vercel';
+  } else {
+    return null;
   }
 }
 
@@ -111,26 +110,28 @@ function renderStatus(diagnosis: DomainDiagnosis): string {
 }
 
 function dnsStatus(diagnosis: DomainDiagnosis): string {
-  switch (diagnosis.configurationStatus) {
-    case 'invalid-configuration':
-      return bad('Invalid Configuration');
-    case 'dns-change-required':
-      return bad('DNS Change Required');
-    case 'dnssec-needs-to-be-disabled':
-      return bad('DNSSEC Needs to be Disabled');
-    case 'dns-change-recommended':
-      return warning('DNS Change Recommended');
-    case 'project-attachment-recommended':
-      return chalk.gray('Not assessed without a project');
-    case 'scope-resolution-required':
-      return chalk.gray('Not assessed in this scope');
-    case 'configured-correctly':
-      break;
+  if (diagnosis.configurationStatus === 'invalid-configuration') {
+    return bad('Invalid Configuration');
+  } else if (diagnosis.configurationStatus === 'dns-change-required') {
+    return bad('DNS Change Required');
+  } else if (diagnosis.configurationStatus === 'dnssec-needs-to-be-disabled') {
+    return bad('DNSSEC Needs to be Disabled');
+  } else if (diagnosis.configurationStatus === 'dns-change-recommended') {
+    return warning('DNS Change Recommended');
+  } else if (
+    diagnosis.configurationStatus === 'project-attachment-recommended'
+  ) {
+    return chalk.gray('Not assessed without a project');
+  } else if (diagnosis.configurationStatus === 'scope-resolution-required') {
+    return chalk.gray('Not assessed in this scope');
+  } else {
+    const configuredBy = describeConfiguredBy(
+      diagnosis.facts.config.configuredBy
+    );
+    return good(
+      `Valid Configuration${configuredBy ? ` (${configuredBy})` : ''}`
+    );
   }
-  const configuredBy = describeConfiguredBy(
-    diagnosis.facts.config.configuredBy
-  );
-  return good(`Valid Configuration${configuredBy ? ` (${configuredBy})` : ''}`);
 }
 
 function projectStatus(diagnosis: DomainDiagnosis): string {
@@ -138,19 +139,14 @@ function projectStatus(diagnosis: DomainDiagnosis): string {
   if (diagnosis.configurationStatus === 'scope-resolution-required') {
     return chalk.gray('Not assessed in this scope');
   }
-  switch (facts.project.kind) {
-    case 'attached':
-      return facts.project.domain.verified
-        ? good(`Verified for ${chalk.bold(facts.project.label)}`)
-        : bad(`Verification Needed for ${chalk.bold(facts.project.label)}`);
-    case 'missing':
-      return bad(
-        `Not attached to project ${chalk.bold(facts.project.idOrName)}`
-      );
-    case 'none':
-      return chalk.gray(
-        `Not attached to any project under ${facts.contextName}`
-      );
+  if (facts.project.kind === 'attached') {
+    return facts.project.domain.verified
+      ? good(`Verified for ${chalk.bold(facts.project.label)}`)
+      : bad(`Verification Needed for ${chalk.bold(facts.project.label)}`);
+  } else if (facts.project.kind === 'missing') {
+    return bad(`Not attached to project ${chalk.bold(facts.project.idOrName)}`);
+  } else {
+    return chalk.gray(`Not attached to any project under ${facts.contextName}`);
   }
 }
 
@@ -179,19 +175,18 @@ function renderStep(
   step: RemediationStep,
   index: number
 ): string {
-  switch (step.kind) {
-    case 'resolve-scope':
-      return scopeStep(diagnosis, step);
-    case 'attach-project':
-      return attachProjectStep(diagnosis, step);
-    case 'configure-dns':
-      return configureDnsStep(diagnosis, step, index);
-    case 'disable-dnssec':
-      return "Disable DNSSEC with your domain registrar. The domain's nameservers point to Vercel, but DNSSEC prevents them from resolving globally.";
-    case 'remove-conflict':
-      return conflictStep(step);
-    case 'verify-ownership':
-      return verificationStep(step);
+  if (step.kind === 'resolve-scope') {
+    return scopeStep(diagnosis, step);
+  } else if (step.kind === 'attach-project') {
+    return attachProjectStep(diagnosis, step);
+  } else if (step.kind === 'configure-dns') {
+    return configureDnsStep(diagnosis, step, index);
+  } else if (step.kind === 'disable-dnssec') {
+    return "Disable DNSSEC with your domain registrar. The domain's nameservers point to Vercel, but DNSSEC prevents them from resolving globally.";
+  } else if (step.kind === 'remove-conflict') {
+    return conflictStep(step);
+  } else {
+    return verificationStep(step);
   }
 }
 
@@ -241,40 +236,34 @@ function configureDnsStep(
 }
 
 function dnsMethodTitle(method: DnsMethod): string {
-  switch (method.kind) {
-    case 'domain-connect':
-      return `Auto configure with ${method.configuration.providerName} using Domain Connect:`;
-    case 'a-records':
-      return method.records.length === 1
-        ? 'Add an A record:'
-        : 'Add A records:';
-    case 'cname-records':
-      return 'Add a CNAME record:';
-    case 'nameservers':
-      return 'Switch to the Vercel nameservers:';
+  if (method.kind === 'domain-connect') {
+    return `Auto configure with ${method.configuration.providerName} using Domain Connect:`;
+  } else if (method.kind === 'a-records') {
+    return method.records.length === 1 ? 'Add an A record:' : 'Add A records:';
+  } else if (method.kind === 'cname-records') {
+    return 'Add a CNAME record:';
+  } else {
+    return 'Switch to the Vercel nameservers:';
   }
 }
 
 function dnsMethodDetails(method: DnsMethod): string[] {
-  switch (method.kind) {
-    case 'domain-connect': {
-      const applyUrl = output.link(
-        method.configuration.applyUrl,
-        method.configuration.applyUrl,
-        { fallback: false }
-      );
-      return [
-        applyUrl,
-        chalk.gray(
-          `Open the URL to review and approve the DNS changes in ${method.configuration.providerName}.`
-        ),
-      ];
-    }
-    case 'nameservers':
-      return method.nameservers.map(nameserver => chalk.cyan(nameserver));
-    case 'a-records':
-    case 'cname-records':
-      return method.records.map(record => chalk.cyan(formatDnsRecord(record)));
+  if (method.kind === 'domain-connect') {
+    const applyUrl = output.link(
+      method.configuration.applyUrl,
+      method.configuration.applyUrl,
+      { fallback: false }
+    );
+    return [
+      applyUrl,
+      chalk.gray(
+        `Open the URL to review and approve the DNS changes in ${method.configuration.providerName}.`
+      ),
+    ];
+  } else if (method.kind === 'nameservers') {
+    return method.nameservers.map(nameserver => chalk.cyan(nameserver));
+  } else {
+    return method.records.map(record => chalk.cyan(formatDnsRecord(record)));
   }
 }
 

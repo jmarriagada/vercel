@@ -254,17 +254,16 @@ function commandErrorForAcquisition(
 function reasonForAcquisitionError(
   error: VerificationAcquisitionError
 ): string {
-  switch (error.kind) {
-    case 'invalid-domain':
-      return AGENT_REASON.INVALID_DOMAIN;
-    case 'permission-denied':
-      return AGENT_REASON.PERMISSION_DENIED;
-    case 'timeout':
-      return 'timeout';
-    case 'unexpected-dns-response':
-      return 'unexpected_dns_response';
-    case 'api-error':
-      return AGENT_REASON.API_ERROR;
+  if (error.kind === 'invalid-domain') {
+    return AGENT_REASON.INVALID_DOMAIN;
+  } else if (error.kind === 'permission-denied') {
+    return AGENT_REASON.PERMISSION_DENIED;
+  } else if (error.kind === 'timeout') {
+    return 'timeout';
+  } else if (error.kind === 'unexpected-dns-response') {
+    return 'unexpected_dns_response';
+  } else {
+    return AGENT_REASON.API_ERROR;
   }
 }
 

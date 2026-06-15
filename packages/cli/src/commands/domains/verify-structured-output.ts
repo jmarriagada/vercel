@@ -89,25 +89,24 @@ function getRecommendedNameservers(methods: DnsMethod[]): string[] {
 }
 
 function serializeProject(project: ProjectStatus) {
-  switch (project.kind) {
-    case 'none':
-      return null;
-    case 'attached':
-      return {
-        idOrName: project.label,
-        attached: true,
-        verified: project.domain.verified,
-        verification: project.domain.verification ?? [],
-        verificationError: project.verificationError
-          ? {
-              code: project.verificationError.code || 'verification_failed',
-              message:
-                project.verificationError.serverMessage ||
-                project.verificationError.message,
-            }
-          : null,
-      };
-    case 'missing':
-      return { idOrName: project.idOrName, attached: false };
+  if (project.kind === 'none') {
+    return null;
+  } else if (project.kind === 'attached') {
+    return {
+      idOrName: project.label,
+      attached: true,
+      verified: project.domain.verified,
+      verification: project.domain.verification ?? [],
+      verificationError: project.verificationError
+        ? {
+            code: project.verificationError.code || 'verification_failed',
+            message:
+              project.verificationError.serverMessage ||
+              project.verificationError.message,
+          }
+        : null,
+    };
+  } else {
+    return { idOrName: project.idOrName, attached: false };
   }
 }

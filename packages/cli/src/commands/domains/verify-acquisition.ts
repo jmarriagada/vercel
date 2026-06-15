@@ -199,9 +199,10 @@ async function findLinkedProjectDomain(
   if (!isAPIError(result)) {
     return attachedProject(link.project.id, link.project.name, result);
   }
-  return result.status === 403 || result.status === 404
-    ? null
-    : { kind: 'error', idOrName: link.project.id, error: result };
+  if (result.status === 403 || result.status === 404) {
+    return null;
+  }
+  return { kind: 'error', idOrName: link.project.id, error: result };
 }
 
 async function findProjectDomainByName(
@@ -212,9 +213,10 @@ async function findProjectDomainByName(
     bailOn429: true,
   });
   if (isAPIError(result)) {
-    return result.status === 403 || result.status === 404
-      ? { kind: 'none' }
-      : { kind: 'error', idOrName: domainName, error: result };
+    if (result.status === 403 || result.status === 404) {
+      return { kind: 'none' };
+    }
+    return { kind: 'error', idOrName: domainName, error: result };
   }
   const label = await getProjectLabel(client, result.projectId);
   return attachedProject(result.projectId, label, result);
@@ -290,30 +292,28 @@ async function triggerVerification(
 function errorKind(
   errorCode: string | undefined
 ): VerificationAcquisitionErrorKind {
-  switch (errorCode) {
-    case 'invalid_name':
-      return 'invalid-domain';
-    case 'forbidden':
-      return 'permission-denied';
-    case 'timeout':
-      return 'timeout';
-    case 'unexpected_dns_response':
-      return 'unexpected-dns-response';
-    default:
-      return 'api-error';
+  if (errorCode === 'invalid_name') {
+    return 'invalid-domain';
+  } else if (errorCode === 'forbidden') {
+    return 'permission-denied';
+  } else if (errorCode === 'timeout') {
+    return 'timeout';
+  } else if (errorCode === 'unexpected_dns_response') {
+    return 'unexpected-dns-response';
+  } else {
+    return 'api-error';
   }
 }
 
 function configErrorMessage(err: APIError, domainName: string): string {
-  switch (err.code) {
-    case 'invalid_name':
-      return `${domainName} is not a valid domain name.`;
-    case 'timeout':
-      return `Resolving the DNS configuration for ${domainName} timed out. This is usually transient — try again in a few seconds.`;
-    case 'unexpected_dns_response':
-      return `The nameservers for ${domainName} returned an unexpected response while checking its DNS configuration.`;
-    default:
-      return err.serverMessage || `API error (${err.status})`;
+  if (err.code === 'invalid_name') {
+    return `${domainName} is not a valid domain name.`;
+  } else if (err.code === 'timeout') {
+    return `Resolving the DNS configuration for ${domainName} timed out. This is usually transient — try again in a few seconds.`;
+  } else if (err.code === 'unexpected_dns_response') {
+    return `The nameservers for ${domainName} returned an unexpected response while checking its DNS configuration.`;
+  } else {
+    return err.serverMessage || `API error (${err.status})`;
   }
 }
 
