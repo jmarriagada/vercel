@@ -1,5 +1,6 @@
 import type { BuildResultV2Typical } from '@vercel/build-utils';
 import { EventEmitter } from 'node:events';
+import { writeFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { build } from '../src';
 
@@ -59,6 +60,8 @@ const VCR_ENV_KEYS = [
   'VERCEL_API_URL',
   'VERCEL_VCR_READY_URL',
   'VERCEL_VCR_READY_INTERVAL_MS',
+  'VERCEL_BUILD_IMAGE',
+  'VERCEL_CONTAINER_ENGINE',
 ];
 
 beforeEach(() => {
@@ -148,12 +151,28 @@ describe('@vercel/container', () => {
     });
   });
 
-  it('builds a Dockerfile, pushes to VCR, and emits the digest reference', async () => {
+  async function runDockerfileBuild(options?: {
+    buildImageEnv?: string;
+    engineOverride?: string;
+  }) {
+    if (options?.buildImageEnv) {
+      process.env.VERCEL_BUILD_IMAGE = options.buildImageEnv;
+    }
+    if (options?.engineOverride) {
+      process.env.VERCEL_CONTAINER_ENGINE = options.engineOverride;
+    }
     process.env.VERCEL_OIDC_TOKEN = fakeOidcToken();
     existsSyncMock.mockReturnValue(true);
     const digest = `sha256:${'a'.repeat(64)}`;
-    spawnMock.mockImplementation((_cmd: string, args: string[]) => {
+    spawnMock.mockImplementation((cmd: string, args: string[]) => {
       if (args.includes('push')) {
+        if (cmd === 'buildah') {
+          const digestIdx = args.indexOf('--digestfile');
+          if (digestIdx >= 0) {
+            writeFileSync(args[digestIdx + 1], `${digest}\n`);
+          }
+          return fakeChild('');
+        }
         return fakeChild(`latest: digest: ${digest} size: 1234\n`);
       }
       return fakeChild('');
@@ -172,12 +191,15 @@ describe('@vercel/container', () => {
       handler: `vcr.vercel.com/acme/my-app/api@${digest}`,
     });
 
-    const commands = spawnMock.mock.calls.map(call => {
+    return spawnMock.mock.calls.map(call => {
       const [cmd, args] = call as [string, string[]];
       return `${cmd} ${args.join(' ')}`;
     });
+  }
+
+  it('builds a Dockerfile with docker locally, pushes to VCR, and emits the digest reference', async () => {
+    const commands = await runDockerfileBuild();
     expect(commands.some(c => c.startsWith('docker build'))).toBe(true);
-    // Login uses the team id as the username.
     expect(
       commands.some(
         c =>
@@ -191,6 +213,16 @@ describe('@vercel/container', () => {
         c.startsWith('docker push vcr.vercel.com/acme/my-app/api')
       )
     ).toBe(true);
+  });
+
+  it('uses buildah in the Vercel build container', async () => {
+    const commands = await runDockerfileBuild({
+      buildImageEnv: 'al2023',
+    });
+    expect(commands.some(c => c.startsWith('buildah build'))).toBe(true);
+    expect(commands.some(c => c.startsWith('buildah login'))).toBe(true);
+    expect(commands.some(c => c.startsWith('buildah push'))).toBe(true);
+    expect(commands.some(c => c.startsWith('docker build'))).toBe(false);
   });
 
   it('ensures the VCR repository exists before pushing', async () => {
