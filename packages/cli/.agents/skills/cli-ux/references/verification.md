@@ -109,6 +109,8 @@ Reject or fix changes that:
 - encode a status heading as a fake aligned label/value row
 - use a gutter glyph as decoration instead of semantic state
 - add blank lines inside a related block or omit phase breaks in a dense multi-phase flow
+- add a progress-bar dependency or hand-rolled cursor output before using `output.spinner()` or the shared `util/output/progress` helper
+- show a progress bar without a real denominator, or emit noisy progress updates in non-TTY output
 - put `▲` on preview/setup/link/local file rows, or omit it from production rows
 - use `✓` as decoration, on every row, or on discovery/progress rows instead of only the primary completed phase
 - print warnings with a column-0 `WARNING!` label instead of the warning gutter

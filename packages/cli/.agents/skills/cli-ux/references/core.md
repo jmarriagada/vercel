@@ -282,9 +282,18 @@ Color:
 ## Progress + Completion
 
 - Print something quickly for network or long-running work.
+- Use the existing output primitives before adding dependencies: `output.spinner()` for indeterminate work, and `progress()` from `util/output/progress` only for bounded quantitative progress.
+- Do not add a new progress-bar package for one command. Add or extend a shared output helper only when the existing spinner/progress helper cannot represent the work.
 - Use spinners for in-progress work, not resolved URLs.
+- Use a spinner when the CLI knows the phase but not the denominator: fetching, verifying, creating, updating, deleting, waiting for browser auth, polling, or a single remote mutation.
+- Use a progress bar only when the CLI has a trustworthy `current` and `total` that users benefit from seeing: uploaded/downloaded bytes, files processed, explicit steps completed, or batch items handled.
+- Do not invent percentages or progress bars for work that can stall, retry, fan out, or change total size. Prefer phase spinners such as `Verifying…`, `Uploading icon…`, `Updating…`.
 - Spinner text uses present participles: `Building…`, `Completing…`.
-- Do not interleave parallel progress unless readable.
+- Render progress through the managed output stream. Do not write raw cursor movement or direct stream updates from command code.
+- In TTY, progress may update in place. In non-TTY, CI, tests, and JSON modes, avoid animation; emit bounded milestones or phase changes only.
+- Throttle progress updates so they do not flood logs. For non-TTY percentage progress, coarse milestones are usually enough.
+- If progress totals are invalid, unavailable, or become misleading, fall back to a spinner.
+- Do not interleave parallel progress unless readable. Prefer one aggregate progress line over many competing bars.
 - Final success gets one primary completion row; add secondary receipt rows only for necessary durable context.
 - Success names what changed and where, either in one row (`✓ Linked acme/web`, `✓ Added example.com to acme/web`) or in a compact receipt block (`✓ Added API_TOKEN`, `Project acme/web`). Never use `Done.` or `Success!`.
 - Include the durable identifier: resource, URL, path, or ID.
