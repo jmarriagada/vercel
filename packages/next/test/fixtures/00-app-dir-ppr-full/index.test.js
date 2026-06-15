@@ -1,4 +1,3 @@
-/* eslint-env jest */
 const path = require('path');
 const { deployAndTest } = require('../../utils');
 const fetch = require('../../../../../test/lib/deployment/fetch-retry');
@@ -267,7 +266,7 @@ describe(`${__dirname.split(path.sep).pop()}`, () => {
 
           res = await fetch(`${ctx.deploymentUrl}${pathname}`, {
             headers: {
-              "RSC": "1",
+              "rsc": "1",
               "Next-Router-Prefetch": "1",
             }
           });
@@ -298,7 +297,7 @@ describe(`${__dirname.split(path.sep).pop()}`, () => {
 
           res = await fetch(`${ctx.deploymentUrl}${pathname}`, {
             headers: {
-              "RSC": "1",
+              "rsc": "1",
               "Next-Router-Prefetch": "1",
             }
           });
@@ -398,8 +397,7 @@ describe(`${__dirname.split(path.sep).pop()}`, () => {
     });
 
     // https://linear.app/vercel/issue/ZERO-3240/unskip-random-test-failures
-    // eslint-disable-next-line jest/no-disabled-tests
-    it.skip('should revalidate the pages and perform a blocking render when the fallback is revalidated', async () => {
+        it.skip('should revalidate the pages and perform a blocking render when the fallback is revalidated', async () => {
       let res = await fetch(`${ctx.deploymentUrl}/fallback/static-01/dynamic`);
       expect(res.status).toEqual(200);
       expect(res.headers.get('x-vercel-cache')).toEqual('PRERENDER');

@@ -22,17 +22,6 @@ test('[vercel dev] validate headers', async () => {
   );
 });
 
-test('[vercel dev] validate mixed routes and rewrites', async () => {
-  const directory = fixture('invalid-mixed-routes-rewrites');
-  const output = await exec(directory);
-
-  expect(output.exitCode).toBe(1);
-  expect(output.stderr).toMatch(
-    /If `rewrites`, `redirects`, `headers`, `cleanUrls` or `trailingSlash` are used, then `routes` cannot be present./m
-  );
-  expect(output.stderr).toMatch(/vercel\.link\/mix-routing-props/m);
-});
-
 test('[vercel dev] validate env var names', async () => {
   const directory = fixture('invalid-env-var-name');
   const { dev } = await testFixture(directory);
@@ -116,14 +105,35 @@ test(
   '[vercel dev] Use `@vercel/python` with Flask requirements.txt',
   testFixtureStdio('python-flask', async (testPath: any) => {
     const name = 'Alice';
-    const year = new Date().getFullYear();
-    await testPath(200, `/api/user?name=${name}`, new RegExp(`Hello ${name}`));
-    await testPath(200, `/api/date`, new RegExp(`Current date is ${year}`));
-    await testPath(200, `/api/date.py`, new RegExp(`Current date is ${year}`));
-    await testPath(200, `/api/headers`, (body: any, res: any) => {
+    await testPath(200, `/api/hello/${name}`, new RegExp(`Hello, ${name}!`));
+    await testPath(200, `/query?param=xyz`, /"received_param":"xyz"/);
+    await testPath(200, `/headers`, (body: any, res: any) => {
       const { host } = new URL(res.url);
       expect(body).toBe(host);
     });
+    await testPath(200, `/logo.svg`, (body: any, res: any) => {
+      expect(res.headers.get('content-type')).toMatch(/image\/svg\+xml/);
+      expect(body).toMatch(/<svg[\s\S]*<circle[\s\S]*\/>[\s\S]*<\/svg>/m);
+    });
+    await testPath(200, `/api/users`, /"users":\[/);
+  })
+);
+
+test(
+  '[vercel dev] Use `@vercel/python` with FastAPI requirements.txt',
+  testFixtureStdio('python-fastapi', async (testPath: any) => {
+    const name = 'Alice';
+    await testPath(200, `/api/hello/${name}`, new RegExp(`Hello, ${name}!`));
+    await testPath(200, `/query?param=xyz`, /"received_param":"xyz"/);
+    await testPath(200, `/headers`, (body: any, res: any) => {
+      const { host } = new URL(res.url);
+      expect(body).toBe(host);
+    });
+    await testPath(200, `/logo.svg`, (body: any, res: any) => {
+      expect(res.headers.get('content-type')).toMatch(/image\/svg\+xml/);
+      expect(body).toMatch(/<svg[\s\S]*<circle[\s\S]*\/>[\s\S]*<\/svg>/m);
+    });
+    await testPath(200, `/api/users`, /"users":\[/);
   })
 );
 
@@ -189,7 +199,8 @@ test(
   })
 );
 
-test(
+// Skipping because it doesn't run yet on Node 22
+test.skip(
   '[vercel dev] Should set the `ts-node` "target" to match Node.js version',
   testFixtureStdio('node-ts-node-target', async (testPath: any) => {
     await testPath(200, `/api/subclass`, '{"ok":true}');

@@ -1,7 +1,14 @@
 import path from 'path';
 import { tmpdir } from 'os';
 import fs from 'fs-extra';
-import { createZip } from '../src/lambda';
+import {
+  createZip,
+  Lambda,
+  TriggerEvent,
+  sanitizeConsumerName,
+  getLambdaOptionsFromFunction,
+} from '../src/lambda';
+import type { Files } from '../src/types';
 import { FileBlob, glob, spawnAsync } from '../src';
 import { describe, expect, it } from 'vitest';
 
@@ -94,5 +101,543 @@ describe('Lambda', () => {
     } finally {
       await fs.remove(dir);
     }
+  });
+
+  describe('maxDuration', () => {
+    const files: Files = {};
+
+    it('should accept a numeric maxDuration', () => {
+      const lambda = new Lambda({
+        files,
+        handler: 'index.handler',
+        runtime: 'nodejs22.x',
+        maxDuration: 60,
+      });
+
+      expect(lambda.maxDuration).toBe(60);
+    });
+
+    it('should accept maxDuration: "max"', () => {
+      const lambda = new Lambda({
+        files,
+        handler: 'index.handler',
+        runtime: 'nodejs22.x',
+        maxDuration: 'max',
+      });
+
+      expect(lambda.maxDuration).toBe('max');
+    });
+
+    it('should throw error for invalid string maxDuration', () => {
+      expect(
+        () =>
+          new Lambda({
+            files,
+            handler: 'index.handler',
+            runtime: 'nodejs22.x',
+            maxDuration: 'invalid' as any,
+          })
+      ).toThrow('"maxDuration" is not a number or "max"');
+    });
+  });
+
+  describe('TriggerEvent', () => {
+    const files: Files = {};
+
+    it('should create Lambda with minimal queue trigger', () => {
+      const trigger: TriggerEvent = {
+        type: 'queue/v1beta',
+        topic: 'user-events',
+        consumer: 'webhook-processors',
+      };
+
+      const lambda = new Lambda({
+        files,
+        handler: 'index.handler',
+        runtime: 'nodejs22.x',
+        experimentalTriggers: [trigger],
+      });
+
+      expect(lambda.experimentalTriggers).toEqual([trigger]);
+      expect(lambda.experimentalTriggers![0].type).toBe('queue/v1beta');
+      expect(lambda.experimentalTriggers![0].topic).toBe('user-events');
+      expect(lambda.experimentalTriggers![0].consumer).toBe(
+        'webhook-processors'
+      );
+    });
+
+    it('should create Lambda with complete queue trigger configuration', () => {
+      const trigger: TriggerEvent = {
+        type: 'queue/v1beta',
+        topic: 'system-events',
+        consumer: 'system-processors',
+        maxDeliveries: 3,
+        retryAfterSeconds: 10,
+        initialDelaySeconds: 60,
+        maxConcurrency: 5,
+      };
+
+      const lambda = new Lambda({
+        files,
+        handler: 'index.handler',
+        runtime: 'nodejs22.x',
+        experimentalTriggers: [trigger],
+      });
+
+      expect(lambda.experimentalTriggers![0].type).toBe('queue/v1beta');
+      expect(lambda.experimentalTriggers![0].topic).toBe('system-events');
+      expect(lambda.experimentalTriggers![0].consumer).toBe(
+        'system-processors'
+      );
+      expect(lambda.experimentalTriggers![0].maxDeliveries).toBe(3);
+      expect(lambda.experimentalTriggers![0].retryAfterSeconds).toBe(10);
+      expect(lambda.experimentalTriggers![0].initialDelaySeconds).toBe(60);
+      expect(lambda.experimentalTriggers![0].maxConcurrency).toBe(5);
+    });
+
+    it('should create Lambda with multiple queue triggers', () => {
+      const triggers: TriggerEvent[] = [
+        {
+          type: 'queue/v1beta',
+          topic: 'user-events',
+          consumer: 'user-processors',
+        },
+        {
+          type: 'queue/v1beta',
+          topic: 'system-events',
+          consumer: 'system-processors',
+          maxDeliveries: 5,
+        },
+      ];
+
+      const lambda = new Lambda({
+        files,
+        handler: 'index.handler',
+        runtime: 'nodejs22.x',
+        experimentalTriggers: triggers,
+      });
+
+      expect(lambda.experimentalTriggers).toHaveLength(2);
+      expect(lambda.experimentalTriggers![0].topic).toBe('user-events');
+      expect(lambda.experimentalTriggers![1].topic).toBe('system-events');
+      expect(lambda.experimentalTriggers![1].maxDeliveries).toBe(5);
+    });
+
+    describe('v2beta', () => {
+      it('should create Lambda with minimal v2beta queue trigger', () => {
+        const trigger: TriggerEvent = {
+          type: 'queue/v2beta',
+          topic: 'user-events',
+          consumer: 'api-handlerjs',
+        };
+
+        const lambda = new Lambda({
+          files,
+          handler: 'index.handler',
+          runtime: 'nodejs22.x',
+          experimentalTriggers: [trigger],
+        });
+
+        expect(lambda.experimentalTriggers).toEqual([trigger]);
+        expect(lambda.experimentalTriggers![0].type).toBe('queue/v2beta');
+        expect(lambda.experimentalTriggers![0].topic).toBe('user-events');
+        expect(lambda.experimentalTriggers![0].consumer).toBe('api-handlerjs');
+      });
+
+      it('should create Lambda with complete v2beta queue trigger configuration', () => {
+        const trigger: TriggerEvent = {
+          type: 'queue/v2beta',
+          topic: 'system-events',
+          consumer: 'api-systemjs',
+          maxDeliveries: 3,
+          retryAfterSeconds: 10,
+          initialDelaySeconds: 60,
+          maxConcurrency: 5,
+        };
+
+        const lambda = new Lambda({
+          files,
+          handler: 'index.handler',
+          runtime: 'nodejs22.x',
+          experimentalTriggers: [trigger],
+        });
+
+        expect(lambda.experimentalTriggers![0].type).toBe('queue/v2beta');
+        expect(lambda.experimentalTriggers![0].topic).toBe('system-events');
+        expect(lambda.experimentalTriggers![0].consumer).toBe('api-systemjs');
+        expect(lambda.experimentalTriggers![0].maxDeliveries).toBe(3);
+        expect(lambda.experimentalTriggers![0].retryAfterSeconds).toBe(10);
+        expect(lambda.experimentalTriggers![0].initialDelaySeconds).toBe(60);
+        expect(lambda.experimentalTriggers![0].maxConcurrency).toBe(5);
+      });
+
+      it('should allow when v2beta has multiple triggers', () => {
+        const lambda = new Lambda({
+          files,
+          handler: 'index.handler',
+          runtime: 'nodejs22.x',
+          experimentalTriggers: [
+            {
+              type: 'queue/v2beta',
+              topic: 'test-topic-1',
+              consumer: 'consumer-1',
+            },
+            {
+              type: 'queue/v2beta',
+              topic: 'test-topic-2',
+              consumer: 'consumer-2',
+            },
+          ],
+        });
+
+        expect(lambda.experimentalTriggers![0].type).toBe('queue/v2beta');
+        expect(lambda.experimentalTriggers![0].topic).toBe('test-topic-1');
+        expect(lambda.experimentalTriggers![0].consumer).toBe('consumer-1');
+        expect(lambda.experimentalTriggers![1].type).toBe('queue/v2beta');
+        expect(lambda.experimentalTriggers![1].topic).toBe('test-topic-2');
+        expect(lambda.experimentalTriggers![1].consumer).toBe('consumer-2');
+      });
+
+      it('should reject multiple v2beta triggers from functions config', async () => {
+        await expect(
+          getLambdaOptionsFromFunction({
+            sourceFile: 'api/handler.js',
+            config: {
+              functions: {
+                'api/handler.js': {
+                  experimentalTriggers: [
+                    { type: 'queue/v2beta', topic: 'topic-1' },
+                    { type: 'queue/v2beta', topic: 'topic-2' },
+                  ],
+                },
+              },
+            },
+          })
+        ).rejects.toThrow(
+          'functions["api/handler.js"].experimentalTriggers can only have one item for queue/v2beta'
+        );
+      });
+    });
+
+    describe('Validation Errors', () => {
+      it('should throw error for invalid type', () => {
+        expect(
+          () =>
+            new Lambda({
+              files,
+              handler: 'index.handler',
+              runtime: 'nodejs22.x',
+              experimentalTriggers: [
+                {
+                  type: 'invalid.type' as any,
+                  topic: 'test-topic',
+                  consumer: 'test-consumer',
+                },
+              ],
+            })
+        ).toThrow(
+          '"experimentalTriggers[0]".type must be "queue/v1beta" or "queue/v2beta"'
+        );
+      });
+
+      it('should throw error for missing topic', () => {
+        expect(
+          () =>
+            new Lambda({
+              files,
+              handler: 'index.handler',
+              runtime: 'nodejs22.x',
+              experimentalTriggers: [
+                {
+                  type: 'queue/v1beta',
+                  topic: '',
+                  consumer: 'test-consumer',
+                },
+              ],
+            })
+        ).toThrow('"experimentalTriggers[0]".topic cannot be empty');
+      });
+
+      it('should throw error for missing consumer', () => {
+        expect(
+          () =>
+            new Lambda({
+              files,
+              handler: 'index.handler',
+              runtime: 'nodejs22.x',
+              experimentalTriggers: [
+                {
+                  type: 'queue/v1beta',
+                  topic: 'test-topic',
+                  consumer: '',
+                },
+              ],
+            })
+        ).toThrow('"experimentalTriggers[0]".consumer cannot be empty');
+      });
+
+      it('should throw error for non-array experimentalTriggers', () => {
+        expect(
+          () =>
+            new Lambda({
+              files,
+              handler: 'index.handler',
+              runtime: 'nodejs22.x',
+              experimentalTriggers: 'invalid' as any,
+            })
+        ).toThrow('"experimentalTriggers" is not an Array');
+      });
+
+      it('should throw error for non-object trigger', () => {
+        expect(
+          () =>
+            new Lambda({
+              files,
+              handler: 'index.handler',
+              runtime: 'nodejs22.x',
+              experimentalTriggers: ['invalid'] as any,
+            })
+        ).toThrow('"experimentalTriggers[0]" is not an object');
+      });
+
+      it('should throw error for invalid maxDeliveries', () => {
+        expect(
+          () =>
+            new Lambda({
+              files,
+              handler: 'index.handler',
+              runtime: 'nodejs22.x',
+              experimentalTriggers: [
+                {
+                  type: 'queue/v1beta',
+                  topic: 'test-topic',
+                  consumer: 'test-consumer',
+                  maxDeliveries: 0,
+                },
+              ],
+            })
+        ).toThrow('"experimentalTriggers[0]".maxDeliveries must be at least 1');
+      });
+
+      it('should throw error for invalid retryAfterSeconds', () => {
+        expect(
+          () =>
+            new Lambda({
+              files,
+              handler: 'index.handler',
+              runtime: 'nodejs22.x',
+              experimentalTriggers: [
+                {
+                  type: 'queue/v1beta',
+                  topic: 'test-topic',
+                  consumer: 'test-consumer',
+                  retryAfterSeconds: 0,
+                },
+              ],
+            })
+        ).toThrow(
+          '"experimentalTriggers[0]".retryAfterSeconds must be a positive number'
+        );
+      });
+
+      it('should throw error for invalid initialDelaySeconds', () => {
+        expect(
+          () =>
+            new Lambda({
+              files,
+              handler: 'index.handler',
+              runtime: 'nodejs22.x',
+              experimentalTriggers: [
+                {
+                  type: 'queue/v1beta',
+                  topic: 'test-topic',
+                  consumer: 'test-consumer',
+                  initialDelaySeconds: -1,
+                },
+              ],
+            })
+        ).toThrow(
+          '"experimentalTriggers[0]".initialDelaySeconds must be a non-negative number'
+        );
+      });
+
+      it('should throw error for invalid maxConcurrency', () => {
+        expect(
+          () =>
+            new Lambda({
+              files,
+              handler: 'index.handler',
+              runtime: 'nodejs22.x',
+              experimentalTriggers: [
+                {
+                  type: 'queue/v1beta',
+                  topic: 'test-topic',
+                  consumer: 'test-consumer',
+                  maxConcurrency: 0,
+                },
+              ],
+            })
+        ).toThrow(
+          '"experimentalTriggers[0]".maxConcurrency must be at least 1'
+        );
+      });
+    });
+
+    describe('Edge Cases', () => {
+      it('should work without experimentalTriggers', () => {
+        const lambda = new Lambda({
+          files,
+          handler: 'index.handler',
+          runtime: 'nodejs22.x',
+        });
+
+        expect(lambda.experimentalTriggers).toBeUndefined();
+      });
+
+      it('should work with empty experimentalTriggers array', () => {
+        const lambda = new Lambda({
+          files,
+          handler: 'index.handler',
+          runtime: 'nodejs22.x',
+          experimentalTriggers: [],
+        });
+
+        expect(lambda.experimentalTriggers).toEqual([]);
+      });
+
+      it('should work with zero initialDelaySeconds', () => {
+        const trigger: TriggerEvent = {
+          type: 'queue/v1beta',
+          topic: 'immediate-events',
+          consumer: 'immediate-processors',
+          initialDelaySeconds: 0,
+        };
+
+        const lambda = new Lambda({
+          files,
+          handler: 'index.handler',
+          runtime: 'nodejs22.x',
+          experimentalTriggers: [trigger],
+        });
+
+        expect(lambda.experimentalTriggers![0].initialDelaySeconds).toBe(0);
+      });
+    });
+  });
+
+  describe('runtimeLanguage validation', () => {
+    it('should create Lambda with valid runtimeLanguage (rust)', () => {
+      const files: Files = {};
+      const lambda = new Lambda({
+        files,
+        handler: 'index.handler',
+        runtime: 'provided.al2',
+        runtimeLanguage: 'rust',
+      });
+
+      expect(lambda.runtimeLanguage).toBe('rust');
+    });
+
+    it('should create Lambda with valid runtimeLanguage (go)', () => {
+      const files: Files = {};
+      const lambda = new Lambda({
+        files,
+        handler: 'index.handler',
+        runtime: 'provided.al2',
+        runtimeLanguage: 'go',
+      });
+
+      expect(lambda.runtimeLanguage).toBe('go');
+    });
+
+    it('should create Lambda without runtimeLanguage', () => {
+      const files: Files = {};
+      const lambda = new Lambda({
+        files,
+        handler: 'index.handler',
+        runtime: 'nodejs22.x',
+      });
+
+      expect(lambda.runtimeLanguage).toBeUndefined();
+    });
+
+    it('should throw error for invalid runtimeLanguage (python)', () => {
+      const files: Files = {};
+      expect(
+        () =>
+          new Lambda({
+            files,
+            handler: 'index.handler',
+            runtime: 'provided.al2',
+            runtimeLanguage: 'python' as any,
+          })
+      ).toThrow('"runtimeLanguage" is invalid. Valid options: "rust", "go"');
+    });
+
+    it('should throw error for invalid runtimeLanguage (number)', () => {
+      const files: Files = {};
+      expect(
+        () =>
+          new Lambda({
+            files,
+            handler: 'index.handler',
+            runtime: 'provided.al2',
+            runtimeLanguage: 123 as any,
+          })
+      ).toThrow('"runtimeLanguage" is invalid. Valid options: "rust", "go"');
+    });
+
+    it('should throw error for invalid runtimeLanguage (empty string)', () => {
+      const files: Files = {};
+      expect(
+        () =>
+          new Lambda({
+            files,
+            handler: 'index.handler',
+            runtime: 'provided.al2',
+            runtimeLanguage: '' as any,
+          })
+      ).toThrow('"runtimeLanguage" is invalid. Valid options: "rust", "go"');
+    });
+  });
+
+  describe('sanitizeConsumerName', () => {
+    it('should encode dots with _D and slashes with _S', () => {
+      expect(sanitizeConsumerName('api/test.js')).toBe('api_Stest_Djs');
+    });
+
+    it('should handle nested paths', () => {
+      expect(sanitizeConsumerName('api/users/handler.ts')).toBe(
+        'api_Susers_Shandler_Dts'
+      );
+    });
+
+    it('should escape underscores with __', () => {
+      expect(sanitizeConsumerName('src/my_func.js')).toBe('src_Smy__func_Djs');
+    });
+
+    it('should encode multiple dots', () => {
+      expect(sanitizeConsumerName('api/test.spec.ts')).toBe(
+        'api_Stest_Dspec_Dts'
+      );
+    });
+
+    it('should encode spaces with hex code', () => {
+      expect(sanitizeConsumerName('api/my func.js')).toBe('api_Smy_20func_Djs');
+    });
+
+    it('should encode special characters with hex codes', () => {
+      expect(sanitizeConsumerName('api/test@file!.js')).toBe(
+        'api_Stest_40file_21_Djs'
+      );
+    });
+
+    it('should preserve alphanumeric characters and hyphens', () => {
+      expect(sanitizeConsumerName('api123/test-456')).toBe('api123_Stest-456');
+    });
+
+    it('should handle simple filename', () => {
+      expect(sanitizeConsumerName('handler.ts')).toBe('handler_Dts');
+    });
   });
 });

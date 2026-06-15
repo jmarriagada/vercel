@@ -22,7 +22,6 @@ if (process.env.NODE_ENV !== 'production' && region !== 'dev1') {
 
 // @preserve pre-next-server-target
 
-// eslint-disable-next-line
 const NextServer = require('__NEXT_SERVER_PATH__').default;
 
 // @preserve next-server-preload-target
@@ -42,22 +41,11 @@ const nextServer = new NextServer({
 // and will crash the lambda if an error isn't caught.
 const serve =
   (handler: any) => async (req: IncomingMessage, res: ServerResponse) => {
-    try {
-      const vercelContext = getVercelRequestContext();
-      await withNextRequestContext(
-        { waitUntil: vercelContext.waitUntil },
-        () => {
-          // @preserve entryDirectory handler
-          return handler(req, res);
-        }
-      );
-    } catch (err) {
-      console.error(err);
-      // crash the lambda immediately to clean up any bad module state,
-      // this was previously handled in ___vc_bridge on an unhandled rejection
-      // but we can do this quicker by triggering here
-      process.exit(1);
-    }
+    const vercelContext = getVercelRequestContext();
+    await withNextRequestContext({ waitUntil: vercelContext.waitUntil }, () => {
+      // @preserve entryDirectory handler
+      return handler(req, res);
+    });
   };
 
 // The default handler method should be exported as a function on the module.
@@ -66,7 +54,7 @@ module.exports = serve(nextServer.getRequestHandler());
 // If available, add `getRequestHandlerWithMetadata` to the export if it's
 // required by the configuration.
 if (
-  conf.experimental?.ppr &&
+  (conf.experimental?.ppr || conf.experimental?.cacheComponents) &&
   'getRequestHandlerWithMetadata' in nextServer &&
   typeof nextServer.getRequestHandlerWithMetadata === 'function'
 ) {

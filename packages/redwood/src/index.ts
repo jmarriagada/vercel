@@ -16,9 +16,11 @@ import {
   download,
   glob,
   debug,
+  createDiagnostics,
+  generateProjectManifest,
+  getReportedServiceType,
   getNodeVersion,
   getPrefixedEnvVars,
-  getSpawnOptions,
   runNpmInstall,
   runPackageJsonScript,
   execCommand,
@@ -54,6 +56,7 @@ export const build: BuildV2 = async ({
   entrypoint,
   meta = {},
   config = {},
+  service,
 }) => {
   await download(files, workPath, meta);
 
@@ -76,23 +79,19 @@ export const build: BuildV2 = async ({
     meta
   );
 
-  const spawnOpts = getSpawnOptions(meta, nodeVersion);
-  if (!spawnOpts.env) {
-    spawnOpts.env = {};
-  }
   const {
     cliType,
+    lockfilePath,
     lockfileVersion,
     packageJsonPackageManager,
     turboSupportsCorepackHome,
   } = await scanParentDirs(entrypointFsDirname, true);
 
-  spawnOpts.env = getEnvForPackageManager({
+  const spawnEnv = getEnvForPackageManager({
     cliType,
     lockfileVersion,
     packageJsonPackageManager,
-    nodeVersion,
-    env: spawnOpts.env || {},
+    env: process.env,
     turboSupportsCorepackHome,
     projectCreatedAt: config.projectSettings?.createdAt,
   });
@@ -102,7 +101,7 @@ export const build: BuildV2 = async ({
       console.log(`Running "install" command: \`${installCommand}\`...`);
 
       await execCommand(installCommand, {
-        ...spawnOpts,
+        env: spawnEnv,
         cwd: entrypointFsDirname,
       });
     } else {
@@ -112,10 +111,25 @@ export const build: BuildV2 = async ({
     await runNpmInstall(
       entrypointFsDirname,
       [],
-      spawnOpts,
+      { env: spawnEnv },
       meta,
-      nodeVersion,
       config.projectSettings?.createdAt
+    );
+  }
+
+  try {
+    await generateProjectManifest({
+      workPath: entrypointFsDirname,
+      nodeVersion,
+      cliType,
+      lockfilePath,
+      lockfileVersion,
+      framework: config.framework ?? undefined,
+      serviceType: service ? getReportedServiceType(service) : undefined,
+    });
+  } catch (err) {
+    debug(
+      `Failed to write redwood manifest: ${err instanceof Error ? err.message : String(err)}`
     );
   }
 
@@ -132,7 +146,7 @@ export const build: BuildV2 = async ({
   if (buildCommand) {
     debug(`Executing build command "${buildCommand}"`);
     await execCommand(buildCommand, {
-      ...spawnOpts,
+      env: spawnEnv,
       cwd: workPath,
     });
   } else if (hasScript('vercel-build', pkg)) {
@@ -140,7 +154,7 @@ export const build: BuildV2 = async ({
     await runPackageJsonScript(
       workPath,
       'vercel-build',
-      spawnOpts,
+      { env: spawnEnv },
       config.projectSettings?.createdAt
     );
   } else if (hasScript('build', pkg)) {
@@ -148,7 +162,7 @@ export const build: BuildV2 = async ({
     await runPackageJsonScript(
       workPath,
       'build',
-      spawnOpts,
+      { env: spawnEnv },
       config.projectSettings?.createdAt
     );
   } else {
@@ -169,7 +183,7 @@ export const build: BuildV2 = async ({
       cmd = 'yarn rw deploy vercel';
     }
     await execCommand(cmd, {
-      ...spawnOpts,
+      env: spawnEnv,
       cwd: workPath,
     });
   }
@@ -301,6 +315,9 @@ export const build: BuildV2 = async ({
       shouldAddHelpers: false,
       shouldAddSourcemapSupport: false,
       awsLambdaHandler,
+      shouldDisableAutomaticFetchInstrumentation:
+        process.env.VERCEL_TRACING_DISABLE_AUTOMATIC_FETCH_INSTRUMENTATION ===
+        '1',
     });
     lambdaOutputs[outputName] = lambda;
   }
@@ -342,3 +359,5 @@ function hasScript(scriptName: string, pkg: PackageJson | null) {
 export const prepareCache: PrepareCache = ({ repoRootPath, workPath }) => {
   return glob(defaultCachePathGlob, repoRootPath || workPath);
 };
+
+export const diagnostics = createDiagnostics('node');

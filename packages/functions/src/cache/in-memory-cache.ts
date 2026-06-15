@@ -1,7 +1,7 @@
 import { RuntimeCache } from './types';
 
 interface CacheEntry {
-  value: unknown;
+  value: string; // JSON-serialized value for consistency with BuildCache
   tags: Set<string>;
   lastModified: number; // Timestamp of when the entry was last modified in epoch milliseconds
   ttl?: number; // Time to live in seconds
@@ -10,10 +10,7 @@ interface CacheEntry {
 export class InMemoryCache implements RuntimeCache {
   private cache: Record<string, CacheEntry> = {};
 
-  async get(
-    key: string,
-    options?: { tags?: string[] }
-  ): Promise<unknown | null> {
+  async get(key: string): Promise<unknown | null> {
     const entry = this.cache[key];
     if (entry) {
       if (entry.ttl && entry.lastModified + entry.ttl * 1000 < Date.now()) {
@@ -21,13 +18,7 @@ export class InMemoryCache implements RuntimeCache {
         await this.delete(key);
         return null;
       }
-      // if tags are specified, add them to the entry's tags set
-      if (options?.tags) {
-        for (const tag of options.tags) {
-          entry.tags.add(tag);
-        }
-      }
-      return entry.value;
+      return JSON.parse(entry.value);
     }
     return null;
   }
@@ -35,10 +26,12 @@ export class InMemoryCache implements RuntimeCache {
   async set(
     key: string,
     value: unknown,
-    options?: { ttl?: number; tags?: string[] }
+    options?: { name?: string; ttl?: number; tags?: string[] }
   ): Promise<void> {
+    // JSON.stringify(undefined) returns undefined (not a string), so coerce to null
+    const serialized = JSON.stringify(value ?? null);
     this.cache[key] = {
-      value,
+      value: serialized,
       lastModified: Date.now(),
       ttl: options?.ttl,
       tags: new Set(options?.tags || []),

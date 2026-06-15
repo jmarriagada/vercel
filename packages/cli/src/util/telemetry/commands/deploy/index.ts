@@ -99,6 +99,11 @@ export class DeployTelemetryClient
       this.trackCliFlag('no-logs');
     }
   }
+  trackCliFlagGuidance(flag: boolean | undefined) {
+    if (flag) {
+      this.trackCliFlag('guidance');
+    }
+  }
   trackCliFlagNoClipboard(flag: boolean | undefined) {
     if (flag) {
       this.trackCliFlag('no-clipboard');
@@ -114,11 +119,30 @@ export class DeployTelemetryClient
       this.trackCliFlag('prebuilt');
     }
   }
+  trackCliSubcommandInit(actual: string) {
+    this.trackCliSubcommand({
+      subcommand: 'init',
+      value: actual,
+    });
+  }
+  trackCliSubcommandContinue(actual: string) {
+    this.trackCliSubcommand({
+      subcommand: 'continue',
+      value: actual,
+    });
+  }
   trackCliFlagProd(flag: boolean | undefined) {
     if (flag) {
       this.trackCliFlag('prod');
     }
   }
+
+  trackTargetEnvironment(target: string | undefined) {
+    super.trackTargetEnvironment(
+      target === 'production' ? 'production' : 'preview'
+    );
+  }
+
   trackCliFlagPublic(flag: boolean | undefined) {
     if (flag) {
       this.trackCliFlag('public');
@@ -137,6 +161,39 @@ export class DeployTelemetryClient
   trackCliFlagYes(flag: boolean | undefined) {
     if (flag) {
       this.trackCliFlag('yes');
+    }
+  }
+  trackCliFlagJson(flag: boolean | undefined) {
+    if (flag) {
+      this.trackCliFlag('json');
+    }
+  }
+  trackCliOptionFormat(format: string | undefined) {
+    if (format) {
+      this.trackCliOption({
+        option: 'format',
+        value: format,
+      });
+    }
+  }
+
+  trackCliFlagFunctionsBeta(flag: boolean | undefined) {
+    if (flag) {
+      this.trackCliFlag('functions-beta');
+    }
+  }
+  trackCliFlagNoFunctionsBeta(flag: boolean | undefined) {
+    if (flag) {
+      this.trackCliFlag('no-functions-beta');
+    }
+  }
+
+  trackDeploymentId(id: string | undefined) {
+    if (id) {
+      this.trackCommandOutput({
+        key: 'deployment-id',
+        value: id,
+      });
     }
   }
 }

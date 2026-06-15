@@ -6,14 +6,18 @@ const {
   testDeployment,
 } = require('../../../test/lib/deployment/test-deployment.js');
 
-jest.setTimeout(12 * 60 * 1000);
+vi.setConfig({ testTimeout: 12 * 60 * 1000, hookTimeout: 12 * 60 * 1000 });
 
 module.exports = function setupTests(groupIndex) {
   const fixturesPath = path.resolve(__dirname, 'fixtures');
   const testsThatFailToBuild = new Map([
     [
       '04-wrong-dist-dir',
-      'No Output Directory named "out" found after the Build completed. You can configure the Output Directory in your Project Settings.',
+      'No Output Directory named "out" found after the Build completed. Configure the Output Directory in your Project Settings. Alternatively, configure vercel.json#outputDirectory.',
+    ],
+    [
+      '04b-wrong-dist-dir-with-vercel-json',
+      'No Output Directory named "out" found after the Build completed. Update vercel.json#outputDirectory to ensure the correct output directory is detected.',
     ],
     ['05-empty-dist-dir', 'The Output Directory "dist" is empty.'],
     [
@@ -23,7 +27,7 @@ module.exports = function setupTests(groupIndex) {
     ['07-nonzero-sh', 'Command "./build.sh" exited with 1'],
     [
       '22-docusaurus-2-build-fail',
-      'No Output Directory named "build" found after the Build completed. You can configure the Output Directory in your Project Settings.',
+      'No Output Directory named "build" found after the Build completed. Configure the Output Directory in your Project Settings. Alternatively, configure vercel.json#outputDirectory.',
     ],
     [
       '36-hugo-version-not-found',
@@ -39,6 +43,8 @@ module.exports = function setupTests(groupIndex) {
   }
 
   const fixturesToSkip = [
+    // not available on AL2023
+    'zola-v0',
     // https://linear.app/vercel/issue/ZERO-2919/investigate-platform-errors-and-restore-skipped-tests
     'ember-v3',
     '53-native-gems',
@@ -57,7 +63,6 @@ module.exports = function setupTests(groupIndex) {
     '22-docusaurus-2-build-fail',
   ];
 
-  // eslint-disable-next-line no-restricted-syntax
   for (const fixture of fixtures) {
     if (fixturesToSkip.includes(fixture)) {
       continue;
@@ -65,8 +70,7 @@ module.exports = function setupTests(groupIndex) {
 
     const errMsg = testsThatFailToBuild.get(fixture);
     if (errMsg) {
-      // eslint-disable-next-line no-loop-func
-      it(`should fail to build ${fixture}`, async () => {
+      it.concurrent(`should fail to build ${fixture}`, async () => {
         try {
           await testDeployment(path.join(fixturesPath, fixture));
         } catch (err) {
@@ -75,9 +79,9 @@ module.exports = function setupTests(groupIndex) {
           expect(err.deployment.errorMessage).toBe(errMsg);
         }
       });
-      continue; //eslint-disable-line
+      continue;
     }
-    it(`should build ${fixture}`, async () => {
+    it.concurrent(`should build ${fixture}`, async () => {
       await expect(
         testDeployment(path.join(fixturesPath, fixture))
       ).resolves.toBeDefined();

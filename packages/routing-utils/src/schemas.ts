@@ -12,6 +12,36 @@ const mitigateSchema = {
   },
 } as const;
 
+const serviceNameSchema = {
+  description: 'A service name identifier.',
+  type: 'string',
+  minLength: 1,
+  maxLength: 64,
+  pattern: '^[a-zA-Z]([a-zA-Z0-9_-]*[a-zA-Z0-9])?$',
+} as const;
+
+const serviceDestinationSchema = {
+  description:
+    'A service-targeted destination that delegates routing into a named service from `services`.',
+  type: 'object',
+  additionalProperties: false,
+  required: ['type', 'service'],
+  properties: {
+    type: {
+      description: 'Discriminator. Must be `service`.',
+      type: 'string',
+      enum: ['service'],
+    },
+    service: serviceNameSchema,
+    path: {
+      description:
+        'Routing-only path used to select a route inside the target service. It does not mutate the URL observed by user code.',
+      type: 'string',
+      maxLength: 4096,
+    },
+  },
+} as const;
+
 const matchableValueSchema = {
   description:
     'A value to match against. Can be a string (regex) or a condition operation object',
@@ -263,6 +293,17 @@ const transformsSchema = {
           },
         ],
       },
+      env: {
+        description:
+          'An array of environment variable names that should be replaced at runtime in the args value',
+        type: 'array',
+        minItems: 1,
+        maxItems: 64,
+        items: {
+          type: 'string',
+          maxLength: 256,
+        },
+      },
     },
     allOf: [
       {
@@ -273,6 +314,7 @@ const transformsSchema = {
             },
           },
         },
+        // biome-ignore lint/suspicious/noThenProperty: JSON Schema if/then keyword
         then: {
           required: ['args'],
         },
@@ -296,6 +338,7 @@ const transformsSchema = {
             },
           ],
         },
+        // biome-ignore lint/suspicious/noThenProperty: JSON Schema if/then keyword
         then: {
           properties: {
             target: {
@@ -304,6 +347,7 @@ const transformsSchema = {
                   if: {
                     type: 'string',
                   },
+                  // biome-ignore lint/suspicious/noThenProperty: JSON Schema if/then keyword
                   then: {
                     pattern: '^[a-zA-Z0-9_-]+$',
                   },
@@ -339,8 +383,6 @@ const transformsSchema = {
  */
 export const routesSchema = {
   type: 'array',
-  maxItems: 2048,
-  deprecated: true,
   description:
     'A list of routes objects used to rewrite paths to point towards other internal or external paths',
   example: [{ dest: 'https://docs.example.com', src: '/docs' }],
@@ -348,16 +390,26 @@ export const routesSchema = {
     anyOf: [
       {
         type: 'object',
-        required: ['src'],
+        anyOf: [{ required: ['src'] }, { required: ['source'] }],
         additionalProperties: false,
         properties: {
           src: {
             type: 'string',
             maxLength: 4096,
           },
+          source: {
+            type: 'string',
+            maxLength: 4096,
+          },
           dest: {
             type: 'string',
             maxLength: 4096,
+          },
+          destination: {
+            anyOf: [
+              { type: 'string', maxLength: 4096 },
+              serviceDestinationSchema,
+            ],
           },
           headers: {
             type: 'object',
@@ -367,7 +419,7 @@ export const routesSchema = {
             patternProperties: {
               '^.{1,256}$': {
                 type: 'string',
-                maxLength: 4096,
+                maxLength: 32768,
               },
             },
           },
@@ -383,6 +435,7 @@ export const routesSchema = {
             type: 'boolean',
           },
           important: {
+            deprecated: true,
             type: 'boolean',
           },
           user: {
@@ -392,6 +445,7 @@ export const routesSchema = {
             type: 'boolean',
           },
           override: {
+            deprecated: true,
             type: 'boolean',
           },
           check: {
@@ -401,6 +455,11 @@ export const routesSchema = {
             type: 'boolean',
           },
           status: {
+            type: 'integer',
+            minimum: 100,
+            maximum: 999,
+          },
+          statusCode: {
             type: 'integer',
             minimum: 100,
             maximum: 999,
@@ -452,10 +511,27 @@ export const routesSchema = {
           missing: hasSchema,
           mitigate: mitigateSchema,
           transforms: transformsSchema,
+          env: {
+            description:
+              'An array of environment variable names that should be replaced at runtime in the destination or headers',
+            type: 'array',
+            minItems: 1,
+            maxItems: 64,
+            items: {
+              type: 'string',
+              maxLength: 256,
+            },
+          },
+          respectOriginCacheControl: {
+            description:
+              'When set to true (default), external rewrites will respect the Cache-Control header from the origin. When false, caching is disabled for this rewrite.',
+            type: 'boolean',
+          },
         },
       },
       {
         type: 'object',
+        deprecated: true,
         required: ['handle'],
         additionalProperties: false,
         properties: {
@@ -487,9 +563,8 @@ export const rewritesSchema = {
       },
       destination: {
         description:
-          'An absolute pathname to an existing resource or an external URL.',
-        type: 'string',
-        maxLength: 4096,
+          'An absolute pathname to an existing resource, an external URL, or a service-targeted destination object.',
+        anyOf: [{ type: 'string', maxLength: 4096 }, serviceDestinationSchema],
       },
       has: hasSchema,
       missing: hasSchema,
@@ -499,6 +574,22 @@ export const rewritesSchema = {
         type: 'integer',
         minimum: 100,
         maximum: 999,
+      },
+      env: {
+        description:
+          'An array of environment variable names that should be replaced at runtime in the destination',
+        type: 'array',
+        minItems: 1,
+        maxItems: 64,
+        items: {
+          type: 'string',
+          maxLength: 256,
+        },
+      },
+      respectOriginCacheControl: {
+        description:
+          'When set to true (default), external rewrites will respect the Cache-Control header from the origin. When false, caching is disabled for this rewrite.',
+        type: 'boolean',
       },
     },
   },
@@ -516,7 +607,7 @@ export const redirectsSchema = {
     properties: {
       source: {
         description:
-          'A pattern that matches each incoming pathname (excluding querystring).',
+          'A pattern that matches each incoming pathname (excluding querystring) or a full URL including domain.',
         type: 'string',
         maxLength: 4096,
       },
@@ -541,6 +632,17 @@ export const redirectsSchema = {
       },
       has: hasSchema,
       missing: hasSchema,
+      env: {
+        description:
+          'An array of environment variable names that should be replaced at runtime in the destination',
+        type: 'array',
+        minItems: 1,
+        maxItems: 64,
+        items: {
+          type: 'string',
+          maxLength: 256,
+        },
+      },
     },
   },
 } as const;
@@ -576,7 +678,7 @@ export const headersSchema = {
             },
             value: {
               type: 'string',
-              maxLength: 4096,
+              maxLength: 32768,
             },
           },
         },

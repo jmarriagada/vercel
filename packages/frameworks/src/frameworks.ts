@@ -66,7 +66,7 @@ export const frameworks = [
     darkModeLogo:
       'https://api-frameworks.vercel.sh/framework-logos/next-dark.svg',
     screenshot:
-      'https://assets.vercel.com/image/upload/v1701461207/front/import/nextjs.png',
+      'https://py8fhxnkzwtsqdo9.public.blob.vercel-storage.com/front/import/nextjs.png',
     tagline:
       'Next.js makes you productive with React instantly — whether you want to build static or dynamic sites.',
     description: 'A Next.js app and a Serverless Function API.',
@@ -156,11 +156,11 @@ export const frameworks = [
         const nowRoutes = JSON.parse(content);
         try {
           await unlink(nowRoutesPath);
-        } catch (err) {
+        } catch (_err) {
           // do nothing if deleting the file fails
         }
         return nowRoutes;
-      } catch (err) {
+      } catch (_err) {
         // if the file doesn't exist, we implement gatsby's recommendations
         // https://www.gatsbyjs.org/docs/caching
 
@@ -202,7 +202,7 @@ export const frameworks = [
     description: 'A new Remix app — the result of running `npx create-remix`.',
     website: 'https://remix.run',
     sort: 6,
-    supersedes: ['hydrogen', 'vite'],
+    supersedes: ['hydrogen', 'vite', 'node'],
     useRuntime: { src: 'package.json', use: '@vercel/remix-builder' },
     ignoreRuntimes: ['@vercel/node'],
     detectors: {
@@ -250,8 +250,9 @@ export const frameworks = [
       'A user-obsessed, standards-focused, multi-strategy router you can deploy anywhere.',
     website: 'https://reactrouter.com',
     sort: 7,
-    supersedes: ['hydrogen', 'vite'],
+    supersedes: ['hydrogen', 'vite', 'node'],
     useRuntime: { src: 'package.json', use: '@vercel/remix-builder' },
+    ignoreRuntimes: ['@vercel/node'],
     detectors: {
       some: [
         {
@@ -1092,11 +1093,12 @@ export const frameworks = [
     demo: 'https://sveltekit-template.vercel.app',
     logo: 'https://api-frameworks.vercel.sh/framework-logos/svelte.svg',
     screenshot:
-      'https://assets.vercel.com/image/upload/v1647366075/front/import/sveltekit.png',
+      'https://py8fhxnkzwtsqdo9.public.blob.vercel-storage.com/front/import/sveltekit.png',
     tagline:
       'SvelteKit is a framework for building web applications of all sizes.',
     description: 'A SvelteKit legacy app optimized Edge-first.',
     website: 'https://kit.svelte.dev',
+    supersedes: ['vite'],
     sort: 99,
     envPrefix: 'VITE_',
     detectors: {
@@ -1133,11 +1135,12 @@ export const frameworks = [
     demo: 'https://sveltekit-1-template.vercel.app',
     logo: 'https://api-frameworks.vercel.sh/framework-logos/svelte.svg',
     screenshot:
-      'https://assets.vercel.com/image/upload/v1647366075/front/import/sveltekit.png',
+      'https://py8fhxnkzwtsqdo9.public.blob.vercel-storage.com/front/import/sveltekit.png',
     tagline:
       'SvelteKit is a framework for building web applications of all sizes.',
     description: 'A SvelteKit app optimized Edge-first.',
     website: 'https://kit.svelte.dev',
+    supersedes: ['vite'],
     detectors: {
       every: [
         {
@@ -1517,16 +1520,16 @@ export const frameworks = [
     ],
   },
   {
-    name: 'Nuxt.js',
+    name: 'Nuxt',
     slug: 'nuxtjs',
     demo: 'https://nuxtjs-template.vercel.app',
     logo: 'https://api-frameworks.vercel.sh/framework-logos/nuxt.svg',
     screenshot:
-      'https://assets.vercel.com/image/upload/v1647366075/front/import/nuxtjs.png',
+      'https://py8fhxnkzwtsqdo9.public.blob.vercel-storage.com/front/import/nuxtjs.png',
     tagline:
-      'Nuxt.js is the web comprehensive framework that lets you dream big with Vue.js.',
-    description: 'A Nuxt.js app, bootstrapped with create-nuxt-app.',
-    website: 'https://nuxtjs.org',
+      'Nuxt is the open source framework that makes full-stack development with Vue.js intuitive.',
+    description: 'A Nuxt app, bootstrapped with create-nuxt-app.',
+    website: 'https://nuxt.com',
     sort: 2,
     envPrefix: 'NUXT_ENV_',
     supersedes: ['nitro'],
@@ -1541,6 +1544,9 @@ export const frameworks = [
         {
           matchPackage: 'nuxt-edge',
         },
+        {
+          matchPackage: 'nuxt-nightly',
+        },
       ],
     },
     settings: {
@@ -1553,7 +1559,7 @@ export const frameworks = [
         value: 'nuxt build',
       },
       devCommand: {
-        value: 'nuxt',
+        value: 'nuxt dev',
       },
       outputDirectory: {
         value: 'dist',
@@ -1902,6 +1908,44 @@ export const frameworks = [
     getOutputDirName: async () => 'dist',
   },
   {
+    name: 'TanStack Start',
+    slug: 'tanstack-start',
+    logo: 'https://api-frameworks.vercel.sh/framework-logos/tanstack-start.svg',
+    darkModeLogo:
+      'https://api-frameworks.vercel.sh/framework-logos/tanstack-start-dark.svg',
+    tagline:
+      'Full-stack Framework powered by TanStack Router for React and Solid.',
+    description:
+      'Full-document SSR, Streaming, Server Functions, bundling and more, powered by TanStack Router and Vite - Ready to deploy to your favorite hosting provider.',
+    website: 'https://tanstack.com/start',
+    supersedes: ['ionic-react', 'vite'],
+    detectors: {
+      every: [{ matchPackage: '@tanstack/router-plugin' }],
+      some: [
+        { matchPackage: '@tanstack/react-start' },
+        { matchPackage: '@tanstack/solid-start' },
+      ],
+    },
+    settings: {
+      installCommand: {
+        placeholder:
+          '`yarn install`, `pnpm install`, `npm install`, or `bun install`',
+      },
+      buildCommand: {
+        placeholder: '`npm run build` or `vite build`',
+        value: 'vite build',
+      },
+      devCommand: {
+        placeholder: 'vite',
+        value: 'vite --port $PORT',
+      },
+      outputDirectory: {
+        value: 'dist',
+      },
+    },
+    getOutputDirName: async () => 'dist',
+  },
+  {
     name: 'VitePress',
     slug: 'vitepress',
     demo: 'https://vitepress-starter-template.vercel.app',
@@ -2014,7 +2058,118 @@ export const frameworks = [
     ],
   },
   {
-    name: 'FastHTML (Experimental)',
+    name: 'FastAPI',
+    slug: 'fastapi',
+    demo: 'https://vercel-fastapi-gamma-smoky.vercel.app/',
+    logo: 'https://api-frameworks.vercel.sh/framework-logos/fastapi.svg',
+    darkModeLogo:
+      'https://api-frameworks.vercel.sh/framework-logos/fastapi.svg',
+    tagline:
+      'FastAPI framework, high performance, easy to learn, fast to code, ready for production',
+    description:
+      'FastAPI framework, high performance, easy to learn, fast to code, ready for production',
+    website: 'https://fastapi.tiangolo.com',
+    supersedes: ['python'],
+    useRuntime: { src: '<detect>', use: '@vercel/python' },
+    ignoreRuntimes: ['@vercel/python'],
+    detectors: {
+      some: [
+        {
+          path: 'requirements.txt',
+          matchContent: 'fastapi',
+        },
+        {
+          path: 'pyproject.toml',
+          matchContent: 'fastapi',
+        },
+        {
+          path: 'Pipfile',
+          matchContent: 'fastapi',
+        },
+      ],
+    },
+    settings: {
+      installCommand: {
+        placeholder: '`pip install -r requirements.txt`',
+      },
+      buildCommand: {
+        placeholder: 'None',
+        value: null,
+      },
+      devCommand: {
+        placeholder: 'None',
+        value: null,
+      },
+      outputDirectory: {
+        value: 'N/A',
+      },
+    },
+    getOutputDirName: async () => 'public',
+    defaultRoutes: [
+      {
+        handle: 'filesystem',
+      },
+      {
+        src: '/(.*)',
+        dest: '/',
+      },
+    ],
+  },
+  {
+    name: 'Flask',
+    slug: 'flask',
+    logo: 'https://api-frameworks.vercel.sh/framework-logos/flask.svg',
+    tagline: 'The Python micro web framework',
+    description: 'A Flask app, ready for production',
+    website: 'https://flask.palletsprojects.com',
+    supersedes: ['python'],
+    useRuntime: { src: '<detect>', use: '@vercel/python' },
+    ignoreRuntimes: ['@vercel/python'],
+    detectors: {
+      some: [
+        {
+          path: 'requirements.txt',
+          matchContent: '[Ff]lask',
+        },
+        {
+          path: 'pyproject.toml',
+          matchContent: '[Ff]lask',
+        },
+        {
+          path: 'Pipfile',
+          matchContent: '[Ff]lask',
+        },
+      ],
+    },
+    settings: {
+      installCommand: {
+        placeholder: '`pip install -r requirements.txt`',
+      },
+      buildCommand: {
+        placeholder: 'None',
+        value: null,
+      },
+      devCommand: {
+        placeholder: 'None',
+        value: null,
+      },
+      outputDirectory: {
+        value: 'N/A',
+      },
+    },
+    getOutputDirName: async () => 'public',
+    defaultRoutes: [
+      {
+        handle: 'filesystem',
+      },
+      {
+        src: '/(.*)',
+        dest: '/',
+      },
+    ],
+  },
+  {
+    name: 'FastHTML',
     slug: 'fasthtml',
     demo: 'https://fasthtml-template.vercel.app',
     logo: 'https://api-frameworks.vercel.sh/framework-logos/fasthtml.png',
@@ -2024,6 +2179,7 @@ export const frameworks = [
     description:
       'A library for writing fast and scalable Starlette-powered web applications',
     website: 'https://fastht.ml',
+    supersedes: ['python'],
     useRuntime: { src: 'main.py', use: '@vercel/python' },
     detectors: {
       every: [
@@ -2060,19 +2216,153 @@ export const frameworks = [
     ],
   },
   {
-    name: 'Sanity (v3)',
-    slug: 'sanity-v3',
-    demo: 'https://sanity-studio-template.vercel.app',
+    name: 'Django',
+    slug: 'django',
+    logo: 'https://api-frameworks.vercel.sh/framework-logos/django.svg',
+    tagline:
+      'Django is a high-level Python web framework that encourages rapid development and clean, pragmatic design. ',
+    description: 'A Django project served via the Python Runtime.',
+    website: 'https://www.djangoproject.com',
+    supersedes: ['python'],
+    useRuntime: { src: '<detect>', use: '@vercel/python' },
+    ignoreRuntimes: ['@vercel/python'],
+    detectors: {
+      some: [
+        {
+          path: 'requirements.txt',
+          matchContent: '[Dd]jango',
+        },
+        {
+          path: 'pyproject.toml',
+          matchContent: '[Dd]jango',
+        },
+        {
+          path: 'Pipfile',
+          matchContent: '[Dd]jango',
+        },
+        {
+          // a default django project will create a manage.py which sets DJANGO_SETTINGS_MODULE
+          path: 'manage.py',
+          matchContent: 'DJANGO_SETTINGS_MODULE',
+        },
+      ],
+    },
+    settings: {
+      installCommand: {
+        placeholder: '`pip install -r requirements.txt`',
+      },
+      buildCommand: {
+        placeholder: 'None',
+        value: null,
+      },
+      devCommand: {
+        placeholder: 'None',
+        value: null,
+      },
+      outputDirectory: {
+        value: 'N/A',
+      },
+    },
+    getOutputDirName: async () => 'public',
+    defaultRoutes: [
+      {
+        handle: 'filesystem',
+      },
+      {
+        src: '/(.*)',
+        dest: '/',
+      },
+    ],
+  },
+  {
+    name: 'Ash',
+    slug: 'ash',
+    logo: 'https://api-frameworks.vercel.sh/framework-logos/ash.svg',
+    darkModeLogo:
+      'https://api-frameworks.vercel.sh/framework-logos/ash-dark.svg',
+    tagline:
+      'A filesystem-first framework for durable backend agents on Vercel.',
+    description:
+      'An Ash app: agents authored as a directory of files, compiled and served on Vercel.',
+    detectors: {
+      every: [
+        {
+          path: 'package.json',
+          matchContent:
+            '"(dev)?(d|D)ependencies":\\s*{[^}]*"experimental-ash":\\s*".+?"[^}]*}',
+        },
+      ],
+    },
+    settings: {
+      installCommand: {
+        placeholder: '`pnpm install`, `yarn install`, or `npm install`',
+      },
+      buildCommand: {
+        value: 'ash build',
+        placeholder: '`npm run build` or `ash build`',
+      },
+      devCommand: {
+        value: 'ash dev',
+        placeholder: 'ash dev',
+      },
+      outputDirectory: {
+        value: '.output',
+      },
+    },
+    getOutputDirName: async () => '.output',
+    experimental: true,
+  },
+  {
+    name: 'Eve',
+    slug: 'eve',
+    logo: 'https://api-frameworks.vercel.sh/framework-logos/eve.svg',
+    darkModeLogo:
+      'https://api-frameworks.vercel.sh/framework-logos/eve-dark.svg',
+    tagline:
+      'A filesystem-first framework for durable backend agents on Vercel.',
+    description:
+      'An Eve app: agents authored as a directory of files, compiled and served on Vercel.',
+    detectors: {
+      every: [
+        {
+          path: 'package.json',
+          matchContent:
+            '"(dev)?(d|D)ependencies":\\s*{[^}]*"eve":\\s*".+?"[^}]*}',
+        },
+      ],
+    },
+    settings: {
+      installCommand: {
+        placeholder: '`pnpm install`, `yarn install`, or `npm install`',
+      },
+      buildCommand: {
+        value: 'eve build',
+        placeholder: '`npm run build` or `eve build`',
+      },
+      devCommand: {
+        value: 'eve dev',
+        placeholder: 'eve dev',
+      },
+      outputDirectory: {
+        value: '.output',
+      },
+    },
+    getOutputDirName: async () => '.output',
+  },
+  {
+    name: 'Sanity',
+    slug: 'sanity',
+    demo: 'https://template-studio-clean.sanity.dev',
     logo: 'https://api-frameworks.vercel.sh/framework-logos/sanity.svg',
-    tagline: 'The structured content platform.',
+    darkModeLogo:
+      'https://api-frameworks.vercel.sh/framework-logos/sanity-dark.svg',
+    tagline:
+      'The back-end built for AI content operations. Power web, mobile, and agentic applications at scale.',
     description: 'A Sanity Studio',
     website: 'https://www.sanity.io',
     envPrefix: 'SANITY_STUDIO_',
     detectors: {
       some: [
-        {
-          path: 'sanity.json',
-        },
         {
           path: 'sanity.config.js',
         },
@@ -2088,9 +2378,7 @@ export const frameworks = [
       ],
       every: [
         {
-          path: 'package.json',
-          matchContent:
-            '"(dev)?(d|D)ependencies":\\s*{[^}]*"sanity":\\s*"\\^?3\\..*"[^}]*}',
+          matchPackage: 'sanity',
         },
       ],
     },
@@ -2110,6 +2398,7 @@ export const frameworks = [
         value: 'dist',
       },
     },
+    dependency: 'sanity',
     getOutputDirName: async () => 'dist',
     defaultRoutes: [
       {
@@ -2122,10 +2411,10 @@ export const frameworks = [
     ],
   },
   {
-    name: 'Sanity',
-    slug: 'sanity',
+    name: 'Sanity (v2 - legacy)',
+    slug: 'sanity-v2',
     demo: 'https://sanity-studio-template.vercel.app',
-    logo: 'https://api-frameworks.vercel.sh/framework-logos/sanity.svg',
+    logo: 'https://api-frameworks.vercel.sh/framework-logos/sanity-v2.svg',
     tagline: 'The structured content platform.',
     description: 'A Sanity Studio',
     website: 'https://www.sanity.io',
@@ -2135,17 +2424,12 @@ export const frameworks = [
         {
           path: 'sanity.json',
         },
+      ],
+      every: [
         {
-          path: 'sanity.config.js',
-        },
-        {
-          path: 'sanity.config.jsx',
-        },
-        {
-          path: 'sanity.config.ts',
-        },
-        {
-          path: 'sanity.config.tsx',
+          path: 'package.json',
+          matchContent:
+            '"(dev)?(d|D)ependencies":\\s*{[^}]*"@sanity/cli":\\s*"\\^?2\\..*"[^}]*}',
         },
       ],
     },
@@ -2222,8 +2506,9 @@ export const frameworks = [
       'Nitro lets you create web servers that run on multiple platforms.',
     website: 'https://nitro.build/',
     detectors: {
-      every: [{ matchPackage: 'nitropack' }],
+      some: [{ matchPackage: 'nitropack' }, { matchPackage: 'nitro' }],
     },
+    supersedes: ['vite'],
     settings: {
       installCommand: {
         placeholder:
@@ -2240,8 +2525,2220 @@ export const frameworks = [
         value: 'dist',
       },
     },
-    dependency: 'nitropack',
-    getOutputDirName: () => Promise<string>,
+    getOutputDirName: async () => 'public',
+  },
+  {
+    name: 'Hono',
+    slug: 'hono',
+    logo: 'https://api-frameworks.vercel.sh/framework-logos/hono.svg',
+    demo: 'https://hono.vercel.dev',
+    tagline: 'Web framework built on Web Standards',
+    description:
+      'Fast, lightweight, built on Web Standards. Support for any JavaScript runtime.',
+    website: 'https://hono.dev',
+    supersedes: ['node'],
+    useRuntime: { src: 'index.js', use: '@vercel/hono' },
+    defaultRoutes: [
+      {
+        handle: 'filesystem',
+      },
+      {
+        src: '/(.*)',
+        dest: '/',
+      },
+    ],
+    detectors: {
+      every: [{ matchPackage: 'hono' }],
+      some: [
+        {
+          path: 'app.cjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']hono["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'app.js',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']hono["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'app.mjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']hono["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'app.mts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']hono["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'app.ts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']hono["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'app.cts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']hono["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'index.cjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']hono["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'index.js',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']hono["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'index.mjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']hono["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'index.mts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']hono["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'index.ts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']hono["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'index.cts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']hono["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'server.cjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']hono["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'server.js',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']hono["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'server.mjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']hono["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'server.mts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']hono["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'server.ts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']hono["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'server.cts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']hono["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/index.cjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']hono["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/index.js',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']hono["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/index.mjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']hono["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/index.mts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']hono["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/index.ts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']hono["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/index.cts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']hono["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/app.cjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']hono["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/app.js',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']hono["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/app.mjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']hono["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/app.mts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']hono["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/app.ts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']hono["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/app.cts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']hono["\']\\s*(?:\\))?',
+        },
+
+        {
+          path: 'src/server.cjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']hono["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/server.js',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']hono["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/server.mjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']hono["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/server.mts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']hono["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/server.ts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']hono["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/server.cts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']hono["\']\\s*(?:\\))?',
+        },
+      ],
+    },
+    settings: {
+      installCommand: {
+        placeholder:
+          '`yarn install`, `pnpm install`, `npm install`, or `bun install`',
+      },
+      buildCommand: {
+        placeholder: 'None',
+        value: null,
+      },
+      devCommand: {
+        placeholder: 'None',
+        value: null,
+      },
+      outputDirectory: {
+        value: 'N/A',
+      },
+    },
+    dependency: 'hono',
+    getOutputDirName: async () => 'public',
+  },
+  {
+    name: 'Express',
+    slug: 'express',
+    logo: 'https://api-frameworks.vercel.sh/framework-logos/express.svg',
+    demo: 'https://express-vercel-example-demo.vercel.app/',
+    darkModeLogo:
+      'https://api-frameworks.vercel.sh/framework-logos/express-dark.svg',
+    tagline: 'Fast, unopinionated, minimalist web framework for Node.js',
+    description: 'Fast, unopinionated, minimalist web framework for Node.js',
+    website: 'https://expressjs.com',
+    supersedes: ['node'],
+    useRuntime: { src: 'index.js', use: '@vercel/express' },
+    defaultRoutes: [
+      {
+        handle: 'filesystem',
+      },
+      {
+        src: '/(.*)',
+        dest: '/',
+      },
+    ],
+    detectors: {
+      every: [{ matchPackage: 'express' }],
+      some: [
+        {
+          path: 'app.cjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']express["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'app.js',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']express["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'app.mjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']express["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'app.mts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']express["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'app.ts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']express["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'app.cts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']express["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'index.cjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']express["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'index.js',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']express["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'index.mjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']express["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'index.mts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']express["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'index.ts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']express["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'index.cts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']express["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'server.cjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']express["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'server.js',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']express["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'server.mjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']express["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'server.mts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']express["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'server.ts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']express["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'server.cts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']express["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/index.cjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']express["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/index.js',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']express["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/index.mjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']express["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/index.mts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']express["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/index.ts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']express["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/index.cts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']express["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/app.cjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']express["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/app.js',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']express["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/app.mjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']express["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/app.mts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']express["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/app.ts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']express["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/app.cts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']express["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/server.js',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']express["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/server.cjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']express["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/server.mjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']express["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/server.ts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']express["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/server.mts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']express["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/server.cts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']express["\']\\s*(?:\\))?',
+        },
+      ],
+    },
+    settings: {
+      installCommand: {
+        placeholder:
+          '`yarn install`, `pnpm install`, `npm install`, or `bun install`',
+      },
+      buildCommand: {
+        placeholder: 'None',
+        value: null,
+      },
+      devCommand: {
+        placeholder: 'None',
+        value: null,
+      },
+      outputDirectory: {
+        value: 'N/A',
+      },
+    },
+    dependency: 'express',
+    getOutputDirName: async () => 'public',
+  },
+  {
+    name: 'H3',
+    slug: 'h3',
+    logo: 'https://api-frameworks.vercel.sh/framework-logos/h3.svg',
+    tagline: 'Universal, Tiny, and Fast Servers',
+    description:
+      'H(TTP) server framework built on top of web standards for high performance and composability.',
+    website: 'https://h3.dev/',
+    supersedes: ['node'],
+    useRuntime: { src: 'index.js', use: '@vercel/h3' },
+    defaultRoutes: [
+      {
+        handle: 'filesystem',
+      },
+      {
+        src: '/(.*)',
+        dest: '/',
+      },
+    ],
+    detectors: {
+      every: [{ matchPackage: 'h3' }],
+      some: [
+        {
+          path: 'app.cjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']h3["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'app.js',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']h3["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'app.mjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']h3["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'app.mts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']h3["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'app.ts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']h3["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'app.cts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']h3["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'index.cjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']h3["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'index.js',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']h3["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'index.mjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']h3["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'index.mts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']h3["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'index.ts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']h3["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'index.cts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']h3["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'server.cjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']h3["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'server.js',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']h3["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'server.mjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']h3["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'server.mts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']h3["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'server.ts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']h3["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'server.cts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']h3["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/index.cjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']h3["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/index.js',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']h3["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/index.mjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']h3["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/index.mts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']h3["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/index.ts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']h3["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/index.cts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']h3["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/app.cjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']h3["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/app.js',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']h3["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/app.mjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']h3["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/app.mts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']h3["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/app.ts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']h3["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/app.cts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']h3["\']\\s*(?:\\))?',
+        },
+
+        {
+          path: 'src/server.cjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']h3["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/server.js',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']h3["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/server.mjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']h3["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/server.mts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']h3["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/server.ts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']h3["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/server.cts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']h3["\']\\s*(?:\\))?',
+        },
+      ],
+    },
+    settings: {
+      installCommand: {
+        placeholder:
+          '`yarn install`, `pnpm install`, `npm install`, or `bun install`',
+      },
+      buildCommand: {
+        placeholder: 'None',
+        value: null,
+      },
+      devCommand: {
+        placeholder: 'None',
+        value: null,
+      },
+      outputDirectory: {
+        value: 'N/A',
+      },
+    },
+    dependency: 'h3',
+    getOutputDirName: async () => 'public',
+  },
+  {
+    name: 'Koa',
+    slug: 'koa',
+    logo: 'https://api-frameworks.vercel.sh/framework-logos/koa.svg',
+    tagline: 'Expressive middleware for Node.js using ES2017 async functions',
+    description:
+      'Koa is a new web framework designed by the team behind Express, which aims to be a smaller, more expressive, and more robust foundation for web applications and APIs.',
+    website: 'https://koajs.com',
+    supersedes: ['node'],
+    useRuntime: { src: 'index.js', use: '@vercel/koa' },
+    defaultRoutes: [
+      {
+        handle: 'filesystem',
+      },
+      {
+        src: '/(.*)',
+        dest: '/',
+      },
+    ],
+    detectors: {
+      every: [{ matchPackage: 'koa' }],
+      some: [
+        {
+          path: 'app.cjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']koa["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'app.js',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']koa["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'app.mjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']koa["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'app.mts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']koa["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'app.ts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']koa["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'app.cts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']koa["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'index.cjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']koa["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'index.js',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']koa["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'index.mjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']koa["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'index.mts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']koa["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'index.ts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']koa["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'index.cts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']koa["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'server.cjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']koa["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'server.js',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']koa["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'server.mjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']koa["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'server.mts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']koa["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'server.ts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']koa["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'server.cts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']koa["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/index.cjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']koa["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/index.js',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']koa["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/index.mjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']koa["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/index.mts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']koa["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/index.ts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']koa["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/index.cts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']koa["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/app.cjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']koa["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/app.js',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']koa["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/app.mjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']koa["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/app.mts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']koa["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/app.ts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']koa["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/app.cts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']koa["\']\\s*(?:\\))?',
+        },
+
+        {
+          path: 'src/server.cjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']koa["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/server.js',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']koa["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/server.mjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']koa["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/server.mts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']koa["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/server.ts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']koa["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/server.cts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']koa["\']\\s*(?:\\))?',
+        },
+      ],
+    },
+    settings: {
+      installCommand: {
+        placeholder:
+          '`yarn install`, `pnpm install`, `npm install`, or `bun install`',
+      },
+      buildCommand: {
+        placeholder: 'None',
+        value: null,
+      },
+      devCommand: {
+        placeholder: 'None',
+        value: null,
+      },
+      outputDirectory: {
+        value: 'N/A',
+      },
+    },
+    dependency: 'koa',
+    getOutputDirName: async () => 'public',
+  },
+  {
+    name: 'NestJS',
+    slug: 'nestjs',
+    logo: 'https://api-frameworks.vercel.sh/framework-logos/nestjs.svg',
+    tagline:
+      'Framework for building efficient, scalable Node.js server-side applications',
+    description:
+      'A progressive Node.js framework for building efficient, reliable and scalable server-side applications.',
+    website: 'https://nestjs.com/',
+    supersedes: ['node'],
+    useRuntime: { src: 'index.js', use: '@vercel/nestjs' },
+    defaultRoutes: [
+      {
+        handle: 'filesystem',
+      },
+      {
+        src: '/(.*)',
+        dest: '/',
+      },
+    ],
+    detectors: {
+      every: [{ matchPackage: '@nestjs/core' }],
+      some: [
+        {
+          path: 'src/main.js',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']@nestjs/core["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/main.cjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']@nestjs/core["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/main.mjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']@nestjs/core["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/main.ts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']@nestjs/core["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/main.cts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']@nestjs/core["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/main.mts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']@nestjs/core["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'main.js',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']@nestjs/core["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'main.cjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']@nestjs/core["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'main.mjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']@nestjs/core["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'main.ts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']@nestjs/core["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'main.cts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']@nestjs/core["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'main.mts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']@nestjs/core["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'app.js',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']@nestjs/core["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'app.cjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']@nestjs/core["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'app.mjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']@nestjs/core["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'app.ts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']@nestjs/core["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'app.cts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']@nestjs/core["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'app.mts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']@nestjs/core["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'index.js',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']@nestjs/core["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'index.cjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']@nestjs/core["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'index.mjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']@nestjs/core["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'index.ts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']@nestjs/core["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'index.cts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']@nestjs/core["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'index.mts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']@nestjs/core["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'server.js',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']@nestjs/core["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'server.cjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']@nestjs/core["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'server.mjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']@nestjs/core["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'server.ts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']@nestjs/core["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'server.cts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']@nestjs/core["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'server.mts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']@nestjs/core["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/app.js',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']@nestjs/core["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/app.cjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']@nestjs/core["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/app.mjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']@nestjs/core["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/app.ts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']@nestjs/core["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/app.cts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']@nestjs/core["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/app.mts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']@nestjs/core["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/index.js',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']@nestjs/core["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/index.cjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']@nestjs/core["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/index.mjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']@nestjs/core["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/index.ts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']@nestjs/core["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/index.cts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']@nestjs/core["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/index.mts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']@nestjs/core["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/server.js',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']@nestjs/core["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/server.cjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']@nestjs/core["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/server.mjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']@nestjs/core["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/server.ts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']@nestjs/core["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/server.cts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']@nestjs/core["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/server.mts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']@nestjs/core["\']\\s*(?:\\))?',
+        },
+      ],
+    },
+    settings: {
+      installCommand: {
+        placeholder:
+          '`yarn install`, `pnpm install`, `npm install`, or `bun install`',
+      },
+      buildCommand: {
+        placeholder: 'None',
+        value: null,
+      },
+      devCommand: {
+        placeholder: 'None',
+        value: null,
+      },
+      outputDirectory: {
+        value: 'N/A',
+      },
+    },
+    dependency: 'nestjs',
+    getOutputDirName: async () => 'public',
+  },
+  {
+    name: 'Elysia',
+    slug: 'elysia',
+    logo: 'https://api-frameworks.vercel.sh/framework-logos/elysia.svg',
+    tagline: 'Ergonomic framework for humans',
+    description:
+      'TypeScript with End-to-End Type Safety, type integrity, and exceptional developer experience. Supercharged by Bun.',
+    website: 'https://elysiajs.com/',
+    supersedes: ['node'],
+    useRuntime: { src: 'index.js', use: '@vercel/elysia' },
+    defaultRoutes: [
+      {
+        handle: 'filesystem',
+      },
+      {
+        src: '/(.*)',
+        dest: '/',
+      },
+    ],
+    detectors: {
+      every: [{ matchPackage: 'elysia' }],
+      some: [
+        {
+          path: 'app.cjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']elysia["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'app.js',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']elysia["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'app.mjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']elysia["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'app.mts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']elysia["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'app.ts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']elysia["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'app.cts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']elysia["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'index.cjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']elysia["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'index.js',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']elysia["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'index.mjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']elysia["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'index.mts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']elysia["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'index.ts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']elysia["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'index.cts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']elysia["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'server.cjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']elysia["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'server.js',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']elysia["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'server.mjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']elysia["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'server.mts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']elysia["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'server.ts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']elysia["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'server.cts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']elysia["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/index.cjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']elysia["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/index.js',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']elysia["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/index.mjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']elysia["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/index.mts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']elysia["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/index.ts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']elysia["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/index.cts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']elysia["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/app.cjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']elysia["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/app.js',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']elysia["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/app.mjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']elysia["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/app.mts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']elysia["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/app.ts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']elysia["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/app.cts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']elysia["\']\\s*(?:\\))?',
+        },
+
+        {
+          path: 'src/server.cjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']elysia["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/server.js',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']elysia["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/server.mjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']elysia["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/server.mts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']elysia["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/server.ts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']elysia["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/server.cts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']elysia["\']\\s*(?:\\))?',
+        },
+      ],
+    },
+    settings: {
+      installCommand: {
+        placeholder:
+          '`yarn install`, `pnpm install`, `npm install`, or `bun install`',
+      },
+      buildCommand: {
+        placeholder: 'None',
+        value: null,
+      },
+      devCommand: {
+        placeholder: 'None',
+        value: null,
+      },
+      outputDirectory: {
+        value: 'N/A',
+      },
+    },
+    getOutputDirName: async () => 'public',
+  },
+  {
+    name: 'Fastify',
+    slug: 'fastify',
+    logo: 'https://api-frameworks.vercel.sh/framework-logos/fastify.svg',
+    darkModeLogo:
+      'https://api-frameworks.vercel.sh/framework-logos/fastify-dark.svg',
+    tagline: 'Fast and low overhead web framework, for Node.js',
+    description:
+      'Fastify is a web framework highly focused on providing the best developer experience with the least overhead and a powerful plugin architecture.',
+    website: 'https://fastify.dev/',
+    supersedes: ['node'],
+    useRuntime: { src: 'index.js', use: '@vercel/fastify' },
+    defaultRoutes: [
+      {
+        handle: 'filesystem',
+      },
+      {
+        src: '/(.*)',
+        dest: '/',
+      },
+    ],
+    detectors: {
+      every: [{ matchPackage: 'fastify' }],
+      some: [
+        {
+          path: 'app.cjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']fastify["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'app.js',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']fastify["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'app.mjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']fastify["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'app.mts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']fastify["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'app.ts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']fastify["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'app.cts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']fastify["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'index.cjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']fastify["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'index.js',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']fastify["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'index.mjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']fastify["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'index.mts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']fastify["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'index.ts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']fastify["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'index.cts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']fastify["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'server.cjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']fastify["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'server.js',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']fastify["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'server.mjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']fastify["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'server.mts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']fastify["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'server.ts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']fastify["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'server.cts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']fastify["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/index.cjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']fastify["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/index.js',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']fastify["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/index.mjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']fastify["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/index.mts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']fastify["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/index.ts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']fastify["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/index.cts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']fastify["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/app.cjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']fastify["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/app.js',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']fastify["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/app.mjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']fastify["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/app.mts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']fastify["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/app.ts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']fastify["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/app.cts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']fastify["\']\\s*(?:\\))?',
+        },
+
+        {
+          path: 'src/server.cjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']fastify["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/server.js',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']fastify["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/server.mjs',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']fastify["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/server.mts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']fastify["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/server.ts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']fastify["\']\\s*(?:\\))?',
+        },
+        {
+          path: 'src/server.cts',
+          matchContent:
+            '(?:from|require|import)\\s*(?:\\(\\s*)?["\']fastify["\']\\s*(?:\\))?',
+        },
+      ],
+    },
+    settings: {
+      installCommand: {
+        placeholder:
+          '`yarn install`, `pnpm install`, `npm install`, or `bun install`',
+      },
+      buildCommand: {
+        placeholder: 'None',
+        value: null,
+      },
+      devCommand: {
+        placeholder: 'None',
+        value: null,
+      },
+      outputDirectory: {
+        value: 'N/A',
+      },
+    },
+    getOutputDirName: async () => 'public',
+  },
+  {
+    name: 'xmcp',
+    slug: 'xmcp',
+    logo: 'https://api-frameworks.vercel.sh/framework-logos/xmcp.svg',
+    demo: 'https://xmcp-template.vercel.app/',
+    tagline: 'The MCP framework for building AI-powered tools',
+    description:
+      'A framework for building Model Context Protocol servers with zero configuration.',
+    website: 'https://xmcp.dev',
+    detectors: {
+      some: [
+        {
+          path: 'xmcp.config.ts',
+        },
+        {
+          path: 'xmcp.config.js',
+        },
+        {
+          matchPackage: 'xmcp',
+        },
+      ],
+    },
+    settings: {
+      installCommand: {
+        placeholder:
+          '`yarn install`, `pnpm install`, `npm install`, or `bun install`',
+      },
+      buildCommand: {
+        placeholder: '`npm run build` or `xmcp build`',
+        value: 'xmcp build --vercel',
+      },
+      devCommand: {
+        value: 'xmcp dev',
+        placeholder: 'xmcp dev',
+      },
+      outputDirectory: {
+        value: 'dist',
+      },
+    },
+    dependency: 'xmcp',
+    getOutputDirName: async () => 'dist',
+  },
+  {
+    name: 'Python',
+    slug: 'python',
+    runtimeFramework: true,
+    logo: 'https://api-frameworks.vercel.sh/framework-logos/python.svg',
+    tagline:
+      'Python is a programming language that lets you work quickly and integrate systems more effectively.',
+    description:
+      'A generic Python application deployed as a serverless function.',
+    website: 'https://python.org',
+    useRuntime: { src: '<detect>', use: '@vercel/python' },
+    ignoreRuntimes: ['@vercel/python'],
+    detectors: {
+      some: [
+        {
+          path: 'requirements.txt',
+        },
+        {
+          path: 'pyproject.toml',
+        },
+        {
+          path: 'Pipfile',
+        },
+      ],
+    },
+    settings: {
+      installCommand: {
+        placeholder: '`pip install -r requirements.txt`',
+      },
+      buildCommand: {
+        placeholder: 'None',
+        value: null,
+      },
+      devCommand: {
+        placeholder: 'None',
+        value: null,
+      },
+      outputDirectory: {
+        value: 'N/A',
+      },
+    },
+    getOutputDirName: async () => 'public',
+    defaultRoutes: [
+      {
+        handle: 'filesystem',
+      },
+      {
+        src: '/(.*)',
+        dest: '/',
+      },
+    ],
+  },
+  {
+    name: 'Ruby',
+    slug: 'ruby',
+    experimental: true,
+    runtimeFramework: true,
+    logo: 'https://api-frameworks.vercel.sh/framework-logos/ruby.svg',
+    tagline:
+      'A dynamic, open source programming language with a focus on simplicity and productivity.',
+    description:
+      'A generic Ruby application deployed as a serverless function.',
+    website: 'https://www.ruby-lang.org',
+    useRuntime: { src: 'config.ru', use: '@vercel/ruby' },
+    ignoreRuntimes: ['@vercel/ruby'],
+    detectors: {
+      every: [
+        {
+          path: 'config.ru',
+        },
+        {
+          path: 'Gemfile',
+        },
+      ],
+    },
+    settings: {
+      installCommand: {
+        placeholder: '`bundle install`',
+      },
+      buildCommand: {
+        placeholder: 'None',
+        value: null,
+      },
+      devCommand: {
+        placeholder: 'None',
+        value: null,
+      },
+      outputDirectory: {
+        value: 'N/A',
+      },
+    },
+    getOutputDirName: async () => 'public',
+    defaultRoutes: [
+      {
+        handle: 'filesystem',
+      },
+      {
+        src: '/(.*)',
+        dest: '/config',
+      },
+    ],
+  },
+  {
+    name: 'Rust',
+    slug: 'rust',
+    experimental: true,
+    runtimeFramework: true,
+    logo: 'https://api-frameworks.vercel.sh/framework-logos/rust.svg',
+    tagline:
+      'A language empowering everyone to build reliable and efficient software.',
+    description:
+      'A generic Rust application deployed as a serverless function.',
+    website: 'https://www.rust-lang.org',
+    useRuntime: { src: 'src/main.rs', use: '@vercel/rust' },
+    ignoreRuntimes: ['@vercel/rust'],
+    detectors: {
+      every: [
+        {
+          path: 'Cargo.toml',
+        },
+        {
+          path: 'src/main.rs',
+        },
+      ],
+    },
+    settings: {
+      installCommand: {
+        placeholder: 'None',
+      },
+      buildCommand: {
+        placeholder: 'None',
+        value: null,
+      },
+      devCommand: {
+        placeholder: '`cargo run`',
+        value: null,
+      },
+      outputDirectory: {
+        value: 'N/A',
+      },
+    },
+    getOutputDirName: async () => 'public',
+    defaultRoutes: [
+      {
+        handle: 'filesystem',
+      },
+      {
+        src: '/(.*)',
+        dest: '/src/main',
+      },
+    ],
+  },
+  {
+    name: 'Axum',
+    slug: 'axum',
+    experimental: true,
+    supersedes: ['rust'],
+    logo: 'https://api-frameworks.vercel.sh/framework-logos/axum.svg',
+    tagline:
+      'Ergonomic and modular web framework built with Tokio, Tower, and Hyper.',
+    description: 'An Axum application deployed as a serverless function.',
+    website: 'https://github.com/tokio-rs/axum',
+    useRuntime: { src: 'src/main.rs', use: '@vercel/rust' },
+    ignoreRuntimes: ['@vercel/rust'],
+    detectors: {
+      every: [
+        {
+          path: 'Cargo.toml',
+          matchContent: 'axum\\s*=',
+        },
+        {
+          path: 'src/main.rs',
+        },
+      ],
+    },
+    settings: {
+      installCommand: {
+        placeholder: 'None',
+      },
+      buildCommand: {
+        placeholder: 'None',
+        value: null,
+      },
+      devCommand: {
+        placeholder: '`cargo run`',
+        value: null,
+      },
+      outputDirectory: {
+        value: 'N/A',
+      },
+    },
+    getOutputDirName: async () => 'public',
+    defaultRoutes: [
+      {
+        handle: 'filesystem',
+      },
+      {
+        src: '/(.*)',
+        dest: '/src/main',
+      },
+    ],
+  },
+  {
+    name: 'Actix Web',
+    slug: 'actix-web',
+    experimental: true,
+    runtimeFramework: true,
+    supersedes: ['rust'],
+    logo: 'https://api-frameworks.vercel.sh/framework-logos/actix-web.svg',
+    tagline:
+      'A powerful, pragmatic, and extremely fast web framework for Rust.',
+    description: 'An Actix Web application deployed as a serverless function.',
+    website: 'https://actix.rs',
+    useRuntime: { src: 'src/main.rs', use: '@vercel/rust' },
+    ignoreRuntimes: ['@vercel/rust'],
+    detectors: {
+      every: [
+        {
+          path: 'Cargo.toml',
+          matchContent: 'actix-web\\s*=',
+        },
+        {
+          path: 'src/main.rs',
+        },
+      ],
+    },
+    settings: {
+      installCommand: {
+        placeholder: 'None',
+      },
+      buildCommand: {
+        placeholder: 'None',
+        value: null,
+      },
+      devCommand: {
+        placeholder: '`cargo run`',
+        value: null,
+      },
+      outputDirectory: {
+        value: 'N/A',
+      },
+    },
+    getOutputDirName: async () => 'public',
+    defaultRoutes: [
+      {
+        handle: 'filesystem',
+      },
+      {
+        src: '/(.*)',
+        dest: '/src/main',
+      },
+    ],
+  },
+  {
+    name: 'Bun',
+    slug: 'bun',
+    runtimeFramework: true,
+    experimental: true,
+    supersedes: ['node'],
+    logo: 'https://api-frameworks.vercel.sh/framework-logos/bun.svg',
+    tagline:
+      'Bun is a fast all-in-one JavaScript runtime, bundler, and package manager.',
+    description: 'A Bun application deployed as a serverless function.',
+    website: 'https://bun.com',
+    useRuntime: { src: 'package.json', use: '@vercel/backends' },
+    ignoreRuntimes: ['@vercel/node'],
+    detectors: {
+      every: [
+        {
+          path: 'bun.lock',
+        },
+      ],
+      some: [
+        {
+          path: 'server.cjs',
+        },
+        {
+          path: 'server.js',
+        },
+        {
+          path: 'server.mjs',
+        },
+        {
+          path: 'server.mts',
+        },
+        {
+          path: 'server.ts',
+        },
+        {
+          path: 'server.cts',
+        },
+        {
+          path: 'src/server.cjs',
+        },
+        {
+          path: 'src/server.js',
+        },
+        {
+          path: 'src/server.mjs',
+        },
+        {
+          path: 'src/server.mts',
+        },
+        {
+          path: 'src/server.ts',
+        },
+        {
+          path: 'src/server.cts',
+        },
+      ],
+    },
+    settings: {
+      installCommand: {
+        value: 'bun install',
+        placeholder: 'bun install',
+      },
+      buildCommand: {
+        placeholder: 'None',
+        value: null,
+      },
+      devCommand: {
+        placeholder: '`bun dev`, `bun run dev`, or `bun --hot server.ts`',
+        value: null,
+      },
+      outputDirectory: {
+        value: 'N/A',
+      },
+    },
+    getOutputDirName: async () => 'public',
+    defaultRoutes: [
+      {
+        handle: 'filesystem',
+      },
+      {
+        src: '/(.*)',
+        dest: '/',
+      },
+    ],
+  },
+  {
+    name: 'Node',
+    slug: 'node',
+    runtimeFramework: true,
+    logo: 'https://api-frameworks.vercel.sh/framework-logos/node.svg',
+    tagline:
+      "Node.js is a JavaScript runtime built on Chrome's V8 JavaScript engine.",
+    description:
+      'A generic Node.js application deployed as a serverless function.',
+    website: 'https://nodejs.org',
+    useRuntime: { src: 'package.json', use: '@vercel/backends' },
+    ignoreRuntimes: ['@vercel/node'],
+    detectors: {
+      some: [
+        {
+          path: 'server.cjs',
+        },
+        {
+          path: 'server.js',
+        },
+        {
+          path: 'server.mjs',
+        },
+        {
+          path: 'server.mts',
+        },
+        {
+          path: 'server.ts',
+        },
+        {
+          path: 'server.cts',
+        },
+        {
+          path: 'src/server.cjs',
+        },
+        {
+          path: 'src/server.js',
+        },
+        {
+          path: 'src/server.mjs',
+        },
+        {
+          path: 'src/server.mts',
+        },
+        {
+          path: 'src/server.ts',
+        },
+        {
+          path: 'src/server.cts',
+        },
+      ],
+    },
+    settings: {
+      installCommand: {
+        placeholder:
+          '`yarn install`, `pnpm install`, `npm install`, or `bun install`',
+      },
+      buildCommand: {
+        placeholder: 'None',
+        value: null,
+      },
+      devCommand: {
+        placeholder:
+          '`npm run dev`, `node server.js`, or `npx ts-node server.ts`',
+        value: null,
+      },
+      outputDirectory: {
+        value: 'N/A',
+      },
+    },
+    getOutputDirName: async () => 'public',
+    defaultRoutes: [
+      {
+        handle: 'filesystem',
+      },
+      {
+        src: '/(.*)',
+        dest: '/',
+      },
+    ],
+  },
+  {
+    name: 'Go',
+    slug: 'go',
+    runtimeFramework: true,
+    logo: 'https://api-frameworks.vercel.sh/framework-logos/go.svg',
+    tagline: 'An open-source programming language supported by Google.',
+    description: 'A generic Go application deployed as a serverless function.',
+    website: 'https://go.dev',
+    useRuntime: { src: 'index.go', use: '@vercel/go' },
+    ignoreRuntimes: ['@vercel/go'],
+    detectors: {
+      every: [
+        {
+          path: 'go.mod',
+        },
+      ],
+      some: [
+        {
+          path: 'main.go',
+        },
+        {
+          path: 'cmd/api/main.go',
+        },
+        {
+          path: 'cmd/server/main.go',
+        },
+      ],
+    },
+    settings: {
+      installCommand: {
+        placeholder: '`go mod download`',
+      },
+      buildCommand: {
+        placeholder: 'None',
+        value: null,
+      },
+      devCommand: {
+        placeholder: '`go run .` or `go run ./cmd/api`',
+        value: null,
+      },
+      outputDirectory: {
+        value: 'N/A',
+      },
+    },
+    getOutputDirName: async () => 'public',
+    defaultRoutes: [
+      {
+        handle: 'filesystem',
+      },
+      {
+        src: '/(.*)',
+        dest: '/',
+      },
+    ],
+  },
+  {
+    name: 'Services',
+    slug: 'services',
+    experimental: true,
+    logo: 'https://api-frameworks.vercel.sh/framework-logos/other.svg',
+    tagline:
+      'Multiple services deployed as serverless functions within your project.',
+    description:
+      'Multiple services deployed as serverless functions within your project.',
+    website: 'https://vercel.com',
+    settings: {
+      installCommand: {
+        placeholder: 'None',
+      },
+      buildCommand: {
+        placeholder: 'None',
+        value: null,
+      },
+      devCommand: {
+        placeholder: 'None',
+        value: null,
+      },
+      outputDirectory: {
+        value: 'N/A',
+      },
+    },
+    getOutputDirName: async () => 'public',
+  },
+  {
+    name: 'Mastra',
+    slug: 'mastra',
+    logo: 'https://api-frameworks.vercel.sh/framework-logos/mastra.svg',
+    darkModeLogo:
+      'https://api-frameworks.vercel.sh/framework-logos/mastra-dark.svg',
+    tagline: 'Build AI agents with a modern TypeScript stack',
+    description:
+      'Mastra is a framework for building AI-powered apps and agents with workflows, memory, streaming, evals, tracing, and Studio, an interactive UI for dev and testing.',
+    website: 'https://mastra.ai',
+    detectors: {
+      every: [{ matchPackage: 'mastra' }],
+    },
+    settings: {
+      installCommand: {
+        placeholder:
+          '`yarn install`, `pnpm install`, `npm install`, or `bun install`',
+      },
+      buildCommand: {
+        placeholder: '`npm run build` or `mastra build`',
+        value: 'mastra build',
+      },
+      devCommand: {
+        value: 'mastra dev',
+      },
+      outputDirectory: {
+        value: '.mastra',
+      },
+    },
+    getOutputDirName: async () => '.mastra',
   },
   {
     name: 'Other',

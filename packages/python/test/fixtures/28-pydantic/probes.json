@@ -1,6 +1,12 @@
 {
   "probes": [
     {
+      "logMustContain": "Using uv "
+    },
+    {
+      "logMustNotContain": "falling back to pip"
+    },
+    {
       "path": "/api/hello",
       "method": "POST",
       "body": {
@@ -15,6 +21,9 @@
       "path": "/api/hello",
       "method": "GET",
       "mustContain": "Hello, World!"
+    },
+    {
+      "logMustContain": "Using python version: 3.12"
     }
   ]
 }

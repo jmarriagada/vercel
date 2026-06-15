@@ -1,16 +1,31 @@
 import minimatch from 'minimatch';
 import { valid as validSemver } from 'semver';
-import { parse as parsePath, extname } from 'path';
+import { parse as parsePath, extname, join } from 'path';
 import type { Route, RouteWithSrc } from '@vercel/routing-utils';
-import frameworkList, { Framework } from '@vercel/frameworks';
+import { frameworkList, type Framework } from '@vercel/frameworks';
 import type {
   PackageJson,
   Builder,
   Config,
   BuilderFunctions,
+  ExperimentalServices,
+  ExperimentalServicesV2,
   ProjectSettings,
+  Service,
 } from '@vercel/build-utils';
 import { isOfficialRuntime } from './is-official-runtime';
+import {
+  isPythonEntrypoint,
+  isNodeEntrypoint,
+  BACKEND_BUILDERS,
+  UNIFIED_BACKEND_BUILDER,
+  isExperimentalBackendsEnabled,
+  getMaxDurationLimit,
+} from '@vercel/build-utils';
+import {
+  getServicesBuilders,
+  warnIgnoredDirectories,
+} from './services/get-services-builders';
 
 /**
  * Pattern for finding all supported middleware files.
@@ -19,8 +34,21 @@ export const REGEX_MIDDLEWARE_FILES = 'middleware.[jt]s';
 
 /**
  * Pattern for files that the Vercel platform cares about separately from frameworks.
+ * These files are excluded from static file serving.
  */
-export const REGEX_VERCEL_PLATFORM_FILES = `api/**,package.json,${REGEX_MIDDLEWARE_FILES}`;
+export const REGEX_VERCEL_PLATFORM_FILES = [
+  'api/**',
+  'node_modules/**',
+  REGEX_MIDDLEWARE_FILES,
+  'package.json',
+  'package-lock.json',
+  'yarn.lock',
+  'pnpm-lock.yaml',
+  'bun.lock',
+  'bun.lockb',
+  '.gitignore',
+  'README.md',
+].join(',');
 
 /**
  * Pattern for non-Vercel platform files.
@@ -41,11 +69,15 @@ export interface ErrorResponse {
 export interface Options {
   tag?: string;
   functions?: BuilderFunctions;
+  experimentalServices?: ExperimentalServices;
+  experimentalServicesV2?: ExperimentalServicesV2;
   ignoreBuildScript?: boolean;
   projectSettings?: ProjectSettings;
   cleanUrls?: boolean;
   trailingSlash?: boolean;
   featHandleMiss?: boolean;
+  bunVersion?: string;
+  workPath?: string;
 }
 
 // We need to sort the file paths by alphabet to make
@@ -106,11 +138,45 @@ export async function detectBuilders(
   builders: Builder[] | null;
   errors: ErrorResponse[] | null;
   warnings: ErrorResponse[];
+  hostRewriteRoutes?: Route[] | null;
   defaultRoutes: Route[] | null;
+  fallbackRoutes?: Route[] | null;
   redirectRoutes: Route[] | null;
   rewriteRoutes: Route[] | null;
   errorRoutes: Route[] | null;
+  services?: Service[];
+  useImplicitEnvInjection?: boolean;
 }> {
+  const {
+    experimentalServices: experimentalServicesV1,
+    experimentalServicesV2,
+    projectSettings = {},
+  } = options;
+  const { framework } = projectSettings;
+  const configuredServices = experimentalServicesV2 ?? experimentalServicesV1;
+  const configuredServicesType = experimentalServicesV2
+    ? 'experimentalServicesV2'
+    : 'experimentalServices';
+  const hasServicesConfig =
+    configuredServices != null && typeof configuredServices === 'object';
+
+  if (hasServicesConfig || framework === 'services') {
+    const result = await getServicesBuilders({
+      workPath: options.workPath,
+      configuredServices: configuredServices,
+      configuredServicesType,
+      projectFramework: framework,
+    });
+
+    if (configuredServices != null) {
+      result.warnings.push(
+        ...warnIgnoredDirectories(files, configuredServices)
+      );
+    }
+
+    return result;
+  }
+
   const errors: ErrorResponse[] = [];
   const warnings: ErrorResponse[] = [];
 
@@ -144,8 +210,7 @@ export async function detectBuilders(
 
   const absolutePathCache = new Map<string, string>();
 
-  const { projectSettings = {} } = options;
-  const { buildCommand, outputDirectory, framework } = projectSettings;
+  const { buildCommand, outputDirectory } = projectSettings;
   const frameworkConfig = slugToFramework.get(framework || '');
   const ignoreRuntimes = new Set(frameworkConfig?.ignoreRuntimes);
   const withTag = options.tag ? `@${options.tag}` : '';
@@ -179,7 +244,7 @@ export async function detectBuilders(
 
   // API
   for (const fileName of sortedFiles) {
-    const apiBuilder = maybeGetApiBuilder(fileName, apiMatches, options);
+    const apiBuilder = await maybeGetApiBuilder(fileName, apiMatches, options);
 
     if (apiBuilder) {
       const { routeError, apiRoute, isDynamic } = getApiRoute(
@@ -242,7 +307,8 @@ export async function detectBuilders(
       buildCommand &&
       !fileName.includes('/') &&
       fileName !== 'now.json' &&
-      fileName !== 'vercel.json'
+      fileName !== 'vercel.json' &&
+      fileName !== 'vercel.toml'
     ) {
       fallbackEntrypoint = fileName;
     }
@@ -348,6 +414,25 @@ export async function detectBuilders(
   }
 
   if (frontendBuilder) {
+    // Add @vercel/static build for public files for server-based frameworks
+    // so that files in `public/` are served from the root path, e.g. `/logo.svg`.
+    // This applies to Express, Hono, Go, Python, and experimental backends.
+    if (
+      isOfficialRuntime('express', frontendBuilder?.use) ||
+      isOfficialRuntime('hono', frontendBuilder?.use) ||
+      isOfficialRuntime('python', frontendBuilder?.use) ||
+      isOfficialRuntime('go', frontendBuilder?.use) ||
+      isOfficialRuntime('backends', frontendBuilder?.use)
+    ) {
+      builders.push({
+        src: 'public/**/*',
+        use: '@vercel/static',
+        config: {
+          zeroConfig: true,
+          outputDirectory: 'public',
+        },
+      });
+    }
     builders.push(frontendBuilder);
 
     if (
@@ -384,11 +469,11 @@ export async function detectBuilders(
   };
 }
 
-function maybeGetApiBuilder(
+async function maybeGetApiBuilder(
   fileName: string,
   apiMatches: Builder[],
   options: Options
-) {
+): Promise<Builder | null> {
   const middleware =
     fileName === 'middleware.js' || fileName === 'middleware.ts';
 
@@ -416,6 +501,33 @@ function maybeGetApiBuilder(
 
   if (fileName.endsWith('.d.ts')) {
     return null;
+  }
+
+  // For Python files, verify they are valid entrypoints before creating a builder
+  if (fileName.endsWith('.py') && options.workPath) {
+    const fsPath = join(options.workPath, fileName);
+    const isEntrypoint = await isPythonEntrypoint({ fsPath });
+    if (!isEntrypoint) {
+      return null;
+    }
+  }
+
+  // For Node.js files under api/, verify they are valid entrypoints before
+  // creating a builder. This only applies to api/ files — root-level platform
+  // files (middleware.js, proxy.js, etc.) use different export signatures and
+  // must not be filtered by API handler pattern detection.
+  const nodeExtensions = ['.js', '.mjs', '.ts', '.tsx'];
+  if (
+    fileName.startsWith('api/') &&
+    process.env.VERCEL_NODE_FILTER_ENTRYPOINTS === '1' &&
+    nodeExtensions.some(ext => fileName.endsWith(ext)) &&
+    options.workPath
+  ) {
+    const fsPath = join(options.workPath, fileName);
+    const isEntrypoint = await isNodeEntrypoint({ fsPath });
+    if (!isEntrypoint) {
+      return null;
+    }
   }
 
   const match = apiMatches.find(({ src = '**' }) => {
@@ -446,6 +558,10 @@ function maybeGetApiBuilder(
     if (func.excludeFiles) {
       config.excludeFiles = func.excludeFiles;
     }
+  }
+
+  if (options.bunVersion) {
+    config.bunVersion = options.bunVersion;
   }
 
   const builder: Builder = {
@@ -484,6 +600,7 @@ function getApiMatches(): Builder[] {
     { src: 'api/**/!(*_test).go', use: `@vercel/go`, config },
     { src: 'api/**/*.py', use: `@vercel/python`, config },
     { src: 'api/**/*.rb', use: `@vercel/ruby`, config },
+    { src: 'api/**/*.rs', use: `@vercel/rust`, config },
   ];
 }
 
@@ -528,6 +645,10 @@ function detectFrontBuilder(
     config.outputDirectory = projectSettings.outputDirectory;
   }
 
+  if (options.bunVersion) {
+    config.bunVersion = options.bunVersion;
+  }
+
   if (
     pkg &&
     (framework === undefined ||
@@ -556,7 +677,13 @@ function detectFrontBuilder(
   const f = slugToFramework.get(framework || '');
   if (f && f.useRuntime) {
     const { src, use } = f.useRuntime;
-    return { src, use: `${use}${withTag}`, config };
+    // Replace framework-specific backend builders with the unified backend builder
+    // when experimental backends is enabled
+    const shouldUseUnifiedBackend =
+      isExperimentalBackendsEnabled() &&
+      BACKEND_BUILDERS.includes(use as (typeof BACKEND_BUILDERS)[number]);
+    const finalUse = shouldUseUnifiedBackend ? UNIFIED_BACKEND_BUILDER : use;
+    return { src, use: `${finalUse}${withTag}`, config };
   }
 
   // Entrypoints for other frameworks
@@ -616,15 +743,25 @@ function validateFunctions({ functions = {} }: Options) {
       };
     }
 
+    // The upper bound is enforced by server-side validation; only apply a
+    // client-side maximum when it has not been skipped via
+    // `VERCEL_CLI_SKIP_MAX_DURATION_LIMIT`. The lower bound and integer check
+    // are always enforced.
+    const maxDurationLimit = getMaxDurationLimit();
     if (
       func.maxDuration !== undefined &&
+      func.maxDuration !== 'max' &&
       (func.maxDuration < 1 ||
-        func.maxDuration > 900 ||
+        (maxDurationLimit !== undefined &&
+          func.maxDuration > maxDurationLimit) ||
         !Number.isInteger(func.maxDuration))
     ) {
       return {
         code: 'invalid_function_duration',
-        message: 'Functions must have a duration between 1 and 900.',
+        message:
+          maxDurationLimit !== undefined
+            ? `Functions must have a maxDuration between 1 and ${maxDurationLimit}, or "max".`
+            : 'Functions must have a positive integer maxDuration, or "max".',
       };
     }
 
@@ -699,7 +836,9 @@ function checkUnusedFunctions(
         fnKey.startsWith('pages/') ||
         fnKey.startsWith('src/pages') ||
         fnKey.startsWith('app/') ||
-        fnKey.startsWith('src/app/')
+        fnKey.startsWith('src/app/') ||
+        fnKey.startsWith('middleware') ||
+        fnKey.startsWith('src/middleware')
       ) {
         unusedFunctions.delete(fnKey);
       } else {
@@ -711,6 +850,15 @@ function checkUnusedFunctions(
         };
       }
     }
+  }
+  if (
+    frontendBuilder &&
+    (isOfficialRuntime('express', frontendBuilder.use) ||
+      isOfficialRuntime('hono', frontendBuilder.use) ||
+      isOfficialRuntime('backends', frontendBuilder.use))
+  ) {
+    // Skip for backends because function names aren't statically defined
+    return null;
   }
 
   if (unusedFunctions.size) {
@@ -1056,9 +1204,9 @@ function getRouteResult(
       const hasApiBuild = apiBuilders.find(builder => {
         return builder.src?.startsWith('api/');
       });
-      if (typeof ignoreRuntimes === 'undefined' && hasApiBuild) {
-        // This route is only necessary to hide the directory listing
-        // to avoid enumerating serverless function names.
+      // Skip for Next.js: it serves /api (Pages + App Router) and 404s unmatched
+      // paths; adding a catch-all here would 404 dynamic routes like /api/flow/[id]/next.
+      if (typeof ignoreRuntimes === 'undefined' && hasApiBuild && !isNextjs) {
         // But it causes issues in `vc dev` for frameworks that handle
         // their own functions such as redwood, so we ignore.
         rewriteRoutes.push({
@@ -1069,7 +1217,7 @@ function getRouteResult(
     } else {
       defaultRoutes.push(...apiRoutes);
 
-      if (apiRoutes.length) {
+      if (apiRoutes.length && !isNextjs) {
         defaultRoutes.push({
           status: 404,
           src: '^/api(/.*)?$',

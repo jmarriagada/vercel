@@ -39,15 +39,42 @@ export class EnvAddTelemetryClient
     }
   }
 
+  trackCliOptionValue(value: string | undefined) {
+    if (value) {
+      this.trackCliOption({
+        option: 'value',
+        value: this.redactedValue,
+      });
+    }
+  }
+
   trackCliFlagSensitive(sensitive: boolean | undefined) {
     if (sensitive) {
       this.trackCliFlag('sensitive');
     }
   }
 
+  trackCliFlagNoSensitive(noSensitive: boolean | undefined) {
+    if (noSensitive) {
+      this.trackCliFlag('no-sensitive');
+    }
+  }
+
   trackCliFlagForce(force: boolean | undefined) {
     if (force) {
       this.trackCliFlag('force');
+    }
+  }
+
+  trackCliFlagGuidance(guidance: boolean | undefined) {
+    if (guidance) {
+      this.trackCliFlag('guidance');
+    }
+  }
+
+  trackCliFlagYes(yes: boolean | undefined) {
+    if (yes) {
+      this.trackCliFlag('yes');
     }
   }
 }

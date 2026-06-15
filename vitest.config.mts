@@ -1,11 +1,17 @@
 import { defineConfig } from 'vite';
-import VitestReporter from './test/lib/vitest-reporter';
 
 export default defineConfig({
   test: {
-    reporters: [new VitestReporter()],
+    globals: true,
     // Use of process.chdir prohibits usage of the default "threads". https://vitest.dev/config/#forks
     pool: 'forks',
+    testTimeout: 12 * 60 * 1000,
+    hookTimeout: 12 * 60 * 1000,
+    include: [
+      '**/*.{test,spec}.?(c|m)[jt]s?(x)',
+      // Legacy e2e entrypoints that predate the *.test.* naming convention.
+      '**/test/test.js',
+    ],
     env: {
       // Vitest supresses color output when `process.env.CI` is true
       // so override that behavior
@@ -20,7 +26,7 @@ export default defineConfig({
       '**/dist/**',
       '**/cypress/**',
       '**/.{idea,git,cache,output,temp}/**',
-      '**/{karma,rollup,webpack,vite,vitest,jest,ava,babel,nyc,cypress,tsup,build}.config.*',
+      '**/{karma,rollup,webpack,vite,vitest,ava,babel,nyc,cypress,tsup,build}.config.*',
       // some artifacts in the fixtures have spec files that we're not using
       '**/*.spec.js',
     ],

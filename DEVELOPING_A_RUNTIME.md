@@ -5,6 +5,8 @@ the Runtime API interface. It's a way to add support for a new programming langu
 
 > Note: If you're the author of a web framework, please use the [Build Output API](https://vercel.com/docs/build-output-api/v3) instead to make your framework compatible with Vercel.
 
+> **See also:** The agent skill at [`.claude/skills/vercel-runtime-implementation-guide.md`](.claude/skills/vercel-runtime-implementation-guide.md) for Fluid protocol documentation and implementation checklists.
+
 A Runtime is an npm module that implements the following interface:
 
 ```typescript
@@ -385,14 +387,11 @@ This is a [class](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Refere
 
 This is an abstract enumeration type that is implemented by one of the following possible `String` values:
 
+- `nodejs22.x`
 - `nodejs20.x`
-- `nodejs18.x`
 - `java11`
-- `python3.9`
-- `dotnet6`
-- `dotnetcore3.1`
+- `python3.12`
 - `ruby2.7`
-- `provided.al2`
 - `provided.al2023`
 
 ## `@vercel/build-utils` Helper Functions

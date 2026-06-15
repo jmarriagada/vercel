@@ -54,7 +54,8 @@ export interface SettingValue {
 
 export type Setting = SettingValue | SettingPlaceholder;
 
-export type Redirect = Rewrite & {
+export type Redirect = Omit<Rewrite, 'destination'> & {
+  destination: string;
   statusCode?: number;
   permanent?: boolean;
 };
@@ -85,7 +86,7 @@ export interface Framework {
   darkModeLogo?: string;
   /**
    * A URL to a screenshot of the demo
-   * @example "https://assets.vercel.com/image/upload/v1647366075/front/import/nextjs.png"
+   * @example "https://py8fhxnkzwtsqdo9.public.blob.vercel-storage.com/front/import/nextjs.png"
    */
   screenshot?: string;
   /**
@@ -223,4 +224,15 @@ export interface Framework {
    * Array of slugs for other framework presets which this framework supersedes.
    */
   supersedes?: string[];
+  /**
+   * Whether the framework is experimental.
+   * Experimental frameworks are feature flagged.
+   * @example true
+   */
+  experimental?: boolean;
+  /**
+   * Whether the framework is a "runtime" framework preset, e.g. Python, Go, etc.
+   * @example true
+   */
+  runtimeFramework?: boolean;
 }

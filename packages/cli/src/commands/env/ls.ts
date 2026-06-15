@@ -16,12 +16,16 @@ import { getCustomEnvironments } from '../../util/target/get-custom-environments
 import formatEnvironments from '../../util/env/format-environments';
 import { formatProject } from '../../util/projects/format-project';
 import output from '../../output-manager';
+import { validateJsonOutput } from '../../util/output-format';
 import { EnvLsTelemetryClient } from '../../util/telemetry/commands/env/ls';
 import { listSubcommand } from './command';
 import { parseArguments } from '../../util/get-args';
 import { getFlagsSpecification } from '../../util/get-flags-specification';
 import { printError } from '../../util/error';
 import { getLinkedProject } from '../../util/projects/link';
+import { determineAgent } from '@vercel/detect-agent';
+import { suggestNextCommands } from '../../util/suggest-next-commands';
+import { validateLsArgs } from '../../util/validate-ls-args';
 
 export default async function ls(client: Client, argv: string[]) {
   const telemetryClient = new EnvLsTelemetryClient({
@@ -38,29 +42,40 @@ export default async function ls(client: Client, argv: string[]) {
     printError(err);
     return 1;
   }
-  const { args } = parsedArgs;
+  const { args, flags } = parsedArgs;
 
-  if (args.length > 2) {
-    output.error(
-      `Invalid number of arguments. Usage: ${getCommandName(
-        `env ls ${getEnvTargetPlaceholder()} <gitbranch>`
-      )}`
-    );
-    return 1;
+  const validationResult = validateLsArgs({
+    commandName: 'env ls',
+    args: args,
+    maxArgs: 2,
+    exitCode: 1,
+    usageString: getCommandName(
+      `env ls ${getEnvTargetPlaceholder()} <gitbranch>`
+    ),
+  });
+  if (validationResult !== 0) {
+    return validationResult;
   }
 
   const [envTarget, envGitBranch] = args;
+  const formatResult = validateJsonOutput(flags);
+  if (!formatResult.valid) {
+    output.error(formatResult.error);
+    return 1;
+  }
+  const asJson = formatResult.jsonOutput;
+
   telemetryClient.trackCliArgumentEnvironment(envTarget);
   telemetryClient.trackCliArgumentGitBranch(envGitBranch);
+  telemetryClient.trackCliFlagGuidance(flags['--guidance']);
+  telemetryClient.trackCliOptionFormat(flags['--format']);
 
   const link = await getLinkedProject(client);
   if (link.status === 'error') {
     return link.exitCode;
   } else if (link.status === 'not_linked') {
     output.error(
-      `Your codebase isn’t linked to a project on Vercel. Run ${getCommandName(
-        'link'
-      )} to begin.`
+      `Your codebase isn’t linked to a project on Vercel. ${client.nonInteractive ? `Run ${getCommandName('link --yes --team <team-id> --project <project-id>')} to link non-interactively.` : `Run ${getCommandName('link')} to begin.`}`
     );
     return 1;
   }
@@ -82,7 +97,22 @@ export default async function ls(client: Client, argv: string[]) {
 
   const projectSlugLink = formatProject(org.slug, project.name);
 
-  if (envs.length === 0) {
+  if (asJson) {
+    output.stopSpinner();
+    const jsonOutput = {
+      envs: envs.map(env => ({
+        key: env.key,
+        value: env.type === 'plain' ? env.value : undefined,
+        type: env.type,
+        target: env.target,
+        gitBranch: env.gitBranch,
+        configurationId: env.configurationId,
+        createdAt: env.createdAt,
+        updatedAt: env.updatedAt,
+      })),
+    };
+    client.stdout.write(`${JSON.stringify(jsonOutput, null, 2)}\n`);
+  } else if (envs.length === 0) {
     output.log(
       `No Environment Variables found for ${projectSlugLink} ${chalk.gray(lsStamp())}`
     );
@@ -91,6 +121,18 @@ export default async function ls(client: Client, argv: string[]) {
       `Environment Variables found for ${projectSlugLink} ${chalk.gray(lsStamp())}`
     );
     client.stdout.write(`${getTable(link, envs, customEnvs)}\n`);
+  }
+
+  if (!asJson) {
+    const { isAgent } = await determineAgent();
+    const guidanceMode = parsedArgs.flags['--guidance'] ?? isAgent;
+    if (guidanceMode) {
+      suggestNextCommands([
+        getCommandName(`env add`),
+        getCommandName('env rm'),
+        getCommandName(`env pull`),
+      ]);
+    }
   }
 
   return 0;

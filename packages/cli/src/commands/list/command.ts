@@ -1,10 +1,16 @@
 import { packageName } from '../../util/pkg-name';
-import { confirmOption, nextOption, yesOption } from '../../util/arg-common';
+import {
+  allOption,
+  confirmOption,
+  formatOption,
+  nextOption,
+  yesOption,
+} from '../../util/arg-common';
 
 export const listCommand = {
   name: 'list',
   aliases: ['ls'],
-  description: 'List app deployments for an app.',
+  description: 'List deployments.',
   arguments: [
     {
       name: 'app',
@@ -12,6 +18,7 @@ export const listCommand = {
     },
   ],
   options: [
+    allOption,
     {
       name: 'meta',
       description:
@@ -38,11 +45,21 @@ export const listCommand = {
       type: String,
       deprecated: false,
     },
+    {
+      name: 'status',
+      description:
+        'Filter deployments by their status. Can be comma-separated for multiple statuses (e.g.: `--status BUILDING,READY`)',
+      argument: 'STATUS',
+      shorthand: 's',
+      type: String,
+      deprecated: false,
+    },
     nextOption,
     // this can be deprecated someday
     { name: 'prod', shorthand: null, type: Boolean, deprecated: false },
     yesOption,
     confirmOption,
+    formatOption,
   ],
   examples: [
     {
@@ -50,7 +67,11 @@ export const listCommand = {
       value: `${packageName} list`,
     },
     {
-      name: 'List all deployments for the project `my-app` in the team of the currently linked project',
+      name: 'List all deployments across all projects',
+      value: `${packageName} list --all`,
+    },
+    {
+      name: 'List all deployments for the project `my-app`',
       value: `${packageName} list my-app`,
     },
     {
@@ -60,6 +81,14 @@ export const listCommand = {
     {
       name: 'Paginate deployments for a project, where `1584722256178` is the time in milliseconds since the UNIX epoch',
       value: `${packageName} list my-app --next 1584722256178`,
+    },
+    {
+      name: 'Filter deployments by status',
+      value: `${packageName} list --status READY`,
+    },
+    {
+      name: 'Filter deployments by multiple statuses',
+      value: `${packageName} list --status BUILDING,ERROR`,
     },
   ],
 } as const;

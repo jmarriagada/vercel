@@ -2,21 +2,21 @@ import qs from 'querystring';
 import { parse as parseUrl } from 'url';
 import retry from 'async-retry';
 import ms from 'ms';
-import fetch, { Headers } from 'node-fetch';
+import nodeFetch, { Headers } from 'node-fetch';
 import bytes from 'bytes';
 import chalk from 'chalk';
 import ua from './ua';
 import processDeployment from './deploy/process-deployment';
 import { responseError } from './error';
-import stamp from './output/stamp';
 import { APIError, BuildError } from './errors-ts';
 import printIndications from './print-indications';
-import type { GitMetadata, Org } from '@vercel-internals/types';
+import type { GitMetadata, Org, Project } from '@vercel-internals/types';
 import type { VercelConfig } from './dev/types';
 import type Client from './client';
 import { type FetchOptions, isJSONObject } from './client';
 import type { ArchiveFormat, Dictionary } from '@vercel/client';
 import output from '../output-manager';
+import sleep from './sleep';
 
 export interface NowOptions {
   client: Client;
@@ -50,8 +50,13 @@ export interface CreateOptions {
   projectSettings?: any;
   skipAutoDetectionConfirmation?: boolean;
   noWait?: boolean;
-  withLogs?: boolean;
+  withFullLogs?: boolean;
   autoAssignCustomDomains?: boolean;
+  agentName?: string;
+  manual?: boolean;
+  jsonOutput?: boolean;
+  functionsBeta?: boolean;
+  linkedProject?: Project;
 }
 
 export interface RemoveOptions {
@@ -103,7 +108,7 @@ export default class Now {
     path: string,
     {
       // Legacy
-      nowConfig: nowConfig = {},
+      nowConfig = {},
 
       // Latest
       name,
@@ -121,19 +126,22 @@ export default class Now {
       forceNew = false,
       withCache = false,
       target = null,
-      deployStamp,
       projectSettings,
       skipAutoDetectionConfirmation,
       noWait,
-      withLogs,
+      withFullLogs,
       autoAssignCustomDomains,
+      agentName,
+      manual,
+      jsonOutput = false,
+      functionsBeta,
+      linkedProject,
     }: CreateOptions,
     org: Org,
     isSettingUpProject: boolean,
     archive?: ArchiveFormat
   ) {
     const hashes: any = {};
-    const uploadStamp = stamp();
 
     const requestBody = {
       ...nowConfig,
@@ -148,6 +156,7 @@ export default class Now {
       target: target || undefined,
       projectSettings,
       source: 'cli',
+      actor: agentName,
       autoAssignCustomDomains,
     };
 
@@ -160,8 +169,6 @@ export default class Now {
       agent: this._client.agent,
       path,
       requestBody,
-      uploadStamp,
-      deployStamp,
       quiet,
       force: forceNew,
       withCache,
@@ -174,7 +181,12 @@ export default class Now {
       vercelOutputDir,
       rootDirectory,
       noWait,
-      withLogs,
+      withFullLogs,
+      bulkRedirectsPath: nowConfig.bulkRedirectsPath,
+      manual,
+      jsonOutput,
+      functionsBeta,
+      linkedProject,
     });
 
     if (deployment && deployment.warnings) {
@@ -210,10 +222,10 @@ export default class Now {
   async handleDeploymentError(error: any, { env }: any) {
     if (error.status === 429) {
       if (error.code === 'builds_rate_limited') {
-        const err = Object.create(APIError.prototype);
+        const err: APIError = Object.create(APIError.prototype);
         err.message = error.message;
         err.status = error.status;
-        err.retryAfter = 'never';
+        err.retryAfterMs = 'never';
         err.code = error.code;
         return err;
       }
@@ -222,17 +234,17 @@ export default class Now {
 
       if (error.limit && error.limit.reset) {
         const { reset } = error.limit;
-        const difference = reset * 1000 - Date.now();
+        const difference = reset - Date.now();
 
         msg += `Please retry in ${ms(difference, { long: true })}.`;
       } else {
         msg += 'Please slow down.';
       }
 
-      const err = Object.create(APIError.prototype);
+      const err: APIError = Object.create(APIError.prototype);
       err.message = msg;
       err.status = error.status;
-      err.retryAfter = 'never';
+      err.retryAfterMs = 'never';
 
       return err;
     }
@@ -302,12 +314,25 @@ export default class Now {
 
       if (res.status === 200) {
         // What we want
-      } else if (res.status > 200 && res.status < 500) {
-        // If something is wrong with our request, we don't retry
-        return bail(await responseError(res, 'Failed to remove deployment'));
       } else {
-        // If something is wrong with the server, we retry
-        throw await responseError(res, 'Failed to remove deployment');
+        const error = await responseError(res, 'Failed to remove deployment');
+        // Always respect Retry-After headers and retry
+        if (typeof error.retryAfterMs === 'number') {
+          // The `Retry-After` header from the api tells us when the next rate
+          // limit token is available. There may only be a single rate limit
+          // token available at that time. Add a random skew to prevent creating
+          // a thundering herd.
+          const randomSkewMs = 30_000 * Math.random();
+          await sleep(error.retryAfterMs + randomSkewMs);
+          throw error;
+        }
+        if (res.status > 200 && res.status < 500) {
+          // If something is wrong with our request, we don't retry
+          return bail(error);
+        } else {
+          // If something is wrong with the server, we retry
+          throw error;
+        }
       }
     });
 
@@ -356,14 +381,14 @@ export default class Now {
 
     const res = await output.time(
       `${opts.method || 'GET'} ${this._apiUrl}${_url} ${opts.body || ''}`,
-      fetch(`${this._apiUrl}${_url}`, { ...opts, body })
+      nodeFetch(`${this._apiUrl}${_url}`, { ...opts, body })
     );
     printIndications(res);
     return res;
   }
 
   // public fetch with built-in retrying that can be
-  // used from external utilities. it optioanlly
+  // used from external utilities. it optionally
   // receives a `retry` object in the opts that is
   // passed to the retry utility
   // it accepts a `json` option, which defaults to `true`
@@ -395,6 +420,16 @@ export default class Now {
           : res;
       }
       const err = await responseError(res);
+      // Always respect Retry-After headers and retry
+      if (typeof err.retryAfterMs === 'number') {
+        // The `Retry-After` header from the api tells us when the next rate
+        // limit token is available. There may only be a single rate limit
+        // token available at that time. Add a random skew to prevent creating
+        // a thundering herd.
+        const randomSkewMs = 30_000 * Math.random();
+        await sleep(err.retryAfterMs + randomSkewMs);
+        throw err;
+      }
       if (res.status >= 400 && res.status < 500) {
         return bail(err);
       }

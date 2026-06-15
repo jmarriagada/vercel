@@ -5,10 +5,11 @@ import {
   download,
   EdgeFunction,
   execCommand,
+  generateProjectManifest,
   getEnvForPackageManager,
   getNodeVersion,
+  getReportedServiceType,
   getPrefixedEnvVars,
-  getSpawnOptions,
   glob,
   readConfigFile,
   runNpmInstall,
@@ -25,6 +26,7 @@ export const build: BuildV2 = async ({
   workPath,
   config,
   meta = {},
+  service,
 }) => {
   const { installCommand, buildCommand } = config;
 
@@ -42,7 +44,6 @@ export const build: BuildV2 = async ({
   const mountpoint = dirname(entrypoint);
   const entrypointDir = join(workPath, mountpoint);
 
-  // Run "Install Command"
   const nodeVersion = await getNodeVersion(
     entrypointDir,
     undefined,
@@ -50,20 +51,19 @@ export const build: BuildV2 = async ({
     meta
   );
 
-  const spawnOpts = getSpawnOptions(meta, nodeVersion);
   const {
     cliType,
+    lockfilePath,
     lockfileVersion,
     packageJsonPackageManager,
     turboSupportsCorepackHome,
   } = await scanParentDirs(entrypointDir, true);
 
-  spawnOpts.env = getEnvForPackageManager({
+  const spawnEnv = getEnvForPackageManager({
     cliType,
     lockfileVersion,
     packageJsonPackageManager,
-    nodeVersion,
-    env: spawnOpts.env || {},
+    env: process.env,
     turboSupportsCorepackHome,
     projectCreatedAt: config.projectSettings?.createdAt,
   });
@@ -72,7 +72,7 @@ export const build: BuildV2 = async ({
     if (installCommand.trim()) {
       console.log(`Running "install" command: \`${installCommand}\`...`);
       await execCommand(installCommand, {
-        ...spawnOpts,
+        env: spawnEnv,
         cwd: entrypointDir,
       });
     } else {
@@ -82,10 +82,25 @@ export const build: BuildV2 = async ({
     await runNpmInstall(
       entrypointDir,
       [],
-      spawnOpts,
+      { env: spawnEnv },
       meta,
-      nodeVersion,
       config.projectSettings?.createdAt
+    );
+  }
+
+  try {
+    await generateProjectManifest({
+      workPath: entrypointDir,
+      nodeVersion,
+      cliType,
+      lockfilePath,
+      lockfileVersion,
+      framework: config.framework ?? undefined,
+      serviceType: service ? getReportedServiceType(service) : undefined,
+    });
+  } catch (err) {
+    debug(
+      `Failed to write hydrogen manifest: ${err instanceof Error ? err.message : String(err)}`
     );
   }
 
@@ -105,16 +120,16 @@ export const build: BuildV2 = async ({
   await fs.writeFile(edgeEntryDest, edgeEntryContents);
 
   // Make `shopify hydrogen build` output a Edge Function compatible bundle
-  spawnOpts.env.SHOPIFY_FLAG_BUILD_TARGET = 'worker';
+  spawnEnv.SHOPIFY_FLAG_BUILD_TARGET = 'worker';
 
   // Use this file as the entrypoint for the Edge Function bundle build
-  spawnOpts.env.SHOPIFY_FLAG_BUILD_SSR_ENTRY = edgeEntryDest;
+  spawnEnv.SHOPIFY_FLAG_BUILD_SSR_ENTRY = edgeEntryDest;
 
   // Run "Build Command"
   if (buildCommand) {
     debug(`Executing build command "${buildCommand}"`);
     await execCommand(buildCommand, {
-      ...spawnOpts,
+      env: spawnEnv,
       cwd: entrypointDir,
     });
   } else {
@@ -126,7 +141,7 @@ export const build: BuildV2 = async ({
       await runPackageJsonScript(
         entrypointDir,
         'vercel-build',
-        spawnOpts,
+        { env: spawnEnv },
         config.projectSettings?.createdAt
       );
     } else if (hasScript('build', pkg)) {
@@ -134,12 +149,12 @@ export const build: BuildV2 = async ({
       await runPackageJsonScript(
         entrypointDir,
         'build',
-        spawnOpts,
+        { env: spawnEnv },
         config.projectSettings?.createdAt
       );
     } else {
       await execCommand('shopify hydrogen build', {
-        ...spawnOpts,
+        env: spawnEnv,
         cwd: entrypointDir,
       });
     }

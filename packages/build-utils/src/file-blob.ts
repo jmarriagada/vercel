@@ -36,10 +36,16 @@ export default class FileBlob implements FileBase {
   }: FromStreamOptions) {
     assert(typeof mode === 'number');
     assert(typeof stream.pipe === 'function'); // is-stream
-    const chunks: Buffer[] = [];
+    const chunks: Uint8Array[] = [];
 
     await new Promise<void>((resolve, reject) => {
-      stream.on('data', chunk => chunks.push(Buffer.from(chunk)));
+      stream.on('data', chunk =>
+        // Usually the chunks we receive here are already buffers, so we
+        // avoid the extra buffer copy in those cases to save memory
+        chunks.push(
+          Uint8Array.from(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
+        )
+      );
       stream.on('error', error => reject(error));
       stream.on('end', () => resolve());
     });

@@ -2,11 +2,14 @@ import {
   getPrettyError,
   getSupportedNodeVersion,
   scanParentDirs,
+  PYTHON_FRAMEWORKS,
 } from '@vercel/build-utils';
 import {
-  type Dictionary,
   fileNameSymbol,
+  continueDeployment,
   VALID_ARCHIVE_FORMATS,
+  type ArchiveFormat,
+  type Dictionary,
   type VercelConfig,
 } from '@vercel/client';
 import { errorToString, isError } from '@vercel/error-utils';
@@ -18,9 +21,12 @@ import { join, resolve } from 'path';
 import Now, { type CreateOptions } from '../../util';
 import type Client from '../../util/client';
 import { readLocalConfig } from '../../util/config/files';
+import { compileVercelConfig } from '../../util/compile-vercel-config';
 import { createGitMeta } from '../../util/create-git-meta';
 import createDeploy from '../../util/deploy/create-deploy';
 import { getDeploymentChecks } from '../../util/deploy/get-deployment-checks';
+import { getDeploymentCheckRuns } from '../../util/deploy/get-deployment-check-runs';
+import { getDeploymentCheckRunLogs } from '../../util/deploy/get-deployment-check-run-logs';
 import getPrebuiltJson from '../../util/deploy/get-prebuilt-json';
 import { printDeploymentStatus } from '../../util/deploy/print-deployment-status';
 import { isValidArchive } from '../../util/deploy/validate-archive-format';
@@ -32,6 +38,7 @@ import {
   AliasDomainConfigured,
   BuildError,
   BuildsRateLimited,
+  ConflictingConfigFiles,
   ConflictingFilePath,
   ConflictingPathSegment,
   DeploymentNotFound,
@@ -40,6 +47,7 @@ import {
   DomainNotVerified,
   DomainPermissionDenied,
   DomainVerificationFailed,
+  DeprecatedNowJson,
   InvalidDomain,
   isAPIError,
   MissingBuildScript,
@@ -51,24 +59,46 @@ import { parseArguments } from '../../util/get-args';
 import getDeployment from '../../util/get-deployment';
 import { getFlagsSpecification } from '../../util/get-flags-specification';
 import getProjectName from '../../util/get-project-name';
+import getSubcommand from '../../util/get-subcommand';
 import code from '../../util/output/code';
 import highlight from '../../util/output/highlight';
 import param from '../../util/output/param';
+import { printAlignedLabel } from '../../util/output/print-aligned-label';
 import stamp from '../../util/output/stamp';
 import { parseEnv } from '../../util/parse-env';
 import parseMeta from '../../util/parse-meta';
+import { getCommandNameWithGlobalFlags } from '../../util/arg-common';
 import { getCommandName } from '../../util/pkg-name';
+import { outputAgentError } from '../../util/agent-output';
+import { AGENT_STATUS } from '../../util/agent-output-constants';
 import { pickOverrides } from '../../util/projects/project-settings';
 import validatePaths, {
   validateRootDirectory,
 } from '../../util/validate-paths';
-import { help } from '../help';
-import { deployCommand, deprecatedArchiveSplitTgz } from './command';
+import { type Command, help } from '../help';
+import { getCommandAliases } from '..';
+import {
+  deployCommand,
+  deprecatedArchiveSplitTgz,
+  initSubcommand,
+  continueSubcommand,
+} from './command';
 import parseTarget from '../../util/parse-target';
 import { DeployTelemetryClient } from '../../util/telemetry/commands/deploy';
 import output from '../../output-manager';
 import { ensureLink } from '../../util/link/ensure-link';
-import { UploadErrorMissingArchive } from '../../util/deploy/process-deployment';
+import {
+  FunctionsSizeLimitError,
+  UploadErrorMissingArchive,
+} from '../../util/deploy/process-deployment';
+import { displayBuildLogsUntilFinalError } from '../../util/logs';
+import { determineAgent } from '@vercel/detect-agent';
+import { validateJsonOutput } from '../../util/output-format';
+
+const COMMAND_CONFIG = {
+  init: getCommandAliases(initSubcommand),
+  continue: getCommandAliases(continueSubcommand),
+};
 
 export default async (client: Client): Promise<number> => {
   const telemetryClient = new DeployTelemetryClient({
@@ -83,68 +113,955 @@ export default async (client: Client): Promise<number> => {
 
   // #region Argument Parsing
   try {
-    parsedArguments = parseArguments(client.argv.slice(2), flagsSpecification);
-
-    telemetryClient.trackCliOptionArchive(parsedArguments.flags['--archive']);
-    telemetryClient.trackCliOptionEnv(parsedArguments.flags['--env']);
-    telemetryClient.trackCliOptionBuildEnv(
-      parsedArguments.flags['--build-env']
-    );
-    telemetryClient.trackCliOptionMeta(parsedArguments.flags['--meta']);
-    telemetryClient.trackCliFlagPrebuilt(parsedArguments.flags['--prebuilt']);
-    telemetryClient.trackCliOptionRegions(parsedArguments.flags['--regions']);
-    telemetryClient.trackCliFlagNoWait(parsedArguments.flags['--no-wait']);
-    telemetryClient.trackCliFlagYes(parsedArguments.flags['--yes']);
-    telemetryClient.trackCliOptionTarget(parsedArguments.flags['--target']);
-    telemetryClient.trackCliFlagProd(parsedArguments.flags['--prod']);
-    telemetryClient.trackCliFlagSkipDomain(
-      parsedArguments.flags['--skip-domain']
-    );
-    telemetryClient.trackCliFlagPublic(parsedArguments.flags['--public']);
-    telemetryClient.trackCliFlagLogs(parsedArguments.flags['--logs']);
-    telemetryClient.trackCliFlagNoLogs(parsedArguments.flags['--no-logs']);
-    telemetryClient.trackCliFlagForce(parsedArguments.flags['--force']);
-    telemetryClient.trackCliFlagWithCache(
-      parsedArguments.flags['--with-cache']
-    );
-
-    if ('--confirm' in parsedArguments.flags) {
-      telemetryClient.trackCliFlagConfirm(parsedArguments.flags['--confirm']);
-      output.warn('`--confirm` is deprecated, please use `--yes` instead');
-      parsedArguments.flags['--yes'] = parsedArguments.flags['--confirm'];
-    }
-
-    if ('--logs' in parsedArguments.flags) {
-      output.warn('`--logs` is deprecated and now the default behavior.');
-    }
+    parsedArguments = parseArguments(client.argv.slice(2), flagsSpecification, {
+      permissive: true,
+    });
   } catch (error) {
     printError(error);
     return 1;
   }
 
-  if (parsedArguments.flags['--help']) {
-    telemetryClient.trackCliFlagHelp('deploy');
-    output.print(help(deployCommand, { columns: client.stderr.columns }));
-    return 2;
+  // Strip the command name from the args
+  const subArgs =
+    parsedArguments.args[0] === deployCommand.name
+      ? parsedArguments.args.slice(1)
+      : parsedArguments.args;
+
+  const { subcommand, subcommandOriginal } = getSubcommand(
+    subArgs,
+    COMMAND_CONFIG
+  );
+
+  function printSubcommandHelp(command: Command) {
+    output.print(
+      help(command, { parent: deployCommand, columns: client.stderr.columns })
+    );
+  }
+
+  switch (subcommand) {
+    case 'init':
+      if (parsedArguments.flags['--help']) {
+        telemetryClient.trackCliFlagHelp('deploy', subcommandOriginal);
+        printSubcommandHelp(initSubcommand);
+        return 2;
+      }
+      telemetryClient.trackCliSubcommandInit(subcommandOriginal);
+      return handleInitDeployment(client, telemetryClient);
+
+    case 'continue':
+      if (parsedArguments.flags['--help']) {
+        telemetryClient.trackCliFlagHelp('deploy', subcommandOriginal);
+        printSubcommandHelp(continueSubcommand);
+        return 2;
+      }
+      telemetryClient.trackCliSubcommandContinue(subcommandOriginal);
+      return handleContinueSubcommand(client, telemetryClient);
+
+    default:
+      if (parsedArguments.flags['--help']) {
+        telemetryClient.trackCliFlagHelp('deploy');
+        output.print(help(deployCommand, { columns: client.stderr.columns }));
+        return 2;
+      }
+      return handleDefaultDeploy(client, telemetryClient);
+  }
+};
+
+async function handleInitDeployment(
+  client: Client,
+  telemetryClient: DeployTelemetryClient
+): Promise<number> {
+  // Re-parse with init-specific flags
+  const flagsSpecification = getFlagsSpecification(initSubcommand.options);
+  let parsedArguments;
+  try {
+    parsedArguments = parseArguments(client.argv.slice(2), flagsSpecification);
+  } catch (error) {
+    printError(error);
+    return 1;
+  }
+
+  telemetryClient.trackCliFlagJson(parsedArguments.flags['--json']);
+  telemetryClient.trackCliOptionFormat(parsedArguments.flags['--format']);
+  telemetryClient.trackCliOptionProject(parsedArguments.flags['--project']);
+  telemetryClient.trackCliFlagFunctionsBeta(
+    parsedArguments.flags['--functions-beta']
+  );
+  telemetryClient.trackCliFlagNoFunctionsBeta(
+    parsedArguments.flags['--no-functions-beta']
+  );
+
+  const projectNameOrId = parsedArguments.flags['--project'];
+  const functionsBeta = parsedArguments.flags['--functions-beta'];
+  const noFunctionsBeta = parsedArguments.flags['--no-functions-beta'];
+
+  // Validate mutual exclusivity
+  if (functionsBeta && noFunctionsBeta) {
+    output.error(
+      'Cannot use --functions-beta and --no-functions-beta together'
+    );
+    return 1;
+  }
+
+  const formatResult = validateJsonOutput(parsedArguments.flags);
+  if (!formatResult.valid) {
+    output.error(formatResult.error);
+    return 1;
+  }
+  const asJson = formatResult.jsonOutput || client.nonInteractive;
+
+  // Strip 'deploy' and 'init' from args
+  let args = parsedArguments.args;
+  if (args[0] === 'deploy') args = args.slice(1);
+  if (args[0] === 'init') args = args.slice(1);
+
+  let paths;
+  if (args.length > 0) {
+    paths = args.map(item => resolve(client.cwd, item));
+    telemetryClient.trackCliArgumentProjectPath(paths[0]);
+  } else {
+    paths = [client.cwd];
+  }
+
+  const pathValidation = await validatePaths(client, paths);
+  if (!pathValidation.valid) {
+    return pathValidation.exitCode;
+  }
+
+  await compileVercelConfig(paths[0]);
+  const shouldUseEarlyLocalConfig = paths[0] === client.cwd;
+  let localConfig = shouldUseEarlyLocalConfig
+    ? client.localConfig || readLocalConfig(paths[0])
+    : readLocalConfig(paths[0]);
+
+  if (localConfig) {
+    client.localConfig = localConfig;
+    const { version } = localConfig;
+    const file = highlight(localConfig[fileNameSymbol]!);
+    const prop = code('version');
+
+    if (version) {
+      if (typeof version === 'number') {
+        if (version !== 2) {
+          const two = code(String(2));
+          output.error(
+            `The value of the ${prop} property within ${file} can only be ${two}.`
+          );
+          return 1;
+        }
+      } else {
+        output.error(
+          `The ${prop} property inside your ${file} file must be a number.`
+        );
+        return 1;
+      }
+    }
+  }
+
+  const { log, debug, error } = output;
+  const quiet = !client.stdout.isTTY;
+  let { path: cwd } = pathValidation;
+  const autoConfirm = parsedArguments.flags['--yes'];
+
+  const target = parseTarget({
+    flagName: 'target',
+    flags: parsedArguments.flags,
+  });
+  telemetryClient.trackTargetEnvironment(target);
+
+  const parsedArchive = parsedArguments.flags['--archive'];
+  if (
+    typeof parsedArchive === 'string' &&
+    !(
+      isValidArchive(parsedArchive) ||
+      parsedArchive === deprecatedArchiveSplitTgz
+    )
+  ) {
+    output.error(`Format must be one of: ${VALID_ARCHIVE_FORMATS.join(', ')}`);
+    return 1;
+  }
+  if (parsedArchive === deprecatedArchiveSplitTgz) {
+    output.print(
+      `${prependEmoji(
+        `${param('--archive=tgz')} now has the same behavior as ${param(
+          '--archive=split-tgz'
+        )}. Please use ${param('--archive=tgz')} instead.`,
+        emoji('warning')
+      )}\n`
+    );
+  }
+
+  const cliMeta = parseMeta(parsedArguments.flags['--meta']);
+  const isV0 = cliMeta.v0 === 'true';
+
+  const link = await ensureLink('deploy', client, cwd, {
+    autoConfirm,
+    setupMsg: 'Set up',
+    projectName:
+      projectNameOrId ??
+      getProjectName({
+        nameParam: undefined,
+        nowConfig: localConfig,
+        paths,
+      }),
+    failIfNotFound: !!projectNameOrId,
+    v0: isV0,
+  });
+  if (typeof link === 'number') {
+    return link;
+  }
+
+  const { org, project } = link;
+  const rootDirectory = project.rootDirectory;
+  const sourceFilesOutsideRootDirectory =
+    project.sourceFilesOutsideRootDirectory ?? true;
+
+  if (link.repoRoot) {
+    cwd = link.repoRoot;
+  }
+
+  const contextName = org.slug;
+  client.config.currentTeam = org.type === 'team' ? org.id : undefined;
+
+  // #region Functions Beta toggle
+  if (functionsBeta || noFunctionsBeta) {
+    const toggleResult = await applyFunctionsBetaToggle(
+      client,
+      project,
+      functionsBeta,
+      noFunctionsBeta
+    );
+    if (toggleResult.error) {
+      return toggleResult.exitCode;
+    }
+  }
+  // #endregion
+
+  if (
+    rootDirectory &&
+    (await validateRootDirectory(
+      cwd,
+      join(cwd, rootDirectory),
+      project
+        ? `To change your Project Settings, go to https://vercel.com/${org?.slug}/${project.name}/settings`
+        : ''
+    )) === false
+  ) {
+    return 1;
+  }
+
+  if (rootDirectory) {
+    const rootDirectoryPath = join(cwd, rootDirectory);
+    await compileVercelConfig(rootDirectoryPath);
+    const rootDirectoryConfig = readLocalConfig(rootDirectoryPath);
+
+    if (rootDirectoryConfig) {
+      debug(`Read local config from root directory (${rootDirectory})`);
+      localConfig = rootDirectoryConfig;
+    } else if (localConfig) {
+      output.print(
+        `${prependEmoji(
+          `The ${highlight(
+            localConfig[fileNameSymbol]!
+          )} file should be inside of the provided root directory.`,
+          emoji('warning')
+        )}\n`
+      );
+    }
+  }
+
+  localConfig = localConfig || {};
+
+  if (localConfig.name) {
+    output.print(
+      `${prependEmoji(
+        `The ${code('name')} property in ${highlight(
+          localConfig[fileNameSymbol]!
+        )} is deprecated (https://vercel.link/name-prop)`,
+        emoji('warning')
+      )}\n`
+    );
+  }
+
+  const isObject = (item: any) =>
+    Object.prototype.toString.call(item) === '[object Object]';
+
+  if (typeof localConfig.env !== 'undefined' && !isObject(localConfig.env)) {
+    error(
+      `The ${code('env')} property in ${highlight(
+        localConfig[fileNameSymbol]!
+      )} needs to be an object`
+    );
+    return 1;
+  }
+
+  if (typeof localConfig.build !== 'undefined') {
+    if (!isObject(localConfig.build)) {
+      error(
+        `The ${code('build')} property in ${highlight(
+          localConfig[fileNameSymbol]!
+        )} needs to be an object`
+      );
+      return 1;
+    }
+
+    if (
+      typeof localConfig.build.env !== 'undefined' &&
+      !isObject(localConfig.build.env)
+    ) {
+      error(
+        `The ${code('build.env')} property in ${highlight(
+          localConfig[fileNameSymbol]!
+        )} needs to be an object`
+      );
+      return 1;
+    }
+  }
+
+  const meta = Object.assign({}, parseMeta(localConfig.meta), cliMeta);
+
+  const gitMetadata = await createGitMeta(cwd, project);
+
+  const deploymentEnv = Object.assign(
+    {},
+    parseEnv(localConfig.env),
+    parseEnv(parsedArguments.flags['--env'])
+  );
+
+  const deploymentBuildEnv = Object.assign(
+    {},
+    parseEnv(localConfig.build && localConfig.build.env),
+    parseEnv(parsedArguments.flags['--build-env'])
+  );
+
+  try {
+    await addProcessEnv(log, deploymentEnv);
+    await addProcessEnv(log, deploymentBuildEnv);
+  } catch (err: unknown) {
+    error(errorToString(err));
+    return 1;
+  }
+
+  const regionFlag = (parsedArguments.flags['--regions'] || '')
+    .split(',')
+    .map((s: string) => s.trim())
+    .filter(Boolean);
+  const regions = regionFlag.length > 0 ? regionFlag : localConfig.regions;
+
+  const currentTeam = org.type === 'team' ? org.id : undefined;
+  const now = new Now({
+    client,
+    currentTeam,
+  });
+  const deployStamp = stamp();
+  const localConfigurationOverrides = pickOverrides(localConfig);
+
+  const name = project.name;
+  if (!name) {
+    throw new Error(
+      '`name` not found on project or provided by existing project'
+    );
+  }
+
+  // init implies prebuilt, manual, and noWait
+  const noWait = true;
+
+  try {
+    const autoAssignCustomDomains = parsedArguments.flags['--skip-domain']
+      ? false
+      : undefined;
+
+    const createArgs: CreateOptions = {
+      name,
+      env: deploymentEnv as Dictionary<string>,
+      build: { env: deploymentBuildEnv as Dictionary<string> },
+      forceNew: parsedArguments.flags['--force'],
+      withCache: parsedArguments.flags['--with-cache'],
+      prebuilt: true,
+      vercelOutputDir: undefined,
+      rootDirectory,
+      quiet,
+      wantsPublic: Boolean(
+        parsedArguments.flags['--public'] || localConfig.public
+      ),
+      nowConfig: {
+        ...localConfig,
+        images: undefined,
+      },
+      regions,
+      meta,
+      gitMetadata,
+      deployStamp,
+      target,
+      skipAutoDetectionConfirmation: autoConfirm,
+      noWait,
+      withFullLogs: false,
+      autoAssignCustomDomains,
+      manual: true,
+      jsonOutput: asJson,
+      functionsBeta: functionsBeta || undefined,
+      linkedProject: project,
+    };
+
+    if (!localConfig.builds || localConfig.builds.length === 0) {
+      createArgs.projectSettings = {
+        sourceFilesOutsideRootDirectory,
+        rootDirectory,
+        ...localConfigurationOverrides,
+      };
+    }
+
+    const { packageJson } = await scanParentDirs(
+      join(cwd, project?.rootDirectory ?? ''),
+      true,
+      cwd
+    );
+    let nodeVersion: string | undefined;
+    if (packageJson?.engines?.node) {
+      try {
+        const { range } = await getSupportedNodeVersion(
+          packageJson.engines.node
+        );
+        nodeVersion = range;
+      } catch (error) {
+        if (error instanceof Error) {
+          output.warn(error.message);
+        }
+      }
+    }
+    if (!createArgs.projectSettings) createArgs.projectSettings = {};
+    createArgs.projectSettings.nodeVersion = nodeVersion;
+
+    const deployment = await createDeploy(
+      client,
+      now,
+      contextName,
+      cwd,
+      createArgs,
+      org,
+      !project,
+      parsedArchive ? 'tgz' : undefined
+    );
+
+    if (deployment instanceof NotDomainOwner) {
+      if (client.nonInteractive) {
+        client.stdout.write(
+          `${JSON.stringify(
+            {
+              status: AGENT_STATUS.ERROR,
+              reason: 'not_domain_owner',
+              message: deployment.message,
+              next: [
+                {
+                  command: getCommandNameWithGlobalFlags('deploy', client.argv),
+                  when: 'retry deploy',
+                },
+              ],
+            },
+            null,
+            2
+          )}\n`
+        );
+        return 1;
+      } else {
+        output.error(deployment.message);
+        return 1;
+      }
+    }
+
+    if (deployment instanceof Error) {
+      const msg =
+        deployment.message ||
+        'An unexpected error occurred while deploying your project';
+      if (client.nonInteractive) {
+        client.stdout.write(
+          `${JSON.stringify(
+            {
+              status: AGENT_STATUS.ERROR,
+              reason: 'deploy_failed',
+              message: msg,
+              next: [
+                {
+                  command: getCommandNameWithGlobalFlags('deploy', client.argv),
+                  when: 'retry deploy',
+                },
+              ],
+            },
+            null,
+            2
+          )}\n`
+        );
+        return 1;
+      } else {
+        output.error(
+          msg,
+          undefined,
+          'https://vercel.link/help',
+          'Contact Support'
+        );
+        return 1;
+      }
+    }
+
+    if (deployment.readyState === 'CANCELED') {
+      if (asJson) {
+        output.stopSpinner();
+        const deploymentJson = getDeploymentOutputJson(
+          deployment,
+          client.apiUrl,
+          {
+            name: 'DEPLOYMENT_CANCELED',
+            message: 'The deployment has been canceled.',
+          }
+        );
+        const payload = client.nonInteractive
+          ? {
+              status: AGENT_STATUS.ERROR,
+              reason: 'deployment_canceled',
+              message: 'The deployment has been canceled.',
+              deployment: deploymentJson,
+              next: [
+                {
+                  command: getCommandNameWithGlobalFlags('deploy', client.argv),
+                  when: 'retry deploy',
+                },
+              ],
+            }
+          : deploymentJson;
+        client.stdout.write(`${JSON.stringify(payload, null, 2)}\n`);
+      } else {
+        output.print('The deployment has been canceled.\n');
+      }
+      return 1;
+    }
+
+    // Deployment Checks: deployment-alias check failed
+    if (deployment.checks?.['deployment-alias']?.state === 'failed') {
+      return handleFailedCheckRuns(client, deployment, asJson);
+    }
+
+    // v1 checks: uses checksConclusion from the deployment object
+    if (deployment.checksConclusion === 'failed') {
+      const { checks } = await getDeploymentChecks(client, deployment.id);
+      const counters = new Map<string, number>();
+      checks.forEach(c => {
+        counters.set(c.conclusion, (counters.get(c.conclusion) ?? 0) + 1);
+      });
+
+      const counterList = Array.from(counters)
+        .map(([name, no]) => `${no} ${name}`)
+        .join(', ');
+      if (asJson) {
+        output.stopSpinner();
+        const message = `Running Checks: ${counterList}`;
+        const deploymentJson = getDeploymentOutputJson(
+          deployment,
+          client.apiUrl,
+          {
+            name: 'CHECKS_FAILED',
+            message,
+          }
+        );
+        const payload = client.nonInteractive
+          ? {
+              status: AGENT_STATUS.ERROR,
+              reason: 'checks_failed',
+              message,
+              deployment: deploymentJson,
+              next: [
+                {
+                  command: getCommandNameWithGlobalFlags('deploy', client.argv),
+                  when: 'retry deploy',
+                },
+              ],
+            }
+          : deploymentJson;
+        client.stdout.write(`${JSON.stringify(payload, null, 2)}\n`);
+      } else {
+        output.error(`Running Checks: ${counterList}`);
+      }
+      return 1;
+    }
+
+    if (deployment === null) {
+      if (client.nonInteractive) {
+        client.stdout.write(
+          `${JSON.stringify(
+            {
+              status: AGENT_STATUS.ERROR,
+              reason: 'upload_failed',
+              message: 'Uploading failed. Please try again.',
+              next: [
+                {
+                  command: getCommandNameWithGlobalFlags('deploy', client.argv),
+                  when: 'retry deploy',
+                },
+              ],
+            },
+            null,
+            2
+          )}\n`
+        );
+        return 1;
+      } else {
+        error('Uploading failed. Please try again.');
+        return 1;
+      }
+    }
+
+    if (asJson) {
+      output.stopSpinner();
+      const deploymentJson = getDeploymentOutputJson(deployment, client.apiUrl);
+      const payload = client.nonInteractive
+        ? {
+            status: AGENT_STATUS.OK,
+            deployment: deploymentJson,
+            message: `Deployment ${deployment.url} ready.`,
+            next: [
+              {
+                command: getCommandNameWithGlobalFlags(
+                  `inspect ${deployment.url}`,
+                  client.argv
+                ),
+                when: 'Inspect deployment',
+              },
+              {
+                command: getCommandNameWithGlobalFlags(
+                  'deploy --prod',
+                  client.argv
+                ),
+                when: 'Promote to production',
+              },
+            ],
+          }
+        : deploymentJson;
+      client.stdout.write(`${JSON.stringify(payload, null, 2)}\n`);
+      return 0;
+    }
+
+    return printDeploymentStatus(
+      client,
+      deployment,
+      deployStamp,
+      noWait,
+      false,
+      true
+    );
+  } catch (err: unknown) {
+    if (isError(err)) {
+      debug(`Error: ${err}\n${err.stack}`);
+    }
+
+    if (err instanceof FunctionsSizeLimitError) {
+      output.prettyError(err);
+      output.log(
+        'Run "vercel deploy --functions-beta" to retry with extended function limits.'
+      );
+      output.log(`Learn More: ${err.link}`);
+      return 1;
+    }
+
+    if (err instanceof UploadErrorMissingArchive) {
+      output.prettyError(err);
+      return 1;
+    }
+
+    if (err instanceof NotDomainOwner) {
+      output.error(err.message);
+      return 1;
+    }
+
+    if (
+      err instanceof DomainNotFound ||
+      err instanceof DomainNotVerified ||
+      err instanceof NotDomainOwner ||
+      err instanceof DomainPermissionDenied ||
+      err instanceof DomainVerificationFailed ||
+      err instanceof SchemaValidationFailed ||
+      err instanceof InvalidDomain ||
+      err instanceof DeploymentNotFound ||
+      err instanceof BuildsRateLimited ||
+      err instanceof DeploymentsRateLimited ||
+      err instanceof AliasDomainConfigured ||
+      err instanceof MissingBuildScript ||
+      err instanceof ConflictingFilePath ||
+      err instanceof ConflictingPathSegment ||
+      err instanceof ConflictingConfigFiles ||
+      err instanceof DeprecatedNowJson
+    ) {
+      handleCreateDeployError(err, localConfig);
+      return 1;
+    }
+
+    if (isAPIError(err) && err.code === 'size_limit_exceeded') {
+      const { sizeLimit = 0 } = err;
+      const message = `File size limit exceeded (${bytes(sizeLimit)})`;
+      error(message);
+      return 1;
+    }
+
+    printError(err);
+    return 1;
+  }
+}
+
+async function handleContinueSubcommand(
+  client: Client,
+  telemetryClient: DeployTelemetryClient
+): Promise<number> {
+  // Parse continue-specific flags
+  const flagsSpecification = getFlagsSpecification(continueSubcommand.options);
+  let parsedArguments;
+  try {
+    parsedArguments = parseArguments(client.argv.slice(2), flagsSpecification);
+  } catch (error) {
+    printError(error);
+    return 1;
+  }
+
+  const idFlag = parsedArguments.flags['--id'];
+  const parsedArchive = parsedArguments.flags['--archive'];
+  const errorMessage = parsedArguments.flags['--error'];
+
+  if (typeof parsedArchive === 'string' && !isValidArchive(parsedArchive)) {
+    output.error(`Format must be one of: ${VALID_ARCHIVE_FORMATS.join(', ')}`);
+    return 1;
+  }
+
+  telemetryClient.trackCliOptionArchive(parsedArchive);
+
+  if (parsedArchive && errorMessage !== undefined) {
+    output.error(`Cannot use ${param('--archive')} with ${param('--error')}`);
+    return 1;
+  }
+
+  if (errorMessage !== undefined && errorMessage.trim() === '') {
+    output.error(`${param('--error')} requires an error message`);
+    return 1;
+  }
+
+  if (!idFlag) {
+    if (client.nonInteractive) {
+      outputAgentError(
+        client,
+        {
+          status: AGENT_STATUS.ERROR,
+          reason: 'missing_id',
+          message:
+            'Missing required --id flag. Provide the deployment ID to continue.',
+          next: [
+            {
+              command: getCommandNameWithGlobalFlags(
+                'deploy continue --id <deployment-id>',
+                client.argv
+              ),
+              when: 'provide deployment ID',
+            },
+          ],
+        },
+        1
+      );
+      return 1;
+    } else {
+      output.error(
+        `Missing required ${param('--id')} flag. Usage: ${getCommandName('deploy continue --id <deployment-id>')}`
+      );
+      return 1;
+    }
+  }
+
+  // Validate paths and get project context
+  const paths = [client.cwd];
+  const pathValidation = await validatePaths(client, paths);
+  if (!pathValidation.valid) {
+    return pathValidation.exitCode;
+  }
+
+  await compileVercelConfig(paths[0]);
+  const localConfig = client.localConfig || readLocalConfig(paths[0]);
+  if (localConfig) {
+    client.localConfig = localConfig;
+  }
+
+  let { path: cwd } = pathValidation;
+
+  const link = await ensureLink('deploy', client, cwd, {
+    autoConfirm: true,
+    setupMsg: 'Set up',
+    projectName: getProjectName({
+      nameParam: undefined,
+      nowConfig: localConfig,
+      paths,
+    }),
+  });
+  if (typeof link === 'number') {
+    return link;
+  }
+
+  const { org } = link;
+
+  if (link.repoRoot) {
+    cwd = link.repoRoot;
+  }
+
+  client.config.currentTeam = org.type === 'team' ? org.id : undefined;
+
+  if (errorMessage !== undefined) {
+    try {
+      await client.fetch(`/deployments/${idFlag}/continue`, {
+        method: 'POST',
+        body: { errorMessage },
+      });
+      output.success(`Marked deployment ${idFlag} as errored`);
+      return 0;
+    } catch (error) {
+      printError(error);
+      return 1;
+    }
+  }
+
+  // Resolve vercelOutputDir - prebuilt is implicit for continue
+  let vercelOutputDir: string = join(cwd, '.vercel/output');
+  if (link.repoRoot && link.project.rootDirectory) {
+    vercelOutputDir = join(cwd, link.project.rootDirectory, '.vercel/output');
+  }
+
+  const prebuiltExists = await fs.pathExists(vercelOutputDir);
+  if (!prebuiltExists) {
+    if (client.nonInteractive) {
+      outputAgentError(
+        client,
+        {
+          status: AGENT_STATUS.ERROR,
+          reason: 'prebuilt_not_found',
+          message:
+            'No prebuilt output found in ".vercel/output". Run build first.',
+          next: [
+            {
+              command: getCommandNameWithGlobalFlags('build', client.argv),
+              when: 'generate prebuilt output',
+            },
+            {
+              command: getCommandNameWithGlobalFlags(
+                `deploy continue --id ${idFlag}`,
+                client.argv
+              ),
+              when: 'deploy prebuilt output',
+            },
+          ],
+        },
+        1
+      );
+      return 1;
+    } else {
+      output.error(
+        `No prebuilt output found in ".vercel/output". Run ${getCommandName(
+          'build'
+        )} to generate a local build.`
+      );
+      return 1;
+    }
+  }
+
+  const deployStamp = stamp();
+
+  return handleContinueDeployment({
+    client,
+    deploymentId: idFlag,
+    cwd,
+    deployStamp,
+    noWait: false,
+    org,
+    vercelOutputDir,
+    archive: parsedArchive ? 'tgz' : undefined,
+  });
+}
+
+async function handleDefaultDeploy(
+  client: Client,
+  telemetryClient: DeployTelemetryClient
+): Promise<number> {
+  // Re-parse without permissive mode for stricter validation
+  const flagsSpecification = getFlagsSpecification(deployCommand.options);
+  let parsedArguments;
+  try {
+    parsedArguments = parseArguments(client.argv.slice(2), flagsSpecification);
+  } catch (error) {
+    printError(error);
+    return 1;
+  }
+
+  telemetryClient.trackCliOptionArchive(parsedArguments.flags['--archive']);
+  telemetryClient.trackCliOptionEnv(parsedArguments.flags['--env']);
+  telemetryClient.trackCliOptionBuildEnv(parsedArguments.flags['--build-env']);
+  telemetryClient.trackCliOptionMeta(parsedArguments.flags['--meta']);
+  telemetryClient.trackCliFlagPrebuilt(parsedArguments.flags['--prebuilt']);
+  telemetryClient.trackCliOptionRegions(parsedArguments.flags['--regions']);
+  telemetryClient.trackCliFlagNoWait(parsedArguments.flags['--no-wait']);
+  telemetryClient.trackCliFlagYes(parsedArguments.flags['--yes']);
+  telemetryClient.trackCliOptionTarget(parsedArguments.flags['--target']);
+  telemetryClient.trackCliFlagProd(parsedArguments.flags['--prod']);
+  telemetryClient.trackCliFlagSkipDomain(
+    parsedArguments.flags['--skip-domain']
+  );
+  telemetryClient.trackCliFlagPublic(parsedArguments.flags['--public']);
+  telemetryClient.trackCliFlagLogs(parsedArguments.flags['--logs']);
+  telemetryClient.trackCliFlagNoLogs(parsedArguments.flags['--no-logs']);
+  telemetryClient.trackCliFlagGuidance(parsedArguments.flags['--guidance']);
+  telemetryClient.trackCliFlagForce(parsedArguments.flags['--force']);
+  telemetryClient.trackCliFlagWithCache(parsedArguments.flags['--with-cache']);
+  telemetryClient.trackCliFlagJson(parsedArguments.flags['--json']);
+  telemetryClient.trackCliOptionFormat(parsedArguments.flags['--format']);
+  telemetryClient.trackCliOptionProject(parsedArguments.flags['--project']);
+  telemetryClient.trackCliFlagFunctionsBeta(
+    parsedArguments.flags['--functions-beta']
+  );
+  telemetryClient.trackCliFlagNoFunctionsBeta(
+    parsedArguments.flags['--no-functions-beta']
+  );
+
+  const projectNameOrId = parsedArguments.flags['--project'];
+  const functionsBeta = parsedArguments.flags['--functions-beta'];
+  const noFunctionsBeta = parsedArguments.flags['--no-functions-beta'];
+
+  // Validate mutual exclusivity
+  if (functionsBeta && noFunctionsBeta) {
+    output.error(
+      'Cannot use --functions-beta and --no-functions-beta together'
+    );
+    return 1;
+  }
+
+  const formatResult = validateJsonOutput(parsedArguments.flags);
+  if (!formatResult.valid) {
+    output.error(formatResult.error);
+    return 1;
+  }
+  const asJson = formatResult.jsonOutput || client.nonInteractive;
+
+  if ('--confirm' in parsedArguments.flags) {
+    telemetryClient.trackCliFlagConfirm(parsedArguments.flags['--confirm']);
+    output.warn('`--confirm` is deprecated, please use `--yes` instead');
+    parsedArguments.flags['--yes'] = parsedArguments.flags['--confirm'];
+  }
+
+  if ('--no-logs' in parsedArguments.flags) {
+    output.warn('`--no-logs` is deprecated and now the default behavior.');
   }
 
   if (parsedArguments.args[0] === deployCommand.name) {
     parsedArguments.args.shift();
   }
-  // #endregion
 
   // #region Path validation
   let paths;
   if (parsedArguments.args.length > 0) {
-    // If path is relative: resolve
-    // if path is absolute: clear up strange `/` etc
     paths = parsedArguments.args.map(item => resolve(client.cwd, item));
     telemetryClient.trackCliArgumentProjectPath(paths[0]);
   } else {
     paths = [client.cwd];
   }
 
-  // check paths
   const pathValidation = await validatePaths(client, paths);
 
   if (!pathValidation.valid) {
@@ -153,7 +1070,23 @@ export default async (client: Client): Promise<number> => {
   // #endregion
 
   // #region Config loading
-  let localConfig = client.localConfig || readLocalConfig(paths[0]);
+  try {
+    await compileVercelConfig(paths[0]);
+  } catch (err) {
+    if (
+      err instanceof ConflictingConfigFiles ||
+      err instanceof DeprecatedNowJson
+    ) {
+      output.prettyError(err);
+      return 1;
+    }
+    throw err;
+  }
+
+  const shouldUseEarlyLocalConfig = paths[0] === client.cwd;
+  let localConfig = shouldUseEarlyLocalConfig
+    ? client.localConfig || readLocalConfig(paths[0])
+    : readLocalConfig(paths[0]);
 
   if (localConfig) {
     client.localConfig = localConfig;
@@ -185,11 +1118,10 @@ export default async (client: Client): Promise<number> => {
   const quiet = !client.stdout.isTTY;
 
   let { path: cwd } = pathValidation;
-  const autoConfirm = parsedArguments.flags['--yes'];
+  const autoConfirm = parsedArguments.flags['--yes'] || client.nonInteractive;
   // #endregion
 
   // #region Warning on flags
-  // deprecate --name
   if (parsedArguments.flags['--name']) {
     output.print(
       `${prependEmoji(
@@ -219,6 +1151,16 @@ export default async (client: Client): Promise<number> => {
     flagName: 'target',
     flags: parsedArguments.flags,
   });
+  telemetryClient.trackTargetEnvironment(target);
+
+  // Validate that --skip-domain is only used with production deployments
+  const skipDomain = parsedArguments.flags['--skip-domain'];
+  if (skipDomain && target !== 'production') {
+    output.error(
+      'The `--skip-domain` option can only be used with production deployments. Use `--prod` or `--target=production`.'
+    );
+    return 1;
+  }
 
   const parsedArchive = parsedArguments.flags['--archive'];
   if (
@@ -242,16 +1184,21 @@ export default async (client: Client): Promise<number> => {
     );
   }
 
-  // Retrieve `project` and `org` from linked Project.
-  // If not linked, prompt user to set up a new Project.
+  const cliMeta = parseMeta(parsedArguments.flags['--meta']);
+  const isV0 = cliMeta.v0 === 'true';
+
   const link = await ensureLink('deploy', client, cwd, {
     autoConfirm,
-    setupMsg: 'Set up and deploy',
-    projectName: getProjectName({
-      nameParam: parsedArguments.flags['--name'],
-      nowConfig: localConfig,
-      paths,
-    }),
+    setupMsg: 'Set up',
+    projectName:
+      projectNameOrId ??
+      getProjectName({
+        nameParam: parsedArguments.flags['--name'],
+        nowConfig: localConfig,
+        paths,
+      }),
+    failIfNotFound: !!projectNameOrId,
+    v0: isV0,
   });
   if (typeof link === 'number') {
     return link;
@@ -262,7 +1209,6 @@ export default async (client: Client): Promise<number> => {
   const sourceFilesOutsideRootDirectory =
     project.sourceFilesOutsideRootDirectory ?? true;
 
-  // For repo-style linking, reset the path to the root of the repository
   if (link.repoRoot) {
     cwd = link.repoRoot;
   }
@@ -272,8 +1218,6 @@ export default async (client: Client): Promise<number> => {
   if (parsedArguments.flags['--prebuilt']) {
     vercelOutputDir = join(cwd, '.vercel/output');
 
-    // For repo-style linking, update `cwd` to be the Project
-    // subdirectory when `rootDirectory` setting is defined
     if (link.repoRoot && link.project.rootDirectory) {
       vercelOutputDir = join(cwd, link.project.rootDirectory, '.vercel/output');
     }
@@ -292,7 +1236,6 @@ export default async (client: Client): Promise<number> => {
 
     const prebuiltBuild = await getPrebuiltJson(vercelOutputDir);
 
-    // Ensure that there was not a build error
     const prebuiltError =
       prebuiltBuild?.error ||
       prebuiltBuild?.builds?.find(build => 'error' in build)?.error;
@@ -306,7 +1249,6 @@ export default async (client: Client): Promise<number> => {
       return 1;
     }
 
-    // Ensure that the deploy target matches the build target
     const assumedTarget = target || 'preview';
     if (prebuiltBuild?.target && prebuiltBuild.target !== assumedTarget) {
       let specifyTarget = '';
@@ -327,10 +1269,22 @@ export default async (client: Client): Promise<number> => {
   }
   // #endregion
 
-  // Set the `contextName` and `currentTeam` as specified by the
-  // Project Settings, so that API calls happen with the proper scope
   const contextName = org.slug;
   client.config.currentTeam = org.type === 'team' ? org.id : undefined;
+
+  // #region Functions Beta toggle
+  if (functionsBeta || noFunctionsBeta) {
+    const toggleResult = await applyFunctionsBetaToggle(
+      client,
+      project,
+      functionsBeta,
+      noFunctionsBeta
+    );
+    if (toggleResult.error) {
+      return toggleResult.exitCode;
+    }
+  }
+  // #endregion
 
   if (
     rootDirectory &&
@@ -345,10 +1299,10 @@ export default async (client: Client): Promise<number> => {
     return 1;
   }
 
-  // If Root Directory is used we'll try to read the config
-  // from there instead and use it if it exists.
   if (rootDirectory) {
-    const rootDirectoryConfig = readLocalConfig(join(cwd, rootDirectory));
+    const rootDirectoryPath = join(cwd, rootDirectory);
+    await compileVercelConfig(rootDirectoryPath);
+    const rootDirectoryConfig = readLocalConfig(rootDirectoryPath);
 
     if (rootDirectoryConfig) {
       debug(`Read local config from root directory (${rootDirectory})`);
@@ -382,9 +1336,6 @@ export default async (client: Client): Promise<number> => {
   const isObject = (item: any) =>
     Object.prototype.toString.call(item) === '[object Object]';
 
-  // This validation needs to happen on the client side because
-  // the data is merged with other data before it is passed to the API (which
-  // also does schema validation).
   if (typeof localConfig.env !== 'undefined' && !isObject(localConfig.env)) {
     error(
       `The ${code('env')} property in ${highlight(
@@ -418,31 +1369,24 @@ export default async (client: Client): Promise<number> => {
   }
 
   // #region Meta
-  const meta = Object.assign(
-    {},
-    parseMeta(localConfig.meta),
-    parseMeta(parsedArguments.flags['--meta'])
-  );
+  const meta = Object.assign({}, parseMeta(localConfig.meta), cliMeta);
 
   const gitMetadata = await createGitMeta(cwd, project);
   // #endregion
 
   // #region Env vars validation
-  // Merge dotenv config, `env` from vercel.json, and `--env` / `-e` arguments
   const deploymentEnv = Object.assign(
     {},
     parseEnv(localConfig.env),
     parseEnv(parsedArguments.flags['--env'])
   );
 
-  // Merge build env out of  `build.env` from vercel.json, and `--build-env` args
   const deploymentBuildEnv = Object.assign(
     {},
     parseEnv(localConfig.build && localConfig.build.env),
     parseEnv(parsedArguments.flags['--build-env'])
   );
 
-  // If there's any undefined values, then inherit them from this process
   try {
     await addProcessEnv(log, deploymentEnv);
     await addProcessEnv(log, deploymentBuildEnv);
@@ -468,7 +1412,7 @@ export default async (client: Client): Promise<number> => {
   const deployStamp = stamp();
   let deployment = null;
   const noWait = !!parsedArguments.flags['--no-wait'];
-  const withLogs = '--no-logs' in parsedArguments.flags ? false : true;
+  const withFullLogs = !!parsedArguments.flags['--logs'];
 
   const localConfigurationOverrides = pickOverrides(localConfig);
 
@@ -480,7 +1424,6 @@ export default async (client: Client): Promise<number> => {
   }
 
   try {
-    // if this flag is not set, use `undefined` to allow the project setting to be used
     const autoAssignCustomDomains = parsedArguments.flags['--skip-domain']
       ? false
       : undefined;
@@ -500,8 +1443,6 @@ export default async (client: Client): Promise<number> => {
       ),
       nowConfig: {
         ...localConfig,
-        // `images` is allowed in "vercel.json" and processed
-        // by `vc build`, but don't send it to the API endpoint
         images: undefined,
       },
       regions,
@@ -511,12 +1452,15 @@ export default async (client: Client): Promise<number> => {
       target,
       skipAutoDetectionConfirmation: autoConfirm,
       noWait,
-      withLogs,
+      withFullLogs,
       autoAssignCustomDomains,
+      agentName: client.agentName,
+      jsonOutput: asJson,
+      functionsBeta: functionsBeta || undefined,
+      linkedProject: project,
     };
 
     if (!localConfig.builds || localConfig.builds.length === 0) {
-      // Only add projectSettings for zero config deployments
       createArgs.projectSettings = {
         sourceFilesOutsideRootDirectory,
         rootDirectory,
@@ -524,9 +1468,6 @@ export default async (client: Client): Promise<number> => {
       };
     }
 
-    // Read the `engines.node` field from `package.json` and send as a
-    // `projectSettings` property as an optimization (so that the API
-    // does not need to retrieve the file to do this check).
     const { packageJson } = await scanParentDirs(
       join(cwd, project?.rootDirectory ?? ''),
       true,
@@ -559,27 +1500,108 @@ export default async (client: Client): Promise<number> => {
       parsedArchive ? 'tgz' : undefined
     );
 
+    if (deployment && !(deployment instanceof Error)) {
+      telemetryClient.trackDeploymentId(deployment.id);
+    }
+
     if (deployment instanceof NotDomainOwner) {
-      output.error(deployment.message);
-      return 1;
+      if (client.nonInteractive) {
+        client.stdout.write(
+          `${JSON.stringify(
+            {
+              status: AGENT_STATUS.ERROR,
+              reason: 'not_domain_owner',
+              message: deployment.message,
+              next: [
+                {
+                  command: getCommandNameWithGlobalFlags('deploy', client.argv),
+                  when: 'retry deploy',
+                },
+              ],
+            },
+            null,
+            2
+          )}\n`
+        );
+        return 1;
+      } else {
+        output.error(deployment.message);
+        return 1;
+      }
     }
 
     if (deployment instanceof Error) {
-      output.error(
+      const msg =
         deployment.message ||
-          'An unexpected error occurred while deploying your project',
-        undefined,
-        'https://vercel.link/help',
-        'Contact Support'
-      );
-      return 1;
+        'An unexpected error occurred while deploying your project';
+      if (client.nonInteractive) {
+        client.stdout.write(
+          `${JSON.stringify(
+            {
+              status: AGENT_STATUS.ERROR,
+              reason: 'deploy_failed',
+              message: msg,
+              next: [
+                {
+                  command: getCommandNameWithGlobalFlags('deploy', client.argv),
+                  when: 'retry deploy',
+                },
+              ],
+            },
+            null,
+            2
+          )}\n`
+        );
+        return 1;
+      } else {
+        output.error(
+          msg,
+          undefined,
+          'https://vercel.link/help',
+          'Contact Support'
+        );
+        return 1;
+      }
     }
 
     if (deployment.readyState === 'CANCELED') {
-      output.print('The deployment has been canceled.\n');
+      if (asJson) {
+        output.stopSpinner();
+        const deploymentJson = getDeploymentOutputJson(
+          deployment,
+          client.apiUrl,
+          {
+            name: 'DEPLOYMENT_CANCELED',
+            message: 'The deployment has been canceled.',
+          }
+        );
+        const payload = client.nonInteractive
+          ? {
+              status: AGENT_STATUS.ERROR,
+              reason: 'deployment_canceled',
+              message: 'The deployment has been canceled.',
+              deployment: deploymentJson,
+              next: [
+                {
+                  command: getCommandNameWithGlobalFlags('deploy', client.argv),
+                  when: 'retry deploy',
+                },
+              ],
+            }
+          : deploymentJson;
+        client.stdout.write(`${JSON.stringify(payload, null, 2)}\n`);
+      } else {
+        output.print('The deployment has been canceled.\n');
+      }
       return 1;
     }
 
+    // Deployment Checks: deployment-alias check failed
+    if (deployment.checks?.['deployment-alias']?.state === 'failed') {
+      return handleFailedCheckRuns(client, deployment, asJson);
+    }
+
+    // v1 checks: uses checksConclusion from the deployment object
     if (deployment.checksConclusion === 'failed') {
       const { checks } = await getDeploymentChecks(client, deployment.id);
       const counters = new Map<string, number>();
@@ -590,32 +1612,156 @@ export default async (client: Client): Promise<number> => {
       const counterList = Array.from(counters)
         .map(([name, no]) => `${no} ${name}`)
         .join(', ');
-      output.error(`Running Checks: ${counterList}`);
+      if (asJson) {
+        output.stopSpinner();
+        const message = `Running Checks: ${counterList}`;
+        const deploymentJson = getDeploymentOutputJson(
+          deployment,
+          client.apiUrl,
+          {
+            name: 'CHECKS_FAILED',
+            message,
+          }
+        );
+        const payload = client.nonInteractive
+          ? {
+              status: AGENT_STATUS.ERROR,
+              reason: 'checks_failed',
+              message,
+              deployment: deploymentJson,
+              next: [
+                {
+                  command: getCommandNameWithGlobalFlags('deploy', client.argv),
+                  when: 'retry deploy',
+                },
+              ],
+            }
+          : deploymentJson;
+        client.stdout.write(`${JSON.stringify(payload, null, 2)}\n`);
+      } else {
+        output.error(`Running Checks: ${counterList}`);
+      }
       return 1;
     }
 
-    if (!noWait) {
-      // get the deployment just to double check that it actually deployed
+    // The deploy status loop already returns the final payload for the normal
+    // READY + alias-assigned path, so skip the old no-op success refetch.
+    if (!noWait && shouldReconcileFinalDeployment(deployment)) {
       await getDeployment(client, contextName, deployment.id);
     }
 
     if (deployment === null) {
-      error('Uploading failed. Please try again.');
-      return 1;
+      if (client.nonInteractive) {
+        client.stdout.write(
+          `${JSON.stringify(
+            {
+              status: AGENT_STATUS.ERROR,
+              reason: 'upload_failed',
+              message: 'Uploading failed. Please try again.',
+              next: [
+                {
+                  command: getCommandNameWithGlobalFlags('deploy', client.argv),
+                  when: 'retry deploy',
+                },
+              ],
+            },
+            null,
+            2
+          )}\n`
+        );
+        return 1;
+      } else {
+        error('Uploading failed. Please try again.');
+        return 1;
+      }
     }
   } catch (err: unknown) {
     if (isError(err)) {
       debug(`Error: ${err}\n${err.stack}`);
     }
 
-    if (err instanceof UploadErrorMissingArchive) {
+    if (err instanceof FunctionsSizeLimitError) {
+      if (client.nonInteractive) {
+        client.stdout.write(
+          `${JSON.stringify(
+            {
+              status: AGENT_STATUS.ERROR,
+              reason: 'function_size_exceeded',
+              message: err.message,
+              next: [
+                {
+                  command: getCommandNameWithGlobalFlags(
+                    'deploy --functions-beta',
+                    client.argv
+                  ),
+                  when: 'retry deploy with extended function limits',
+                },
+              ],
+            },
+            null,
+            2
+          )}\n`
+        );
+      }
+
       output.prettyError(err);
+      log(
+        'Run "vercel deploy --functions-beta" to retry with extended function limits.'
+      );
+      log(`Learn More: ${err.link}`);
       return 1;
     }
 
+    if (err instanceof UploadErrorMissingArchive) {
+      if (client.nonInteractive) {
+        client.stdout.write(
+          `${JSON.stringify(
+            {
+              status: AGENT_STATUS.ERROR,
+              reason: 'missing_archive',
+              message: err.message,
+              next: [
+                {
+                  command: getCommandNameWithGlobalFlags('deploy', client.argv),
+                  when: 'retry deploy',
+                },
+              ],
+            },
+            null,
+            2
+          )}\n`
+        );
+        return 1;
+      } else {
+        output.prettyError(err);
+        return 1;
+      }
+    }
+
     if (err instanceof NotDomainOwner) {
-      output.error(err.message);
-      return 1;
+      if (client.nonInteractive) {
+        client.stdout.write(
+          `${JSON.stringify(
+            {
+              status: AGENT_STATUS.ERROR,
+              reason: 'not_domain_owner',
+              message: err.message,
+              next: [
+                {
+                  command: getCommandNameWithGlobalFlags('deploy', client.argv),
+                  when: 'retry deploy',
+                },
+              ],
+            },
+            null,
+            2
+          )}\n`
+        );
+        return 1;
+      } else {
+        output.error(err.message);
+        return 1;
+      }
     }
 
     if (err instanceof DomainNotFound && err.meta && err.meta.domain) {
@@ -631,9 +1777,6 @@ export default async (client: Client): Promise<number> => {
 
       if (purchase === true) {
         output.success(`Successfully purchased the domain ${err.meta.domain}!`);
-
-        // We exit if the purchase is completed since
-        // the domain verification can take some time
         return 0;
       }
 
@@ -660,21 +1803,88 @@ export default async (client: Client): Promise<number> => {
       err instanceof AliasDomainConfigured ||
       err instanceof MissingBuildScript ||
       err instanceof ConflictingFilePath ||
-      err instanceof ConflictingPathSegment
+      err instanceof ConflictingPathSegment ||
+      err instanceof ConflictingConfigFiles
     ) {
+      if (client.nonInteractive) {
+        client.stdout.write(
+          `${JSON.stringify(
+            {
+              status: AGENT_STATUS.ERROR,
+              reason: 'deploy_failed',
+              message: err instanceof Error ? err.message : String(err),
+              next: [
+                {
+                  command: getCommandNameWithGlobalFlags('deploy', client.argv),
+                  when: 'retry deploy',
+                },
+              ],
+            },
+            null,
+            2
+          )}\n`
+        );
+      }
       handleCreateDeployError(err, localConfig);
       return 1;
     }
 
     if (err instanceof BuildError) {
-      output.error(err.message || 'Build failed');
-      output.log('\n');
-      output.log(
-        `To check build logs run: ${getCommandName(
-          `inspect ${now.url} --logs`
-        )}`
-      );
-      output.log(`Or inspect them in your browser at https://${now.url}/_logs`);
+      if (now.url) {
+        try {
+          const failedDeployment = await getDeployment(
+            client,
+            contextName,
+            now.url
+          );
+
+          if (asJson) {
+            output.stopSpinner();
+            client.stdout.write(
+              `${JSON.stringify(
+                getDeploymentOutputJson(failedDeployment, client.apiUrl, {
+                  name: 'BUILD_ERROR',
+                  message: err.message,
+                }),
+                null,
+                2
+              )}\n`
+            );
+          } else if (withFullLogs === false) {
+            await displayBuildLogsUntilFinalError(
+              client,
+              failedDeployment,
+              err.message
+            );
+          }
+        } catch (_) {
+          if (asJson) {
+            output.stopSpinner();
+            client.stdout.write(
+              `${JSON.stringify(
+                {
+                  error: {
+                    name: 'BUILD_ERROR',
+                    message: err.message,
+                  },
+                  url: `https://${now.url}`,
+                },
+                null,
+                2
+              )}\n`
+            );
+          } else {
+            output.log(
+              `To check build logs run: ${getCommandName(
+                `inspect ${now.url} --logs`
+              )}`
+            );
+            output.log(
+              `Or inspect them in your browser at https://${now.url}/_logs`
+            );
+          }
+        }
+      }
 
       return 1;
     }
@@ -682,16 +1892,92 @@ export default async (client: Client): Promise<number> => {
     if (isAPIError(err) && err.code === 'size_limit_exceeded') {
       const { sizeLimit = 0 } = err;
       const message = `File size limit exceeded (${bytes(sizeLimit)})`;
+      if (client.nonInteractive) {
+        client.stdout.write(
+          `${JSON.stringify(
+            {
+              status: AGENT_STATUS.ERROR,
+              reason: 'size_limit_exceeded',
+              message,
+              next: [
+                {
+                  command: getCommandNameWithGlobalFlags('deploy', client.argv),
+                  when: 'retry deploy',
+                },
+              ],
+            },
+            null,
+            2
+          )}\n`
+        );
+      }
       error(message);
       return 1;
     }
 
+    if (client.nonInteractive) {
+      client.stdout.write(
+        `${JSON.stringify(
+          {
+            status: AGENT_STATUS.ERROR,
+            reason: 'deploy_failed',
+            message: err instanceof Error ? err.message : String(err),
+            next: [
+              {
+                command: getCommandNameWithGlobalFlags('deploy', client.argv),
+                when: 'retry deploy',
+              },
+            ],
+          },
+          null,
+          2
+        )}\n`
+      );
+    }
     printError(err);
     return 1;
   }
 
-  return printDeploymentStatus(deployment, deployStamp, noWait);
-};
+  if (asJson) {
+    output.stopSpinner();
+    const deploymentJson = getDeploymentOutputJson(deployment, client.apiUrl);
+    const payload = client.nonInteractive
+      ? {
+          status: AGENT_STATUS.OK,
+          deployment: deploymentJson,
+          message: `Deployment ${deployment.url} ready.`,
+          next: [
+            {
+              command: getCommandNameWithGlobalFlags(
+                `inspect ${deployment.url}`,
+                client.argv
+              ),
+              when: 'Inspect deployment',
+            },
+            {
+              command: getCommandNameWithGlobalFlags(
+                'deploy --prod',
+                client.argv
+              ),
+              when: 'Promote to production',
+            },
+          ],
+        }
+      : deploymentJson;
+    client.stdout.write(`${JSON.stringify(payload, null, 2)}\n`);
+    return 0;
+  }
+
+  const { isAgent } = await determineAgent();
+  const guidanceMode = parsedArguments.flags['--guidance'] ?? isAgent;
+  return printDeploymentStatus(
+    client,
+    deployment,
+    deployStamp,
+    noWait,
+    guidanceMode
+  );
+}
 
 function handleCreateDeployError(error: Error, localConfig: VercelConfig) {
   if (error instanceof InvalidDomain) {
@@ -724,7 +2010,7 @@ function handleCreateDeployError(error: Error, localConfig: VercelConfig) {
   if (error instanceof TooManyRequests) {
     output.error(
       `Too many requests detected for ${error.meta.api} API. Try again in ${ms(
-        error.meta.retryAfter * 1000,
+        error.meta.retryAfterMs,
         {
           long: true,
         }
@@ -754,7 +2040,9 @@ function handleCreateDeployError(error: Error, localConfig: VercelConfig) {
     error instanceof AliasDomainConfigured ||
     error instanceof MissingBuildScript ||
     error instanceof ConflictingFilePath ||
-    error instanceof ConflictingPathSegment
+    error instanceof ConflictingPathSegment ||
+    error instanceof ConflictingConfigFiles ||
+    error instanceof DeprecatedNowJson
   ) {
     output.error(error.message);
     return 1;
@@ -763,28 +2051,6 @@ function handleCreateDeployError(error: Error, localConfig: VercelConfig) {
   return error;
 }
 
-/**
- * Adds missing environment variables from process.env to the provided env object.
- * @param {Function} log - The logging function.
- * @param {Object} env - The environment object to add missing variables to.
- * @returns {Promise<void>} - A promise that resolves when all missing variables are added.
- * @throws {Error} - If a missing variable is not found in the environment object or process.env.
- * @example
- * const log = (str) => console.log(str);
- * const env = { "FOO": undefined, "BAR": "baz" };
- * process.env["FOO"] = "fooValue";
- * process.env["VOZ"] = "vozValue"; // not in `env`
- *
- * await addProcessEnv(log, env);
- * assert(env["FOO"] === "fooValue"); // true
- * assert(env["VOZ"] === undefined); // true, since it was not in `env`
- *
- * @example
- * const log = (str) => console.log(str);
- * const env = { "FOO": undefined, "BAR": "baz" };
- *
- * await addProcessEnv(log, env); // throws an error
- */
 const addProcessEnv = async (
   log: (str: string) => void,
   env: typeof process.env
@@ -804,7 +2070,6 @@ const addProcessEnv = async (
           `"${chalk.bold(key)}"`
         )} from your env (as no value was specified)`
       );
-      // Escape value if it begins with @
       env[key] = val.replace(/^@/, '\\@');
     } else {
       throw new Error(
@@ -815,3 +2080,381 @@ const addProcessEnv = async (
     }
   }
 };
+
+async function handleContinueDeployment({
+  client,
+  deploymentId,
+  cwd,
+  deployStamp,
+  noWait,
+  org,
+  vercelOutputDir,
+  archive,
+}: {
+  client: Client;
+  deploymentId: string;
+  cwd: string;
+  deployStamp: () => string;
+  noWait: boolean;
+  org: { type: string; id: string; slug: string };
+  vercelOutputDir: string | undefined;
+  archive?: ArchiveFormat;
+}): Promise<number> {
+  const { debug, error } = output;
+
+  debug(`Continuing deployment: ${deploymentId}`);
+
+  if (!vercelOutputDir) {
+    error('Could not determine vercel output directory');
+    return 1;
+  }
+
+  const token = client.authConfig.token;
+  if (!token) {
+    error('Missing authentication token');
+    return 1;
+  }
+
+  output.spinner(`Continuing deployment…`, 0);
+
+  try {
+    let finalDeployment: any = null;
+
+    for await (const event of continueDeployment({
+      apiUrl: client.apiUrl,
+      debug: output.isDebugEnabled(),
+      deploymentId,
+      archive,
+      path: cwd,
+      teamId: org.type === 'team' ? org.id : undefined,
+      token,
+      vercelOutputDir,
+    })) {
+      debug(`Event: ${event.type}`);
+
+      if (event.type === 'hashes-calculated') {
+        const hashCount = Object.keys(event.payload).length;
+        debug(`Calculated ${hashCount} hashes`);
+      }
+
+      if (event.type === 'file-count') {
+        const { total, missing } = event.payload;
+        output.spinner(
+          `Uploading ${missing.length} of ${total.size} files…`,
+          0
+        );
+      }
+
+      if (event.type === 'file-uploaded') {
+        debug(`Uploaded: ${event.payload.file.names.join(' ')}`);
+      }
+
+      if (event.type === 'all-files-uploaded') {
+        output.spinner('Continuing deployment…', 0);
+      }
+
+      if (event.type === 'created') {
+        finalDeployment = event.payload;
+        output.stopSpinner();
+
+        if (finalDeployment.inspectorUrl) {
+          printAlignedLabel(
+            'Inspect',
+            chalk.cyan(finalDeployment.inspectorUrl)
+          );
+        }
+
+        const isProdDeployment = finalDeployment.target === 'production';
+        const previewUrl = `https://${finalDeployment.url}`;
+        printAlignedLabel(
+          isProdDeployment ? 'Production' : 'Preview',
+          chalk.cyan(previewUrl),
+          isProdDeployment ? { gutter: '▲' } : {}
+        );
+
+        if (noWait) {
+          return printDeploymentStatus(
+            client,
+            finalDeployment,
+            deployStamp,
+            noWait,
+            false
+          );
+        }
+
+        output.spinner('Building…', 0);
+      }
+
+      if (event.type === 'building') {
+        output.spinner('Building…', 0);
+      }
+
+      if (event.type === 'ready') {
+        finalDeployment = event.payload;
+        output.stopSpinner();
+      }
+
+      if (event.type === 'alias-assigned') {
+        finalDeployment = event.payload;
+        output.stopSpinner();
+
+        if (
+          finalDeployment.target === 'production' &&
+          finalDeployment.alias &&
+          finalDeployment.alias.length > 0
+        ) {
+          const primaryDomain = finalDeployment.alias[0];
+          const prodUrl = `https://${primaryDomain}`;
+          printAlignedLabel('Aliased', chalk.cyan(prodUrl), { gutter: '▲' });
+        }
+      }
+
+      if (event.type === 'checks-v2-failed') {
+        output.stopSpinner();
+        return handleFailedCheckRuns(client, event.payload, false);
+      }
+
+      if (event.type === 'error') {
+        output.stopSpinner();
+        const payload = event.payload;
+        error(payload.message || 'An error occurred during deployment');
+        return 1;
+      }
+    }
+
+    if (!finalDeployment) {
+      error('Deployment failed: no deployment returned');
+      return 1;
+    }
+
+    return printDeploymentStatus(
+      client,
+      finalDeployment,
+      deployStamp,
+      noWait,
+      false
+    );
+  } catch (err: unknown) {
+    output.stopSpinner();
+    if (isError(err)) {
+      debug(`Error: ${err}\n${err.stack}`);
+      error(err.message);
+    } else {
+      error('An unexpected error occurred');
+    }
+    return 1;
+  }
+}
+
+function getDeploymentOutputJson(
+  deployment: {
+    id: string;
+    url: string;
+    inspectorUrl?: string | null;
+    readyState: string;
+    target?: string | null;
+  },
+  apiUrl: string,
+  error?: { name: string; message: string }
+) {
+  return {
+    id: deployment.id,
+    url: `https://${deployment.url}`,
+    inspectorUrl: deployment.inspectorUrl ?? null,
+    readyState: deployment.readyState,
+    target: deployment.target ?? null,
+    deploymentApiUrl: `${apiUrl}/v13/deployments/${deployment.id}`,
+    ...(error ? { error } : {}),
+  };
+}
+
+// Keep one reconciliation fetch for ambiguous terminal states where alias/check
+// details may have changed after the payload we are holding was produced.
+function shouldReconcileFinalDeployment(
+  deployment:
+    | {
+        readyState?: string;
+        aliasAssigned?: boolean | number | null;
+        aliasError?: unknown;
+        checksConclusion?: string;
+        checks?: {
+          'deployment-alias'?: {
+            state?: string;
+          };
+        };
+      }
+    | null
+    | undefined
+): boolean {
+  if (!deployment) {
+    return false;
+  }
+
+  if (deployment.readyState !== 'READY') {
+    return true;
+  }
+
+  if (deployment.aliasError || !deployment.aliasAssigned) {
+    return true;
+  }
+
+  if (
+    deployment.checksConclusion === 'failed' ||
+    deployment.checks?.['deployment-alias']?.state === 'failed'
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+// v2 checks: fetch check runs and print failures
+async function handleFailedCheckRuns(
+  client: Client,
+  deployment: {
+    id: string;
+    url: string;
+    inspectorUrl?: string | null;
+    readyState: string;
+    target?: string | null;
+  },
+  asJson: boolean
+): Promise<number> {
+  const { runs } = await getDeploymentCheckRuns(client, deployment.id);
+
+  const failedRuns = (runs ?? []).filter(run => run.conclusion === 'failed');
+  const counters = new Map<string, number>();
+  (runs ?? []).forEach(r => {
+    counters.set(r.conclusion, (counters.get(r.conclusion) ?? 0) + 1);
+  });
+  const counterList = Array.from(counters)
+    .map(([name, no]) => `${no} ${name}`)
+    .join(', ');
+
+  const message = `Running Checks: ${counterList}`;
+
+  const getCheckRunUrl = (run: {
+    id: string;
+    externalUrl?: string | null;
+    detailsUrl?: string | null;
+  }) => {
+    if (run.externalUrl) return run.externalUrl;
+    if (run.detailsUrl) return run.detailsUrl;
+    return deployment.inspectorUrl
+      ? `${deployment.inspectorUrl}?checkRunLog=${encodeURIComponent(run.id)}`
+      : null;
+  };
+
+  if (asJson) {
+    output.stopSpinner();
+    const deploymentJson = getDeploymentOutputJson(deployment, client.apiUrl, {
+      name: 'CHECKS_FAILED',
+      message,
+    });
+
+    let payload;
+    if (client.nonInteractive) {
+      const failedCheckRunsWithLogs = await Promise.all(
+        failedRuns.map(async run => {
+          let logs: { level: string; timestamp: number; message: string }[] =
+            [];
+          try {
+            logs = await getDeploymentCheckRunLogs(
+              client,
+              deployment.id,
+              run.id
+            );
+          } catch {
+            // best-effort: if log fetching fails, continue without logs
+          }
+          return {
+            id: run.id,
+            name: run.name,
+            conclusion: run.conclusion,
+            source: run.source,
+            url: getCheckRunUrl(run),
+            logs,
+          };
+        })
+      );
+
+      payload = {
+        status: AGENT_STATUS.ERROR,
+        reason: 'checks_failed',
+        message,
+        deployment: deploymentJson,
+        failedCheckRuns: failedCheckRunsWithLogs,
+        next: [
+          {
+            command: getCommandNameWithGlobalFlags('deploy', client.argv),
+            when: 'retry deploy after fixing check failures',
+          },
+        ],
+      };
+    } else {
+      payload = deploymentJson;
+    }
+
+    client.stdout.write(`${JSON.stringify(payload, null, 2)}\n`);
+  } else {
+    output.error(message);
+    for (const run of failedRuns) {
+      const dashboardUrl = getCheckRunUrl(run);
+      const label = dashboardUrl
+        ? output.link(run.name, dashboardUrl)
+        : run.name;
+      output.print(`  ${chalk.red('✗')} ${label}\n`);
+    }
+  }
+
+  return 1;
+}
+
+/**
+ * Validate the project framework and PATCH the project to toggle
+ * `enableFunctionsBeta`. Shared between `handleInitDeployment` and
+ * `handleDefaultDeploy` to avoid duplication.
+ */
+async function applyFunctionsBetaToggle(
+  client: Client,
+  project: { id: string; framework?: string | null },
+  functionsBeta: boolean | undefined,
+  noFunctionsBeta: boolean | undefined
+): Promise<{ error: false } | { error: true; exitCode: number }> {
+  if (functionsBeta) {
+    if (
+      project.framework &&
+      !PYTHON_FRAMEWORKS.includes(
+        project.framework as (typeof PYTHON_FRAMEWORKS)[number]
+      )
+    ) {
+      output.error(
+        'Extended function limits are only available for Python projects. ' +
+          `This project uses "${project.framework}".`
+      );
+      return { error: true, exitCode: 1 };
+    }
+    if (!project.framework) {
+      output.warn(
+        'Project framework is not set. Extended function limits are designed for Python projects.'
+      );
+    }
+  }
+
+  await client.fetch(`/v9/projects/${encodeURIComponent(project.id)}`, {
+    method: 'PATCH',
+    body: {
+      resourceConfig: {
+        enableFunctionsBeta: !!functionsBeta,
+      },
+    },
+  });
+
+  if (functionsBeta) {
+    output.log('Extended function limits (Beta) enabled for this project.');
+  } else {
+    output.log('Extended function limits (Beta) disabled for this project.');
+  }
+
+  return { error: false };
+}

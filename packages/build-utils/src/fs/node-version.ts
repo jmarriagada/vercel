@@ -1,6 +1,6 @@
 import { statSync } from 'fs';
 import { intersects, validRange } from 'semver';
-import { NodeVersion } from '../types';
+import { BunVersion, NodeVersion, Version } from '../types';
 import { NowBuildError } from '../errors';
 import debug from '../debug';
 
@@ -9,6 +9,11 @@ export type NodeVersionMajor = ReturnType<typeof getOptions>[number]['major'];
 // `NODE_VERSIONS` is assumed to be sorted by version number
 // with the newest supported version first
 export const NODE_VERSIONS: NodeVersion[] = [
+  new NodeVersion({
+    major: 24,
+    range: '24.x',
+    runtime: 'nodejs24.x',
+  }),
   new NodeVersion({
     major: 22,
     range: '22.x',
@@ -23,6 +28,7 @@ export const NODE_VERSIONS: NodeVersion[] = [
     major: 18,
     range: '18.x',
     runtime: 'nodejs18.x',
+    discontinueDate: new Date('2025-09-01'),
   }),
   new NodeVersion({
     major: 16,
@@ -56,27 +62,35 @@ export const NODE_VERSIONS: NodeVersion[] = [
   }),
 ];
 
+export const BUN_VERSIONS: BunVersion[] = [
+  new BunVersion({
+    major: 1,
+    range: '1.x',
+    runtime: 'bun1.x',
+  }),
+];
+
 export function getNodeVersionByMajor(major: number): NodeVersion | undefined {
-  return NODE_VERSIONS.find(v => v.major === major);
+  return getOptions().find(v => v.major === major);
 }
 
-function getOptions() {
+function getOptions(): NodeVersion[] {
   return NODE_VERSIONS;
 }
 
 function isNodeVersionAvailable(version: NodeVersion): boolean {
-  try {
-    return statSync(`/node${version.major}`).isDirectory();
-  } catch {
-    // ENOENT, or any other error, we don't care about
-  }
-  return false;
+  const stat = statSync(`/node${version.major}`, { throwIfNoEntry: false });
+  return stat?.isDirectory() ?? false;
 }
 
 export function getAvailableNodeVersions(): NodeVersionMajor[] {
-  return getOptions()
-    .filter(isNodeVersionAvailable)
-    .map(n => n.major);
+  return (
+    getOptions()
+      // Only check versions >= 18, as older versions don't have directories in the build container
+      .filter(v => v.major >= 18)
+      .filter(isNodeVersionAvailable)
+      .map(n => n.major)
+  );
 }
 
 function getHint(isAuto = false, availableVersions?: NodeVersionMajor[]) {
@@ -134,8 +148,8 @@ export async function getSupportedNodeVersion(
     if (!found) {
       throw new NowBuildError({
         code: 'BUILD_UTILS_NODE_VERSION_INVALID',
-        link: 'http://vercel.link/node-version',
-        message: `Found invalid Node.js Version: "${engineRange}". ${getHint(
+        link: 'https://vercel.link/node-version',
+        message: `Found invalid or discontinued Node.js Version: "${engineRange}". ${getHint(
           isAuto,
           availableVersions
         )}`,
@@ -151,7 +165,7 @@ export async function getSupportedNodeVersion(
     const intro = `Node.js Version "${selection.range}" is discontinued and must be upgraded.`;
     throw new NowBuildError({
       code: 'BUILD_UTILS_NODE_VERSION_DISCONTINUED',
-      link: 'http://vercel.link/node-version',
+      link: 'https://vercel.link/node-version',
       message: `${intro} ${getHint(isAuto)}`,
     });
   }
@@ -180,4 +194,29 @@ export async function getSupportedNodeVersion(
   }
 
   return selection;
+}
+
+export function getSupportedBunVersion(engineRange: string): BunVersion {
+  if (validRange(engineRange)) {
+    const selected = BUN_VERSIONS.find(version => {
+      return intersects(version.range, engineRange);
+    });
+
+    if (selected) {
+      return new BunVersion({
+        major: selected.major,
+        range: selected.range,
+        runtime: selected.runtime,
+      });
+    }
+  }
+
+  throw new NowBuildError({
+    message: `Found invalid Bun Version: "${engineRange}".`,
+    code: 'BUILD_UTILS_BUN_VERSION_INVALID',
+  });
+}
+
+export function isBunVersion(version: Version) {
+  return version.runtime.startsWith('bun');
 }

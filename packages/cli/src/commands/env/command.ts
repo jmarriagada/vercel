@@ -1,6 +1,6 @@
 import { packageName } from '../../util/pkg-name';
 import { getEnvTargetPlaceholder } from '../../util/env/env-target';
-import { forceOption, yesOption } from '../../util/arg-common';
+import { forceOption, formatOption, yesOption } from '../../util/arg-common';
 
 const targetPlaceholder = getEnvTargetPlaceholder();
 
@@ -18,7 +18,16 @@ export const listSubcommand = {
       required: false,
     },
   ],
-  options: [],
+  options: [
+    formatOption,
+    {
+      name: 'guidance',
+      description: 'Receive command suggestions once command is complete',
+      shorthand: null,
+      type: Boolean,
+      deprecated: false,
+    },
+  ],
   examples: [],
 } as const;
 
@@ -35,11 +44,24 @@ export const addSubcommand = {
       name: 'environment',
       required: false,
     },
+    {
+      name: 'git-branch',
+      required: false,
+    },
   ],
   options: [
     {
       name: 'sensitive',
-      description: 'Add a sensitive Environment Variable',
+      description:
+        'Force the Environment Variable to be sensitive, even when adding to Development (will fail server-side)',
+      shorthand: null,
+      type: Boolean,
+      deprecated: false,
+    },
+    {
+      name: 'no-sensitive',
+      description:
+        'Opt out of the sensitive default on Production and Preview; value remains readable later',
       shorthand: null,
       type: Boolean,
       deprecated: false,
@@ -48,6 +70,27 @@ export const addSubcommand = {
       ...forceOption,
       description: 'Force overwrites when a command would normally fail',
       shorthand: null,
+    },
+    {
+      ...yesOption,
+      description:
+        'Skip the confirmation prompt when adding an Environment Variable',
+    },
+    {
+      name: 'guidance',
+      description: 'Receive command suggestions once command is complete',
+      shorthand: null,
+      type: Boolean,
+      deprecated: false,
+    },
+    {
+      name: 'value',
+      description:
+        'Value for the variable (non-interactive). Otherwise use stdin or you will be prompted.',
+      shorthand: null,
+      type: String,
+      argument: 'VALUE',
+      deprecated: false,
     },
   ],
   examples: [
@@ -70,13 +113,13 @@ export const addSubcommand = {
       value: `${packageName} env add API_TOKEN --force`,
     },
     {
-      name: 'Add a sensitive Environment Variable',
-      value: `${packageName} env add API_TOKEN --sensitive`,
+      name: 'Add a regular (non-sensitive) Environment Variable that remains readable later',
+      value: `${packageName} env add API_TOKEN --no-sensitive`,
     },
     {
       name: 'Add a new Environment Variable for a specific Environment and Git Branch',
       value: [
-        `${packageName} env add <name> ${targetPlaceholder} <git-branch>`,
+        `${packageName} env add <name> ${targetPlaceholder} <gitbranch>`,
         `${packageName} env add DB_PASS preview feat1`,
       ],
     },
@@ -87,6 +130,10 @@ export const addSubcommand = {
         `cat ~/.npmrc | ${packageName} env add NPM_RC preview`,
         `${packageName} env add API_URL production < url.txt`,
       ],
+    },
+    {
+      name: 'Add with value as argument (non-interactive)',
+      value: `${packageName} env add API_TOKEN production --value "secret" --yes`,
     },
   ],
 } as const;
@@ -167,6 +214,15 @@ export const pullSubcommand = {
       deprecated: false,
     },
     {
+      name: 'id',
+      description:
+        'Pull environment variables for a specific deployment (e.g. dpl_xxx)',
+      shorthand: null,
+      type: String,
+      argument: 'ID',
+      deprecated: false,
+    },
+    {
       ...yesOption,
       description:
         'Skip the confirmation prompt when removing an environment variable',
@@ -178,6 +234,125 @@ export const pullSubcommand = {
       value: [
         `${packageName} env pull <file>`,
         `${packageName} env pull .env.development.local`,
+      ],
+    },
+    {
+      name: 'Pull environment variables for a specific deployment',
+      value: `${packageName} env pull --id dpl_xxx`,
+    },
+  ],
+} as const;
+
+export const runSubcommand = {
+  name: 'run',
+  aliases: [],
+  description:
+    'Run a command with environment variables from the linked Vercel project',
+  arguments: [
+    {
+      name: 'command',
+      required: true,
+      multiple: true,
+    },
+  ],
+  options: [
+    {
+      name: 'environment',
+      description:
+        'Specify the environment to pull variables from (default: development)',
+      shorthand: 'e',
+      type: String,
+      argument: 'TARGET',
+      deprecated: false,
+    },
+    {
+      name: 'git-branch',
+      description:
+        'Specify the Git branch to pull specific Environment Variables for',
+      shorthand: null,
+      type: String,
+      argument: 'NAME',
+      deprecated: false,
+    },
+  ],
+  examples: [
+    {
+      name: 'Run Next.js dev server with development environment variables',
+      value: `${packageName} env run -- next dev`,
+    },
+    {
+      name: 'Run tests with preview environment variables for a specific branch',
+      value: `${packageName} env run -e preview --git-branch feature-x -- npm test`,
+    },
+  ],
+} as const;
+
+export const updateSubcommand = {
+  name: 'update',
+  aliases: [],
+  description:
+    'Update the value of an existing Environment Variable (see examples below)',
+  arguments: [
+    {
+      name: 'name',
+      required: true,
+    },
+    {
+      name: 'environment',
+      required: false,
+    },
+  ],
+  options: [
+    {
+      name: 'sensitive',
+      description: 'Update to a sensitive Environment Variable',
+      shorthand: null,
+      type: Boolean,
+      deprecated: false,
+    },
+    {
+      ...yesOption,
+      description:
+        'Skip the confirmation prompt when updating an Environment Variable',
+    },
+    {
+      name: 'value',
+      description:
+        'New value for the variable (non-interactive). Otherwise use stdin or you will be prompted.',
+      shorthand: null,
+      type: String,
+      argument: 'VALUE',
+      deprecated: false,
+    },
+  ],
+  examples: [
+    {
+      name: 'Update a variable in all Environments',
+      value: [
+        `${packageName} env update <name>`,
+        `${packageName} env update API_TOKEN`,
+      ],
+    },
+    {
+      name: 'Update a variable in a specific Environment',
+      value: [
+        `${packageName} env update <name> ${targetPlaceholder}`,
+        `${packageName} env update DB_PASS production`,
+      ],
+    },
+    {
+      name: 'Update a variable for a specific Environment and Git Branch',
+      value: [
+        `${packageName} env update <name> ${targetPlaceholder} <gitbranch>`,
+        `${packageName} env update NPM_RC preview feat1`,
+      ],
+    },
+    {
+      name: 'Update a variable from stdin',
+      value: [
+        `cat <file> | ${packageName} env update <name> ${targetPlaceholder}`,
+        `cat ~/.npmrc | ${packageName} env update NPM_RC preview`,
+        `${packageName} env update API_URL production < url.txt`,
       ],
     },
   ],
@@ -193,7 +368,14 @@ export const envCommand = {
     listSubcommand,
     pullSubcommand,
     removeSubcommand,
+    runSubcommand,
+    updateSubcommand,
   ],
   options: [],
-  examples: [],
+  examples: [
+    {
+      name: 'Run a command with Environment Variables from the linked Project',
+      value: `${packageName} env run -- <command>`,
+    },
+  ],
 } as const;

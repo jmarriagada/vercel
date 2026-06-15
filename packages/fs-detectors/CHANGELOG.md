@@ -1,5 +1,1064 @@
 # @vercel/fs-detectors
 
+## 6.9.0
+
+### Minor Changes
+
+- 3d8df16: Add bun preset.
+
+### Patch Changes
+
+- Updated dependencies [2fd14e0]
+- Updated dependencies [68c2fd7]
+- Updated dependencies [3d8df16]
+  - @vercel/frameworks@3.29.0
+
+## 6.8.5
+
+### Patch Changes
+
+- Updated dependencies [4421ad9]
+  - @vercel/frameworks@3.28.1
+
+## 6.8.4
+
+### Patch Changes
+
+- Updated dependencies [01e18e8]
+  - @vercel/build-utils@13.30.0
+
+## 6.8.3
+
+### Patch Changes
+
+- 32a730e: Elevate maximum maxDuration to 1800s
+- Updated dependencies [32a730e]
+  - @vercel/build-utils@13.29.1
+
+## 6.8.2
+
+### Patch Changes
+
+- Updated dependencies [8d8e871]
+- Updated dependencies [90a7cc1]
+  - @vercel/build-utils@13.29.0
+  - @vercel/routing-utils@6.3.0
+  - @vercel/frameworks@3.28.0
+
+## 6.8.1
+
+### Patch Changes
+
+- Updated dependencies [4e849dd]
+  - @vercel/build-utils@13.28.0
+
+## 6.8.0
+
+### Minor Changes
+
+- 1a9558b: Add warning when api/ dir is ignored by experimental services.
+
+### Patch Changes
+
+- c5eeb30: Gate the client-side 900-second `maxDuration` upper bound behind the `VERCEL_CLI_SKIP_MAX_DURATION_LIMIT` environment variable. The limit is now owned by a single helper in `@vercel/build-utils` instead of being hardcoded in multiple validators. When the variable is set to `1`, the client-side maximum is skipped and validation defers to the server. Default behavior is unchanged — the maximum, the lower bound, and the integer check are all still enforced when the variable is unset.
+- 9f9eed3: Nest Build Output API files for `experimentalServicesV2` under `.vercel/output/services/<name>`.
+- Updated dependencies [4bd58f2]
+- Updated dependencies [c5eeb30]
+- Updated dependencies [b98053e]
+- Updated dependencies [09c39af]
+  - @vercel/frameworks@3.28.0
+  - @vercel/build-utils@13.27.2
+
+## 6.7.8
+
+### Patch Changes
+
+- 0a170fd: [services] wire `experimentalServicesV2` into `fs-detectors`.
+- Updated dependencies [0a170fd]
+  - @vercel/build-utils@13.27.1
+
+## 6.7.7
+
+### Patch Changes
+
+- Updated dependencies [338cc35]
+  - @vercel/build-utils@13.27.0
+
+## 6.7.6
+
+### Patch Changes
+
+- 3019788: [services] Remove the `services` field from `vercel.json` and the `VERCEL_USE_SERVICES` gate.
+- Updated dependencies [3019788]
+- Updated dependencies [fe893ec]
+- Updated dependencies [fddeb55]
+- Updated dependencies [c0f1229]
+  - @vercel/build-utils@13.26.6
+  - @vercel/error-utils@2.2.0
+  - @vercel/frameworks@3.27.0
+
+## 6.7.5
+
+### Patch Changes
+
+- Updated dependencies [1180675]
+  - @vercel/build-utils@13.26.5
+
+## 6.7.4
+
+### Patch Changes
+
+- 1444502: Support discovering `experimentalServices` from Build Output API config during `vercel build`.
+
+## 6.7.3
+
+### Patch Changes
+
+- 6495585: [services] drop top-level `env` support for the new `service-ref` shape for services.
+- Updated dependencies [6495585]
+  - @vercel/build-utils@13.26.4
+
+## 6.7.2
+
+### Patch Changes
+
+- Updated dependencies [b66bd3e]
+  - @vercel/build-utils@13.26.3
+
+## 6.7.1
+
+### Patch Changes
+
+- Updated dependencies [647c1e8]
+  - @vercel/build-utils@13.26.2
+
+## 6.7.0
+
+### Minor Changes
+
+- feb8bed: Detect entrypoint file from render yaml.
+
+### Patch Changes
+
+- Updated dependencies [fa25cb7]
+- Updated dependencies [972cc84]
+  - @vercel/build-utils@13.26.1
+
+## 6.6.0
+
+### Minor Changes
+
+- 20247d6: Use builder entrypoint detection in service auto-detection.
+
+## 6.5.0
+
+### Minor Changes
+
+- 0c762a7: [services] detect services from Render
+- e1f4dd5: [services] detect services from Procfile
+
+### Patch Changes
+
+- Updated dependencies [bb61428]
+- Updated dependencies [137e5d1]
+  - @vercel/build-utils@13.26.0
+
+## 6.4.0
+
+### Minor Changes
+
+- 4fc110b: [services] add preDeployCommand for experimentalServices
+
+### Patch Changes
+
+- Updated dependencies [0dbb8e5]
+- Updated dependencies [fb0cb8d]
+- Updated dependencies [4fc110b]
+  - @vercel/frameworks@3.26.1
+  - @vercel/build-utils@13.25.0
+
+## 6.3.0
+
+### Minor Changes
+
+- d874af6: Add support for env vars injection that reference other services in `services` with an explicit `env` configuration.
+
+### Patch Changes
+
+- Updated dependencies [d874af6]
+  - @vercel/build-utils@13.24.0
+
+## 6.2.2
+
+### Patch Changes
+
+- 979d70a: [services] `services` schema support
+- Updated dependencies [51785a6]
+- Updated dependencies [22f77b9]
+- Updated dependencies [979d70a]
+  - @vercel/frameworks@3.26.0
+  - @vercel/build-utils@13.23.0
+
+## 6.2.1
+
+### Patch Changes
+
+- Updated dependencies [f0d7d32]
+  - @vercel/build-utils@13.22.1
+
+## 6.2.0
+
+### Minor Changes
+
+- b4ada64: Implement scheduled jobs for JS/TS.
+
+### Patch Changes
+
+- 1e08c83: [services] error on framework = "services" but no services configured
+- Updated dependencies [e53dd86]
+- Updated dependencies [c95a7ca]
+  - @vercel/build-utils@13.22.0
+  - @vercel/frameworks@3.25.1
+
+## 6.1.1
+
+### Patch Changes
+
+- 8a5aa6a: Ensure synthetic SPA fallbacks are merged after builder-produced routes.
+
+## 6.1.0
+
+### Minor Changes
+
+- c56f851: Upgrade to TypeScript 5.9
+
+### Patch Changes
+
+- Updated dependencies [c56f851]
+  - @vercel/routing-utils@6.2.0
+  - @vercel/build-utils@13.21.0
+  - @vercel/error-utils@2.1.0
+  - @vercel/frameworks@3.25.0
+
+## 6.0.1
+
+### Patch Changes
+
+- Updated dependencies [09d9000]
+  - @vercel/frameworks@3.24.2
+
+## 6.0.0
+
+### Major Changes
+
+- fix!: exclude configuration files from static deployments ([#16056](https://github.com/vercel/vercel/pull/16056))
+
+### Patch Changes
+
+- Updated dependencies [[`2aa78415831fe89d1b21dd89704706bd1ad5e78d`](https://github.com/vercel/vercel/commit/2aa78415831fe89d1b21dd89704706bd1ad5e78d), [`2aa78415831fe89d1b21dd89704706bd1ad5e78d`](https://github.com/vercel/vercel/commit/2aa78415831fe89d1b21dd89704706bd1ad5e78d)]:
+  - @vercel/build-utils@13.20.0
+
+## 5.19.1
+
+### Patch Changes
+
+- Updated dependencies [[`c1866cf1add2107f91cae8292e38e4854bfe0aca`](https://github.com/vercel/vercel/commit/c1866cf1add2107f91cae8292e38e4854bfe0aca)]:
+  - @vercel/build-utils@13.19.1
+
+## 5.19.0
+
+### Minor Changes
+
+- [services] move Python workers to v2beta triggers with private routing ([#15920](https://github.com/vercel/vercel/pull/15920))
+
+### Patch Changes
+
+- Updated dependencies [[`93be6d188176cdd4451a6c62155f3ccd7dfa89e1`](https://github.com/vercel/vercel/commit/93be6d188176cdd4451a6c62155f3ccd7dfa89e1), [`0793b7d31e4ff21dd12ff727f2906be2fd63fe3e`](https://github.com/vercel/vercel/commit/0793b7d31e4ff21dd12ff727f2906be2fd63fe3e)]:
+  - @vercel/build-utils@13.19.0
+
+## 5.18.3
+
+### Patch Changes
+
+- Updated dependencies [[`055f6239a4fe763b9f3b33cfbb5baa2e0e214767`](https://github.com/vercel/vercel/commit/055f6239a4fe763b9f3b33cfbb5baa2e0e214767)]:
+  - @vercel/build-utils@13.18.0
+
+## 5.18.2
+
+### Patch Changes
+
+- [experimental-services] add new job service type support ([#15944](https://github.com/vercel/vercel/pull/15944))
+
+- Updated dependencies [[`2a6344e205910dafc05cb74a80f98165d95322d7`](https://github.com/vercel/vercel/commit/2a6344e205910dafc05cb74a80f98165d95322d7)]:
+  - @vercel/build-utils@13.17.2
+
+## 5.18.1
+
+### Patch Changes
+
+- Updated dependencies [[`5219572d21a2ba4b49cc1c27d244c1ff5d76c591`](https://github.com/vercel/vercel/commit/5219572d21a2ba4b49cc1c27d244c1ff5d76c591)]:
+  - @vercel/build-utils@13.17.1
+
+## 5.18.0
+
+### Minor Changes
+
+- Support dynamically specifying crons from a python service ([#15930](https://github.com/vercel/vercel/pull/15930))
+
+### Patch Changes
+
+- Updated dependencies [[`44897297d569742e93725d71ca481803c9b0b9cc`](https://github.com/vercel/vercel/commit/44897297d569742e93725d71ca481803c9b0b9cc)]:
+  - @vercel/build-utils@13.17.0
+
+## 5.17.0
+
+### Minor Changes
+
+- Add root to experimentalServices to set a service's working directory. ([#15929](https://github.com/vercel/vercel/pull/15929))
+
+### Patch Changes
+
+- fix(node): scope entrypoint filter to `api/` directory only ([#15954](https://github.com/vercel/vercel/pull/15954))
+
+- Add actix framework preset ([#15752](https://github.com/vercel/vercel/pull/15752))
+
+- Updated dependencies [[`86d1f5b3cbd520af2632d4a3d6a1f24557448c0e`](https://github.com/vercel/vercel/commit/86d1f5b3cbd520af2632d4a3d6a1f24557448c0e), [`1056be976b6ba9b42cc1e2ffe895d255ab6c9850`](https://github.com/vercel/vercel/commit/1056be976b6ba9b42cc1e2ffe895d255ab6c9850), [`620c42ffa6d335c9a6e3e57a1e81c522696b7c2c`](https://github.com/vercel/vercel/commit/620c42ffa6d335c9a6e3e57a1e81c522696b7c2c), [`c27eedaa1b0e3f6e3770b578f62e5463d82f06e0`](https://github.com/vercel/vercel/commit/c27eedaa1b0e3f6e3770b578f62e5463d82f06e0)]:
+  - @vercel/build-utils@13.16.0
+  - @vercel/frameworks@3.24.1
+
+## 5.16.0
+
+### Minor Changes
+
+- Parse python module:variable entrypoint notation in experimentalServices for all service types. ([#15844](https://github.com/vercel/vercel/pull/15844))
+
+### Patch Changes
+
+- Updated dependencies [[`4e62f6c2204dd148643f86f140f0ae7995778017`](https://github.com/vercel/vercel/commit/4e62f6c2204dd148643f86f140f0ae7995778017), [`42a70e1e6318615bd420933f9cc978bed3a43936`](https://github.com/vercel/vercel/commit/42a70e1e6318615bd420933f9cc978bed3a43936)]:
+  - @vercel/build-utils@13.15.0
+
+## 5.15.2
+
+### Patch Changes
+
+- Add `mount` support for experimental services across config validation and service resolution. ([#15882](https://github.com/vercel/vercel/pull/15882))
+
+- Updated dependencies [[`9b3ea340f23c1faad6d56c2a54d75bb2e77b0162`](https://github.com/vercel/vercel/commit/9b3ea340f23c1faad6d56c2a54d75bb2e77b0162)]:
+  - @vercel/build-utils@13.14.2
+
+## 5.15.1
+
+### Patch Changes
+
+- feat(node): filter non-entrypoint Node.js files in `/api` directory ([#15873](https://github.com/vercel/vercel/pull/15873))
+
+- Updated dependencies [[`2e15ee828f14de4a849a462429ca03feab161174`](https://github.com/vercel/vercel/commit/2e15ee828f14de4a849a462429ca03feab161174), [`a31c84d1bda56a60da6d7bc6d611b0b18ba3bf57`](https://github.com/vercel/vercel/commit/a31c84d1bda56a60da6d7bc6d611b0b18ba3bf57)]:
+  - @vercel/build-utils@13.14.1
+
+## 5.15.0
+
+### Minor Changes
+
+- Support configuration via vercel.toml ([#15750](https://github.com/vercel/vercel/pull/15750))
+
+### Patch Changes
+
+- remove experimental flag on node preset ([#15628](https://github.com/vercel/vercel/pull/15628))
+
+- Updated dependencies [[`aea2272ac976a2e13591e402b2a41173cf51f740`](https://github.com/vercel/vercel/commit/aea2272ac976a2e13591e402b2a41173cf51f740), [`42b6ff3113eb7ba5302b8469f8dd10070ecec6f0`](https://github.com/vercel/vercel/commit/42b6ff3113eb7ba5302b8469f8dd10070ecec6f0)]:
+  - @vercel/frameworks@3.24.0
+  - @vercel/build-utils@13.14.0
+
+## 5.14.3
+
+### Patch Changes
+
+- Updated dependencies [[`a80217a9ed60d7b7f3e98537b0468cc5488078c1`](https://github.com/vercel/vercel/commit/a80217a9ed60d7b7f3e98537b0468cc5488078c1)]:
+  - @vercel/build-utils@13.13.0
+
+## 5.14.2
+
+### Patch Changes
+
+- Fall back to `--scope` flag for Turborepo versions 1.1 and below when generating default build commands. ([#15835](https://github.com/vercel/vercel/pull/15835))
+
+## 5.14.1
+
+### Patch Changes
+
+- Updated dependencies [[`d034d90dcf78316ddacdcce8fd51329fb7eefe82`](https://github.com/vercel/vercel/commit/d034d90dcf78316ddacdcce8fd51329fb7eefe82)]:
+  - @vercel/frameworks@3.23.0
+
+## 5.14.0
+
+### Minor Changes
+
+- [services] infer services from Railway configs ([#15787](https://github.com/vercel/vercel/pull/15787))
+
+## 5.13.1
+
+### Patch Changes
+
+- Updated dependencies [[`c98a02d87276f41b1580b78d37f9f671fd9d1f12`](https://github.com/vercel/vercel/commit/c98a02d87276f41b1580b78d37f9f671fd9d1f12)]:
+  - @vercel/build-utils@13.12.2
+
+## 5.13.0
+
+### Minor Changes
+
+- Simplify and streamline python builder logic ([#15696](https://github.com/vercel/vercel/pull/15696))
+
+### Patch Changes
+
+- Updated dependencies [[`f912eef614731a75ecdca3bee159cc59abd4c58e`](https://github.com/vercel/vercel/commit/f912eef614731a75ecdca3bee159cc59abd4c58e), [`6cb5c6e1216d7a0dbaa6f740875a36f1b7166900`](https://github.com/vercel/vercel/commit/6cb5c6e1216d7a0dbaa6f740875a36f1b7166900)]:
+  - @vercel/frameworks@3.22.0
+  - @vercel/build-utils@13.12.1
+
+## 5.12.2
+
+### Patch Changes
+
+- Updated dependencies [[`3427149c3751192b54bb4fad9d3b50f171a28666`](https://github.com/vercel/vercel/commit/3427149c3751192b54bb4fad9d3b50f171a28666)]:
+  - @vercel/build-utils@13.12.0
+
+## 5.12.1
+
+### Patch Changes
+
+- Updated dependencies [[`a54b8f246ac6b43ac8f1674093402e3fe145fd64`](https://github.com/vercel/vercel/commit/a54b8f246ac6b43ac8f1674093402e3fe145fd64)]:
+  - @vercel/build-utils@13.11.0
+
+## 5.12.0
+
+### Minor Changes
+
+- [services] support multiple topics for a single worker service ([#15615](https://github.com/vercel/vercel/pull/15615))
+
+- [services] support for specifying an env prefix for each service ([#15641](https://github.com/vercel/vercel/pull/15641))
+
+### Patch Changes
+
+- Updated dependencies [[`4839214ae9cbcc95d448429bf93133e58284e03f`](https://github.com/vercel/vercel/commit/4839214ae9cbcc95d448429bf93133e58284e03f), [`13f719da050ba4b73b95b51e8edf7141c967b9a2`](https://github.com/vercel/vercel/commit/13f719da050ba4b73b95b51e8edf7141c967b9a2), [`ece813e0a9a75e3ad262817f00050c62f5ad67eb`](https://github.com/vercel/vercel/commit/ece813e0a9a75e3ad262817f00050c62f5ad67eb), [`d7107d025500d6be305895dfd5cd89d87e6eb9f0`](https://github.com/vercel/vercel/commit/d7107d025500d6be305895dfd5cd89d87e6eb9f0), [`25a6a2daa46baba6e8d7dec90eb49213b8150b8c`](https://github.com/vercel/vercel/commit/25a6a2daa46baba6e8d7dec90eb49213b8150b8c)]:
+  - @vercel/build-utils@13.10.0
+  - @vercel/routing-utils@6.1.1
+  - @vercel/frameworks@3.21.1
+
+## 5.11.5
+
+### Patch Changes
+
+- Updated dependencies [[`e5564b684ee40dd60f745327ef206bbe58a5191a`](https://github.com/vercel/vercel/commit/e5564b684ee40dd60f745327ef206bbe58a5191a)]:
+  - @vercel/build-utils@13.9.0
+
+## 5.11.4
+
+### Patch Changes
+
+- Updated dependencies [[`62b9c34a92fe6d60d73f81a1674c2e483f12fc8f`](https://github.com/vercel/vercel/commit/62b9c34a92fe6d60d73f81a1674c2e483f12fc8f)]:
+  - @vercel/routing-utils@6.1.0
+  - @vercel/build-utils@13.8.2
+  - @vercel/frameworks@3.21.1
+
+## 5.11.3
+
+### Patch Changes
+
+- adds build utils to fs-detectors dependencies ([#15642](https://github.com/vercel/vercel/pull/15642))
+
+## 5.11.2
+
+### Patch Changes
+
+- [python] update celery worker services declaration to support broker_url="vercel://" instead of having to import from vercel.workers.celery ([#15454](https://github.com/vercel/vercel/pull/15454))
+
+- [services] prompt to auto-configure `experimentalServices` in `vercel.json` from layout during project link ([#15590](https://github.com/vercel/vercel/pull/15590))
+
+## 5.11.1
+
+### Patch Changes
+
+- Switch "node" framework preset to use @vercel/backends ([#15248](https://github.com/vercel/vercel/pull/15248))
+
+  Fix services-mode internal function output aliasing to use slashless `_svc/*` output keys so Node service routes can resolve their Lambda targets.
+
+- Improve services auto-detection so a single detected frontend at the project root, ([#15571](https://github.com/vercel/vercel/pull/15571))
+  `frontend/`, or `apps/<name>/` is mounted at `/` even without backend services.
+
+## 5.11.0
+
+### Minor Changes
+
+- [services] add support for background workers to vc dev ([#15434](https://github.com/vercel/vercel/pull/15434))
+
+### Patch Changes
+
+- [services] exclude service route prefixes on subdomain rewrites ([#15508](https://github.com/vercel/vercel/pull/15508))
+
+## 5.10.3
+
+### Patch Changes
+
+- Updated dependencies [[`04433cfd686bf27e3f63bc895c15f7e75918b0d7`](https://github.com/vercel/vercel/commit/04433cfd686bf27e3f63bc895c15f7e75918b0d7)]:
+  - @vercel/frameworks@3.21.1
+
+## 5.10.2
+
+### Patch Changes
+
+- [experimental-services] build using `experimentalServices` regardless of framework setting ([#15451](https://github.com/vercel/vercel/pull/15451))
+
+## 5.10.1
+
+### Patch Changes
+
+- Updated dependencies [[`9660ee0aee6113e9674918bbeb2b94db63d36702`](https://github.com/vercel/vercel/commit/9660ee0aee6113e9674918bbeb2b94db63d36702)]:
+  - @vercel/frameworks@3.21.0
+
+## 5.10.0
+
+### Minor Changes
+
+- Support `maxDuration: 'max'` to allow the backend to resolve the maximum duration based on account plan type ([#15217](https://github.com/vercel/vercel/pull/15217))
+
+## 5.9.1
+
+### Patch Changes
+
+- [services] adds support for subdomai configuration in experimentalServices ([#15401](https://github.com/vercel/vercel/pull/15401))
+
+## 5.9.0
+
+### Minor Changes
+
+- [python] add support for module-based entrypoints for cron jobs ([#15393](https://github.com/vercel/vercel/pull/15393))
+
+### Patch Changes
+
+- [python] add support for Python worker services with Django tasks ([#15396](https://github.com/vercel/vercel/pull/15396))
+
+## 5.8.18
+
+### Patch Changes
+
+- [services] adds support for python cron worker services ([#15175](https://github.com/vercel/vercel/pull/15175))
+
+## 5.8.17
+
+### Patch Changes
+
+- [fs-detectors] skip auto-detection for root-only projects ([#15364](https://github.com/vercel/vercel/pull/15364))
+
+- Add background worker service support for Python (Dramatiq/Celery) and propagate vercel headers context to worker handlers. ([#15361](https://github.com/vercel/vercel/pull/15361))
+
+## 5.8.16
+
+### Patch Changes
+
+- [services] run framework detection with file entrypoints ([#15358](https://github.com/vercel/vercel/pull/15358))
+
+- Updated dependencies [[`91e367532050b0c1f17c49df701017f85f4dc85a`](https://github.com/vercel/vercel/commit/91e367532050b0c1f17c49df701017f85f4dc85a), [`e6c736fb74bedb975caad76d4c1f1e589a1c6cc9`](https://github.com/vercel/vercel/commit/e6c736fb74bedb975caad76d4c1f1e589a1c6cc9), [`fac0a516914491cf662068e37cd00f50400e3b58`](https://github.com/vercel/vercel/commit/fac0a516914491cf662068e37cd00f50400e3b58)]:
+  - @vercel/frameworks@3.20.0
+  - @vercel/routing-utils@6.0.2
+
+## 5.8.15
+
+### Patch Changes
+
+- Fix App Router dynamic API routes returning 404 in production. When a project has both Next.js (App Router) and a root `api/` folder, zero-config added a catch-all `^/api(/.*)?# @vercel/fs-detectors → 404 in the filesystem phase, which runs before the rewrite phase where Next.js routes live. So requests like `/api/flow/hello/next`or`/api/blog/posts/5`matched the catch-all and never reached the Next.js route. When Next.js is the frontend we no longer add that rewrite so those routes are handled by Next.js. (Locally, only`next dev`worked;`vc dev` had the same 404.) ([#15297](https://github.com/vercel/vercel/pull/15297))
+
+## 5.8.14
+
+### Patch Changes
+
+- Fix `detectBuilders` so projects using experimental backends still add `@vercel/static` for `public/**/*` files. ([#15261](https://github.com/vercel/vercel/pull/15261))
+
+## 5.8.13
+
+### Patch Changes
+
+- Updated dependencies [[`b3b94f2335026634f4fa9fdfe0671677fa00000e`](https://github.com/vercel/vercel/commit/b3b94f2335026634f4fa9fdfe0671677fa00000e)]:
+  - @vercel/routing-utils@6.0.1
+  - @vercel/frameworks@3.19.1
+
+## 5.8.12
+
+### Patch Changes
+
+- Support function overrides in backends builder ([#15214](https://github.com/vercel/vercel/pull/15214))
+
+- Updated dependencies [[`3d872692c601abeec98743d2af3a3ea19587e799`](https://github.com/vercel/vercel/commit/3d872692c601abeec98743d2af3a3ea19587e799), [`e64a85daec784b4fe571abe7405a80aca150007a`](https://github.com/vercel/vercel/commit/e64a85daec784b4fe571abe7405a80aca150007a), [`af6a651229cad4ddb7fcc15bd14d06355c2b77ee`](https://github.com/vercel/vercel/commit/af6a651229cad4ddb7fcc15bd14d06355c2b77ee)]:
+  - @vercel/frameworks@3.19.1
+  - @vercel/routing-utils@6.0.0
+
+## 5.8.11
+
+### Patch Changes
+
+- [services] adds source information to detected services ([#15245](https://github.com/vercel/vercel/pull/15245))
+
+- Updated dependencies [[`0c961fce30d495620542066249dae447764d2eba`](https://github.com/vercel/vercel/commit/0c961fce30d495620542066249dae447764d2eba)]:
+  - @vercel/routing-utils@5.4.0
+  - @vercel/frameworks@3.19.0
+
+## 5.8.10
+
+### Patch Changes
+
+- Fix service route-prefix stripping for standalone Go services in services mode. ([#15120](https://github.com/vercel/vercel/pull/15120))
+
+  This updates Go's executable bootstrap to strip generated service route prefixes in production and adds a Go dev wrapper (`vc_init_dev.go`) so standalone Go dev also strips generated service route prefixes before forwarding requests to the user app.
+
+  Update the `09-services-frontend-backend-go-zc` e2e fixture backend from Ruby/Sinatra to Go so it exercises Go services detection and routing in zero-config services mode.
+
+- [services] strip services route prefix in ruby runtime by mounting the app at `SCRIPT_NAME` when service route prefix is auto configured ([#15099](https://github.com/vercel/vercel/pull/15099))
+
+- Updated dependencies [[`cb79f6f8080fddd3673a8911566085e0265b060b`](https://github.com/vercel/vercel/commit/cb79f6f8080fddd3673a8911566085e0265b060b)]:
+  - @vercel/frameworks@3.19.0
+
+## 5.8.9
+
+### Patch Changes
+
+- [services] ([#15093](https://github.com/vercel/vercel/pull/15093))
+  - consolidate `workspace` and `entrypoint` from `experimentalServices` `vercel.json` schema
+  - make `framework` config in service optional -- infer framework from service workspace when not explicitly provided
+
+## 5.8.8
+
+### Patch Changes
+
+- Updated dependencies [[`d103a83aa1d6a283760709990907204f85a136b2`](https://github.com/vercel/vercel/commit/d103a83aa1d6a283760709990907204f85a136b2)]:
+  - @vercel/frameworks@3.18.0
+
+## 5.8.7
+
+### Patch Changes
+
+- [services] infer workspace from manifest: when workspace is not explicitly configured, infer from nearest manifest to entrypoint ([#14986](https://github.com/vercel/vercel/pull/14986))
+
+## 5.8.6
+
+### Patch Changes
+
+- Services routing improvements: ([#15018](https://github.com/vercel/vercel/pull/15018))
+
+  - Fix route ownership scoping so parent service catch-alls (e.g. Vite SPA fallback) don't capture sibling service prefixes
+  - Move shared ownership-guard helpers (`getOwnershipGuard`, `scopeRouteSourceToOwnership`) to `@vercel/routing-utils`
+  - Place runtime service function outputs under internal `/_svc/<service>/index` namespace to prevent filesystem path leakage
+  - Block `/_svc` as a reserved routePrefix in service validation
+  - Scope all builder-emitted routes (not just route-owning builders) to their service ownership before merging
+
+- Updated dependencies [[`3cd0b559f1815fdb13f7aa05114bae2b0b0b0e68`](https://github.com/vercel/vercel/commit/3cd0b559f1815fdb13f7aa05114bae2b0b0b0e68)]:
+  - @vercel/routing-utils@5.3.3
+  - @vercel/frameworks@3.17.1
+
+## 5.8.5
+
+### Patch Changes
+
+- Add service configuration to BuildOptions ([#14918](https://github.com/vercel/vercel/pull/14918))
+
+- - Fix services routing for runtime entrypoints by using extensionless function destinations, disabling framework `defaultRoutes` injection during services builds, and ensuring deterministic route merging precedence for services. ([#14946](https://github.com/vercel/vercel/pull/14946))
+  - Scope route-owning builder routes to their owning service prefixes in services mode, preventing cross-service route leakage
+
+## 5.8.4
+
+### Patch Changes
+
+- Add exclude/include support for backends builder ([#14950](https://github.com/vercel/vercel/pull/14950))
+
+## 5.8.3
+
+### Patch Changes
+
+- [services] add service name validation ([#14907](https://github.com/vercel/vercel/pull/14907))
+
+- Updated dependencies [[`712badd017d01fd1f8cb51980752ecda18540b78`](https://github.com/vercel/vercel/commit/712badd017d01fd1f8cb51980752ecda18540b78)]:
+  - @vercel/frameworks@3.17.1
+
+## 5.8.2
+
+### Patch Changes
+
+- Updated dependencies [[`84f121190813b2840a6a16279dcaa75dcb2872cd`](https://github.com/vercel/vercel/commit/84f121190813b2840a6a16279dcaa75dcb2872cd)]:
+  - @vercel/frameworks@3.17.0
+
+## 5.8.1
+
+### Patch Changes
+
+- [services] `vercel dev` will add the known framework prefix to env vars for services ([#14866](https://github.com/vercel/vercel/pull/14866))
+
+## 5.8.0
+
+### Minor Changes
+
+- Add multi-service support for `vercel dev`. When `VERCEL_USE_EXPERIMENTAL_SERVICES=1` is set, the CLI auto-detects different multi-service layouts and orchestrates dev servers for each service through a single proxy server. ([#14805](https://github.com/vercel/vercel/pull/14805))
+
+### Patch Changes
+
+- [services] add `services` to `config.json` ([#14847](https://github.com/vercel/vercel/pull/14847))
+
+## 5.7.22
+
+### Patch Changes
+
+- [services] static-build frontends support ([#14819](https://github.com/vercel/vercel/pull/14819))
+
+## 5.7.21
+
+### Patch Changes
+
+- Move backends builder detection to detectBuilders phase ([#14830](https://github.com/vercel/vercel/pull/14830))
+
+## 5.7.20
+
+### Patch Changes
+
+- Added experimental services support in the CLI new project flow. When `VERCEL_USE_EXPERIMENTAL_SERVICES=1` is set and a project's `vercel.json` contains `experimentalServices`, the CLI will detect and display the configured services during project setup, automatically selecting the "services" framework preset. ([#14776](https://github.com/vercel/vercel/pull/14776))
+
+## 5.7.19
+
+### Patch Changes
+
+- experimental rust runtime framework preset ([#14765](https://github.com/vercel/vercel/pull/14765))
+
+- Updated dependencies [[`9d1e38e9ff6f0431dce8e421497e1ec4fc823291`](https://github.com/vercel/vercel/commit/9d1e38e9ff6f0431dce8e421497e1ec4fc823291), [`e800617a334377e11953df22ef40d03716daf692`](https://github.com/vercel/vercel/commit/e800617a334377e11953df22ef40d03716daf692)]:
+  - @vercel/frameworks@3.16.1
+
+## 5.7.18
+
+### Patch Changes
+
+- [ruby] Add experimental Ruby runtime framework preset ([#14762](https://github.com/vercel/vercel/pull/14762))
+
+  Also fixed a bug in the Ruby version parsing where `ruby "~> 3.3.x"` in Gemfile would fail due to a trailing space not being trimmed after removing the `~>` prefix.
+
+- Updated dependencies [[`31afeb2546b316a2e9553ee937d9771b86898e0e`](https://github.com/vercel/vercel/commit/31afeb2546b316a2e9553ee937d9771b86898e0e)]:
+  - @vercel/frameworks@3.16.0
+
+## 5.7.17
+
+### Patch Changes
+
+- [experimental] Adds support for building multiple services when framework mode is set to "services" ([#14739](https://github.com/vercel/vercel/pull/14739))
+
+## 5.7.16
+
+### Patch Changes
+
+- Add `experimentalServices` to `vercel.json` ([#14612](https://github.com/vercel/vercel/pull/14612))
+
+## 5.7.15
+
+### Patch Changes
+
+- [frameworks] experimental framework flagging ([#14646](https://github.com/vercel/vercel/pull/14646))
+
+- Updated dependencies [[`9de063fe733651c295d39f956930a34d88b01e37`](https://github.com/vercel/vercel/commit/9de063fe733651c295d39f956930a34d88b01e37), [`5f085b86b26310e027de5b757a4aac3ff88a9c02`](https://github.com/vercel/vercel/commit/5f085b86b26310e027de5b757a4aac3ff88a9c02), [`5f085b86b26310e027de5b757a4aac3ff88a9c02`](https://github.com/vercel/vercel/commit/5f085b86b26310e027de5b757a4aac3ff88a9c02)]:
+  - @vercel/frameworks@3.15.7
+
+## 5.7.14
+
+### Patch Changes
+
+- [frameworks] experimental framework flagging ([#14637](https://github.com/vercel/vercel/pull/14637))
+
+- Updated dependencies [[`cb2163d94a96059c481cb23cab25459f012c3a86`](https://github.com/vercel/vercel/commit/cb2163d94a96059c481cb23cab25459f012c3a86)]:
+  - @vercel/frameworks@3.15.6
+
+## 5.7.13
+
+### Patch Changes
+
+- Updated dependencies [[`460443ef814240f03bb385f95f22431bf496b5fa`](https://github.com/vercel/vercel/commit/460443ef814240f03bb385f95f22431bf496b5fa)]:
+  - @vercel/frameworks@3.15.5
+
+## 5.7.12
+
+### Patch Changes
+
+- Updated dependencies [[`e725853a6c41bed634d1e3e2382596f17a18f342`](https://github.com/vercel/vercel/commit/e725853a6c41bed634d1e3e2382596f17a18f342), [`567d2d41e685cd949274411ce0e60e61a3dc3942`](https://github.com/vercel/vercel/commit/567d2d41e685cd949274411ce0e60e61a3dc3942)]:
+  - @vercel/routing-utils@5.3.2
+  - @vercel/frameworks@3.15.4
+
+## 5.7.11
+
+### Patch Changes
+
+- [python] only create api builders for `.py` files that export an app or handler ([#14493](https://github.com/vercel/vercel/pull/14493))
+
+## 5.7.10
+
+### Patch Changes
+
+- Updated dependencies [[`288b97aa5ffda33c892dd4fb6ee85d7fef126fdc`](https://github.com/vercel/vercel/commit/288b97aa5ffda33c892dd4fb6ee85d7fef126fdc)]:
+  - @vercel/routing-utils@5.3.1
+  - @vercel/frameworks@3.15.4
+
+## 5.7.9
+
+### Patch Changes
+
+- Use `workspace:*` for workspace dependencies ([#14396](https://github.com/vercel/vercel/pull/14396))
+
+- Updated dependencies [[`6bdbf9e170507a973a53bd881c8c7ecbaa3a930c`](https://github.com/vercel/vercel/commit/6bdbf9e170507a973a53bd881c8c7ecbaa3a930c)]:
+  - @vercel/frameworks@3.15.4
+
+## 5.7.8
+
+### Patch Changes
+
+- Enable `@vercel/rust` cli fs detection ([#14330](https://github.com/vercel/vercel/pull/14330))
+
+## 5.7.7
+
+### Patch Changes
+
+- Updated dependencies [[`045b88c0cb376100492915caf7f11aa3adc88903`](https://github.com/vercel/vercel/commit/045b88c0cb376100492915caf7f11aa3adc88903)]:
+  - @vercel/routing-utils@5.3.0
+
+## 5.7.6
+
+### Patch Changes
+
+- Updated dependencies [[`8c7cbd059906126f335b3a55d6914c8945e1b6f9`](https://github.com/vercel/vercel/commit/8c7cbd059906126f335b3a55d6914c8945e1b6f9), [`7faa102e3ff50f54921465ec56162120cb9146ff`](https://github.com/vercel/vercel/commit/7faa102e3ff50f54921465ec56162120cb9146ff)]:
+  - @vercel/frameworks@3.15.3
+  - @vercel/routing-utils@5.2.2
+
+## 5.7.5
+
+### Patch Changes
+
+- Updated dependencies [[`fc12669551958ae81a9dd4827bef9d5b4429d851`](https://github.com/vercel/vercel/commit/fc12669551958ae81a9dd4827bef9d5b4429d851)]:
+  - @vercel/frameworks@3.15.2
+
+## 5.7.4
+
+### Patch Changes
+
+- Updated dependencies [[`05c0cc43820cb5012068c8397c1594792dd481f0`](https://github.com/vercel/vercel/commit/05c0cc43820cb5012068c8397c1594792dd481f0)]:
+  - @vercel/frameworks@3.15.1
+
+## 5.7.3
+
+### Patch Changes
+
+- Updated dependencies [[`d90cc096089a402c343aab4e47ebd1b0bb4f1148`](https://github.com/vercel/vercel/commit/d90cc096089a402c343aab4e47ebd1b0bb4f1148)]:
+  - @vercel/frameworks@3.15.0
+
+## 5.7.2
+
+### Patch Changes
+
+- Updated dependencies [[`55a1f7691ab944e133a43fc859fb8f373c5982c0`](https://github.com/vercel/vercel/commit/55a1f7691ab944e133a43fc859fb8f373c5982c0)]:
+  - @vercel/frameworks@3.14.1
+
+## 5.7.1
+
+### Patch Changes
+
+- Updated dependencies [[`c4fca8a2ee0eeb863fbe1abeac73c6c760182303`](https://github.com/vercel/vercel/commit/c4fca8a2ee0eeb863fbe1abeac73c6c760182303)]:
+  - @vercel/routing-utils@5.2.1
+
+## 5.7.0
+
+### Minor Changes
+
+- Add support for Bun through a vercel.json property ([#14130](https://github.com/vercel/vercel/pull/14130))
+
+## 5.6.4
+
+### Patch Changes
+
+- Updated dependencies [[`1e3e68d5c07e5516566db2d8e54d226142041f31`](https://github.com/vercel/vercel/commit/1e3e68d5c07e5516566db2d8e54d226142041f31)]:
+  - @vercel/frameworks@3.14.0
+
+## 5.6.3
+
+### Patch Changes
+
+- Updated dependencies [[`3eefc863b8e2078a3fcf691f925646da71698771`](https://github.com/vercel/vercel/commit/3eefc863b8e2078a3fcf691f925646da71698771)]:
+  - @vercel/frameworks@3.13.0
+
+## 5.6.2
+
+### Patch Changes
+
+- Updated dependencies [[`bcf9c18da437d9566eeff1fdaedb11abb00c080c`](https://github.com/vercel/vercel/commit/bcf9c18da437d9566eeff1fdaedb11abb00c080c), [`bcf9c18da437d9566eeff1fdaedb11abb00c080c`](https://github.com/vercel/vercel/commit/bcf9c18da437d9566eeff1fdaedb11abb00c080c)]:
+  - @vercel/frameworks@3.12.0
+
+## 5.6.1
+
+### Patch Changes
+
+- Updated dependencies [[`60b7697ccd433859dc922ab1780b95304f76c5fc`](https://github.com/vercel/vercel/commit/60b7697ccd433859dc922ab1780b95304f76c5fc)]:
+  - @vercel/frameworks@3.11.1
+
+## 5.6.0
+
+### Minor Changes
+
+- Add zero config support for NestJS ([#14009](https://github.com/vercel/vercel/pull/14009))
+
+### Patch Changes
+
+- Updated dependencies [[`07cefee4765af8797855092d387a834eaa8a987a`](https://github.com/vercel/vercel/commit/07cefee4765af8797855092d387a834eaa8a987a), [`4d0d2ec6cea57e0ec6e55132f6a2007309e2916b`](https://github.com/vercel/vercel/commit/4d0d2ec6cea57e0ec6e55132f6a2007309e2916b), [`6deaf1c665aeacd57d075d2b808a8b2880023b53`](https://github.com/vercel/vercel/commit/6deaf1c665aeacd57d075d2b808a8b2880023b53)]:
+  - @vercel/routing-utils@5.2.0
+  - @vercel/frameworks@3.11.0
+
+## 5.5.8
+
+### Patch Changes
+
+- [python] Use static builder for /public for FastAPI ([#14027](https://github.com/vercel/vercel/pull/14027))
+
+- Updated dependencies [[`da6ca6d80915221b7f60cd711e4fada41a828e4c`](https://github.com/vercel/vercel/commit/da6ca6d80915221b7f60cd711e4fada41a828e4c), [`a26744ba059edf435a31ac5967fa01aeb9d1647f`](https://github.com/vercel/vercel/commit/a26744ba059edf435a31ac5967fa01aeb9d1647f), [`da6ca6d80915221b7f60cd711e4fada41a828e4c`](https://github.com/vercel/vercel/commit/da6ca6d80915221b7f60cd711e4fada41a828e4c)]:
+  - @vercel/frameworks@3.10.0
+
+## 5.5.7
+
+### Patch Changes
+
+- Updated dependencies [[`3eb70a1571f5740859d25a0dcfb8d03c9042ba52`](https://github.com/vercel/vercel/commit/3eb70a1571f5740859d25a0dcfb8d03c9042ba52)]:
+  - @vercel/frameworks@3.9.3
+
+## 5.5.6
+
+### Patch Changes
+
+- Update info around H3 framework ([#13957](https://github.com/vercel/vercel/pull/13957))
+
+- Updated dependencies [[`c10395ad9dfd874f9a0f1d4a77748c67e4084339`](https://github.com/vercel/vercel/commit/c10395ad9dfd874f9a0f1d4a77748c67e4084339)]:
+  - @vercel/frameworks@3.9.2
+
+## 5.5.5
+
+### Patch Changes
+
+- Add support for inlclude/exclude files config from vercel.json ([#13946](https://github.com/vercel/vercel/pull/13946))
+
+- Updated dependencies [[`e1c2e723925598e69811da2004bf023658bfdb9e`](https://github.com/vercel/vercel/commit/e1c2e723925598e69811da2004bf023658bfdb9e)]:
+  - @vercel/frameworks@3.9.1
+
+## 5.5.4
+
+### Patch Changes
+
+- Updated dependencies [[`426aca07b47590a0f1b7631e92c8776d5f8d661d`](https://github.com/vercel/vercel/commit/426aca07b47590a0f1b7631e92c8776d5f8d661d)]:
+  - @vercel/frameworks@3.9.0
+
+## 5.5.3
+
+### Patch Changes
+
+- Updated dependencies [[`5d7922f15f0c969b347dabc15c52972f1e482a38`](https://github.com/vercel/vercel/commit/5d7922f15f0c969b347dabc15c52972f1e482a38)]:
+  - @vercel/frameworks@3.8.5
+
+## 5.5.2
+
+### Patch Changes
+
+- Updated dependencies [[`1d04886f34e8fa705f22333422ea0c0c315c4006`](https://github.com/vercel/vercel/commit/1d04886f34e8fa705f22333422ea0c0c315c4006)]:
+  - @vercel/frameworks@3.8.4
+
+## 5.5.1
+
+### Patch Changes
+
+- Updated dependencies [[`e01478ab10bf1fcf0bcbc904b16bfb82689b0bd3`](https://github.com/vercel/vercel/commit/e01478ab10bf1fcf0bcbc904b16bfb82689b0bd3)]:
+  - @vercel/frameworks@3.8.3
+
+## 5.5.0
+
+### Minor Changes
+
+- Support turbo.jsonc ([#13792](https://github.com/vercel/vercel/pull/13792))
+
+## 5.4.16
+
+### Patch Changes
+
+- Updated dependencies [[`2f9a6e68f845ff06c60c7cdab15bb4f4321ac8ed`](https://github.com/vercel/vercel/commit/2f9a6e68f845ff06c60c7cdab15bb4f4321ac8ed), [`2f9a6e68f845ff06c60c7cdab15bb4f4321ac8ed`](https://github.com/vercel/vercel/commit/2f9a6e68f845ff06c60c7cdab15bb4f4321ac8ed)]:
+  - @vercel/frameworks@3.8.2
+
+## 5.4.15
+
+### Patch Changes
+
+- Updated dependencies [[`2876dace493b97f4cae7f3839484ee36ed8ac363`](https://github.com/vercel/vercel/commit/2876dace493b97f4cae7f3839484ee36ed8ac363)]:
+  - @vercel/frameworks@3.8.1
+
+## 5.4.14
+
+### Patch Changes
+
+- Updated dependencies [[`724127d24f469b495e64e50ee152b7cc66f50153`](https://github.com/vercel/vercel/commit/724127d24f469b495e64e50ee152b7cc66f50153)]:
+  - @vercel/frameworks@3.8.0
+
+## 5.4.13
+
+### Patch Changes
+
+- Updated dependencies [[`277c78cd16d7c8c9e5a9da92953af1b94a4c94bc`](https://github.com/vercel/vercel/commit/277c78cd16d7c8c9e5a9da92953af1b94a4c94bc)]:
+  - @vercel/frameworks@3.7.7
+
+## 5.4.12
+
+### Patch Changes
+
+- Updated dependencies [[`b1993ee3af72d12859bbc621744b687fbc968a1b`](https://github.com/vercel/vercel/commit/b1993ee3af72d12859bbc621744b687fbc968a1b)]:
+  - @vercel/frameworks@3.7.6
+
+## 5.4.11
+
+### Patch Changes
+
+- Fix incorrect caching for DetectorFilesystem.readdir ([#13645](https://github.com/vercel/vercel/pull/13645))
+
+- Updated dependencies [[`99ec6718b0ddffac67a8a66608c718fce99bf542`](https://github.com/vercel/vercel/commit/99ec6718b0ddffac67a8a66608c718fce99bf542)]:
+  - @vercel/frameworks@3.7.5
+
+## 5.4.10
+
+### Patch Changes
+
+- Adds framework detection and an associated builder for Hono. ([#13594](https://github.com/vercel/vercel/pull/13594))
+
+- Updated dependencies [[`4e1731ead55caeb5e51b45b4dab3a6c9bb1d63e9`](https://github.com/vercel/vercel/commit/4e1731ead55caeb5e51b45b4dab3a6c9bb1d63e9)]:
+  - @vercel/frameworks@3.7.4
+
+## 5.4.9
+
+### Patch Changes
+
+- Updated dependencies [[`6f0caeefca35582b2824e7ded34e25ea3b6f65ff`](https://github.com/vercel/vercel/commit/6f0caeefca35582b2824e7ded34e25ea3b6f65ff)]:
+  - @vercel/frameworks@3.7.3
+
+## 5.4.8
+
+### Patch Changes
+
+- Reverting support for `preferredRegion` ([#13566](https://github.com/vercel/vercel/pull/13566))
+
+- Updated dependencies [[`bae121f5ba238a7e98ac6159bc4cf36e23c33142`](https://github.com/vercel/vercel/commit/bae121f5ba238a7e98ac6159bc4cf36e23c33142)]:
+  - @vercel/routing-utils@5.1.1
+  - @vercel/frameworks@3.7.2
+
+## 5.4.7
+
+### Patch Changes
+
+- Updated dependencies [[`e714304f8fcd5059490a9d4c37cdd546c498d9dd`](https://github.com/vercel/vercel/commit/e714304f8fcd5059490a9d4c37cdd546c498d9dd)]:
+  - @vercel/frameworks@3.7.1
+
+## 5.4.6
+
+### Patch Changes
+
+- Updated dependencies [[`53cbed6a060885094384b27108ac162193326aae`](https://github.com/vercel/vercel/commit/53cbed6a060885094384b27108ac162193326aae)]:
+  - @vercel/routing-utils@5.1.0
+
 ## 5.4.5
 
 ### Patch Changes

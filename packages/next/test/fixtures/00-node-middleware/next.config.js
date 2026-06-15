@@ -1,9 +1,6 @@
 module.exports = {
-  experimental: {
-    nodeMiddleware: true
-  },
   generateBuildId() {
-    return 'testing-build-id';
+    return 'build-TfctsWXpff2fKS';
   },
   redirects() {
     return [

@@ -1,4 +1,4 @@
-import fs from 'fs-extra';
+import fs, { existsSync } from 'fs-extra';
 import mimeTypes from 'mime-types';
 import {
   basename,
@@ -11,11 +11,13 @@ import {
 } from 'path';
 import {
   type Builder,
+  type BuildResultVX,
   type BuildResultV2,
   type BuildResultV3,
   type File,
   type Files,
   FileFsRef,
+  type BuilderVX,
   type BuilderV2,
   type BuilderV3,
   type Lambda,
@@ -27,15 +29,34 @@ import {
   type BuildResultBuildOutput,
   getLambdaOptionsFromFunction,
   normalizePath,
+  type TriggerEvent,
+  isBackendBuilder,
+  isExperimentalBackendsEnabled,
+  type ExperimentalService,
+  type Service,
+  isExperimentalService,
+  isExternalSymlink,
 } from '@vercel/build-utils';
+import { getInternalServiceFunctionPath } from '@vercel/fs-detectors';
 import pipe from 'promisepipe';
 import { merge } from './merge';
 import { unzip } from './unzip';
 import { VERCEL_DIR } from '../projects/link';
-import { fileNameSymbol, type VercelConfig } from '@vercel/client';
+import {
+  fileNameSymbol,
+  type VercelConfig,
+  getVercelIgnore,
+} from '@vercel/client';
+import outputManager from '../../output-manager';
 
 const { normalize } = posix;
 export const OUTPUT_DIR = join(VERCEL_DIR, 'output');
+const BUILD_OUTPUT_API_ENTRIES = [
+  'config.json',
+  'functions',
+  'routes',
+  'static',
+];
 
 /**
  * An entry in the "functions" object in `vercel.json`.
@@ -43,35 +64,82 @@ export const OUTPUT_DIR = join(VERCEL_DIR, 'output');
 interface FunctionConfiguration {
   architecture?: string;
   memory?: number;
-  maxDuration?: number;
+  maxDuration?: number | 'max';
+  regions?: Lambda['regions'];
+  functionFailoverRegions?: Lambda['functionFailoverRegions'];
+  experimentalTriggers?: TriggerEvent[];
+  supportsCancellation?: boolean;
 }
 
-export async function writeBuildResult(
-  repoRootPath: string,
-  outputDir: string,
-  buildResult: BuildResultV2 | BuildResultV3,
-  build: Builder,
-  builder: BuilderV2 | BuilderV3,
-  builderPkg: PackageJson,
-  vercelConfig: VercelConfig | null
-) {
-  const { version } = builder;
+export async function writeBuildResult(args: {
+  repoRootPath: string;
+  outputDir: string;
+  buildResult: BuildResultVX | BuildResultV2 | BuildResultV3;
+  build: Builder;
+  builder: BuilderVX | BuilderV2 | BuilderV3;
+  builderPkg: PackageJson;
+  vercelConfig: VercelConfig | null;
+  standalone: boolean;
+  workPath: string;
+  service?: Service;
+  nestServiceOutput?: boolean;
+  stripServiceRoutePrefix?: boolean;
+}) {
+  const {
+    repoRootPath,
+    outputDir,
+    buildResult,
+    build,
+    builder,
+    builderPkg,
+    vercelConfig,
+    standalone,
+    workPath,
+    service,
+    nestServiceOutput = false,
+    stripServiceRoutePrefix = false,
+  } = args;
+  const writeOutputDir =
+    service && nestServiceOutput
+      ? getServiceOutputDir(outputDir, service)
+      : outputDir;
+  let version: number;
+  let actualResult: BuildResultV2 | BuildResultV3;
+  if (builder.version === -1) {
+    const vx = buildResult as BuildResultVX;
+    version = vx.resultVersion;
+    actualResult = vx.result;
+  } else {
+    version = builder.version;
+    actualResult = buildResult as BuildResultV2 | BuildResultV3;
+  }
+
   if (typeof version !== 'number' || version === 2) {
-    return writeBuildResultV2(
+    return writeBuildResultV2({
       repoRootPath,
-      outputDir,
-      buildResult as BuildResultV2,
+      outputDir: writeOutputDir,
+      buildResult: actualResult as BuildResultV2,
       build,
-      vercelConfig
-    );
+      vercelConfig,
+      standalone,
+      workPath,
+      service,
+      rootOutputDir: outputDir,
+      stripServiceRoutePrefix,
+    });
   } else if (version === 3) {
-    return writeBuildResultV3(
+    return writeBuildResultV3({
       repoRootPath,
-      outputDir,
-      buildResult as BuildResultV3,
+      outputDir: writeOutputDir,
+      buildResult: actualResult as BuildResultV3,
       build,
-      vercelConfig
-    );
+      vercelConfig,
+      standalone,
+      workPath,
+      service,
+      rootOutputDir: outputDir,
+      stripServiceRoutePrefix,
+    });
   }
   throw new Error(
     `Unsupported Builder version \`${version}\` from "${builderPkg.name}"`
@@ -82,7 +150,7 @@ function isEdgeFunction(v: any): v is EdgeFunction {
   return v?.type === 'EdgeFunction';
 }
 
-function isLambda(v: any): v is Lambda {
+export function isLambda(v: any): v is Lambda {
   return v?.type === 'Lambda';
 }
 
@@ -100,6 +168,30 @@ export interface PathOverride {
   path?: string;
 }
 
+function injectServiceEnvVars(
+  lambda: Lambda,
+  service?: ExperimentalService,
+  stripServiceRoutePrefix: boolean = false
+): void {
+  if (service?.name) {
+    // Exposes the owning service so the API can resolve per-service envVars
+    // at deploy time.
+    lambda.environment.VERCEL_SERVICE_NAME = service.name;
+  }
+  if (service?.type) {
+    lambda.environment.VERCEL_SERVICE_TYPE = service.type;
+  }
+  if (service?.trigger) {
+    lambda.environment.VERCEL_SERVICE_TRIGGER = service.trigger;
+  }
+  if (service?.routePrefix && service.routePrefix !== '/') {
+    lambda.environment.VERCEL_SERVICE_ROUTE_PREFIX = service.routePrefix;
+  }
+  if (stripServiceRoutePrefix) {
+    lambda.environment.VERCEL_SERVICE_ROUTE_PREFIX_STRIP = '1';
+  }
+}
+
 /**
  * Remove duplicate slashes as well as leading/trailing slashes.
  */
@@ -107,19 +199,53 @@ function stripDuplicateSlashes(path: string): string {
   return normalize(path).replace(/(^\/|\/$)/g, '');
 }
 
+function getServiceOutputDir(outputDir: string, service: Service): string {
+  return join(outputDir, 'services', service.name);
+}
+
+export async function relocateRootBuildOutputToService(args: {
+  outputDir: string;
+  service: Service;
+  workPath: string;
+}) {
+  const { outputDir, service, workPath } = args;
+  await relocateBuildOutputApiEntries(
+    outputDir,
+    getServiceOutputDir(outputDir, service),
+    workPath
+  );
+}
+
 /**
  * Writes the output from the `build()` return value of a v2 Builder to
  * the filesystem.
  */
-async function writeBuildResultV2(
-  repoRootPath: string,
-  outputDir: string,
-  buildResult: BuildResultV2,
-  build: Builder,
-  vercelConfig: VercelConfig | null
-) {
+async function writeBuildResultV2(args: {
+  repoRootPath: string;
+  outputDir: string;
+  buildResult: BuildResultV2;
+  build: Builder;
+  vercelConfig: VercelConfig | null;
+  standalone: boolean;
+  workPath: string;
+  service?: Service;
+  rootOutputDir: string;
+  stripServiceRoutePrefix: boolean;
+}) {
+  const {
+    repoRootPath,
+    outputDir,
+    buildResult,
+    build,
+    vercelConfig,
+    standalone,
+    workPath,
+    service,
+    rootOutputDir,
+    stripServiceRoutePrefix,
+  } = args;
   if ('buildOutputPath' in buildResult) {
-    await mergeBuilderOutput(outputDir, buildResult);
+    await mergeBuilderOutput(outputDir, buildResult, workPath, rootOutputDir);
     return;
   }
 
@@ -141,13 +267,19 @@ async function writeBuildResultV2(
   for (const [path, output] of Object.entries(buildResult.output)) {
     const normalizedPath = stripDuplicateSlashes(path);
     if (isLambda(output)) {
+      injectServiceEnvVars(
+        output,
+        service && isExperimentalService(service) ? service : undefined,
+        stripServiceRoutePrefix
+      );
       await writeLambda(
         repoRootPath,
         outputDir,
         output,
         normalizedPath,
         undefined,
-        existingFunctions
+        existingFunctions,
+        standalone
       );
     } else if (isPrerender(output)) {
       if (!output.lambda) {
@@ -162,7 +294,8 @@ async function writeBuildResultV2(
         output.lambda,
         normalizedPath,
         undefined,
-        existingFunctions
+        existingFunctions,
+        standalone
       );
 
       // Write the fallback file alongside the Lambda directory
@@ -222,7 +355,8 @@ async function writeBuildResultV2(
         outputDir,
         output,
         normalizedPath,
-        existingFunctions
+        existingFunctions,
+        standalone
       );
     } else {
       throw new Error(
@@ -239,14 +373,93 @@ async function writeBuildResultV2(
  * Writes the output from the `build()` return value of a v3 Builder to
  * the filesystem.
  */
-async function writeBuildResultV3(
-  repoRootPath: string,
-  outputDir: string,
-  buildResult: BuildResultV3,
-  build: Builder,
-  vercelConfig: VercelConfig | null
-) {
+async function writeBuildResultV3(args: {
+  repoRootPath: string;
+  outputDir: string;
+  buildResult: BuildResultV3;
+  build: Builder;
+  vercelConfig: VercelConfig | null;
+  standalone: boolean;
+  workPath: string;
+  service?: Service;
+  rootOutputDir: string;
+  stripServiceRoutePrefix: boolean;
+}) {
+  const {
+    repoRootPath,
+    outputDir,
+    buildResult,
+    build,
+    vercelConfig,
+    standalone,
+    workPath,
+    service,
+    rootOutputDir,
+    stripServiceRoutePrefix,
+  } = args;
   const { output } = buildResult;
+  const routesJsonPath = join(workPath, '.vercel', 'routes.json');
+
+  if (isBackendBuilder(build) || build.use === '@vercel/python') {
+    if (existsSync(routesJsonPath)) {
+      try {
+        const newOutput: Record<string, Lambda | EdgeFunction> = {
+          index: output,
+        };
+        const routesJson = await fs.readJSON(routesJsonPath);
+        if (
+          routesJson &&
+          typeof routesJson === 'object' &&
+          'routes' in routesJson &&
+          Array.isArray(routesJson.routes)
+        ) {
+          for (const route of routesJson.routes) {
+            if (route.source === '/') {
+              continue;
+            }
+            if (route.source) {
+              newOutput[route.source] = output;
+            }
+          }
+        }
+
+        return writeBuildResultV2({
+          repoRootPath,
+          outputDir,
+          buildResult: { output: newOutput, routes: buildResult.routes },
+          build,
+          vercelConfig,
+          standalone,
+          workPath,
+          service,
+          rootOutputDir,
+          stripServiceRoutePrefix,
+        });
+      } catch (error) {
+        outputManager.error(`Failed to read routes.json: ${error}`);
+      }
+    }
+    // This flag is being used to write a v2 build result,
+    // earlier in the process, the `routes` check is just to double-check
+    if (
+      isBackendBuilder(build) &&
+      isExperimentalBackendsEnabled() &&
+      'routes' in buildResult
+    ) {
+      return writeBuildResultV2({
+        repoRootPath,
+        outputDir,
+        buildResult: buildResult as unknown as BuildResultV2,
+        build,
+        vercelConfig,
+        standalone,
+        workPath,
+        service,
+        rootOutputDir,
+        stripServiceRoutePrefix,
+      });
+    }
+  }
   const src = build.src;
   if (typeof src !== 'string') {
     throw new Error(`Expected "build.src" to be a string`);
@@ -260,19 +473,38 @@ async function writeBuildResultV3(
     : {};
 
   const ext = extname(src);
-  const path = stripDuplicateSlashes(
-    build.config?.zeroConfig ? src.substring(0, src.length - ext.length) : src
-  );
+  const path =
+    service && typeof service.runtime === 'string'
+      ? stripDuplicateSlashes(getInternalServiceFunctionPath(service.name))
+      : stripDuplicateSlashes(
+          build.config?.zeroConfig
+            ? src.substring(0, src.length - ext.length)
+            : src
+        );
   if (isLambda(output)) {
+    injectServiceEnvVars(
+      output,
+      service && isExperimentalService(service) ? service : undefined,
+      stripServiceRoutePrefix
+    );
     await writeLambda(
       repoRootPath,
       outputDir,
       output,
       path,
-      functionConfiguration
+      functionConfiguration,
+      undefined,
+      standalone
     );
   } else if (isEdgeFunction(output)) {
-    await writeEdgeFunction(repoRootPath, outputDir, output, path);
+    await writeEdgeFunction(
+      repoRootPath,
+      outputDir,
+      output,
+      path,
+      undefined,
+      standalone
+    );
   } else {
     throw new Error(
       `Unsupported output type: "${(output as any).type}" for ${build.src}`
@@ -333,6 +565,13 @@ async function writeStaticFile(
 
   // if already on disk hard link instead of copying
   if ('fsPath' in file) {
+    // If source and destination resolve to the same path (e.g. local builds
+    // where a builder writes static files directly into outputDir/static/ and
+    // then returns FileFsRef objects pointing to those same paths), the file
+    // is already in place — skip to avoid truncating it via downloadFile.
+    if (resolve(file.fsPath) === resolve(dest)) {
+      return;
+    }
     try {
       return await fs.link(file.fsPath, dest);
     } catch (_) {
@@ -384,7 +623,8 @@ async function writeEdgeFunction(
   outputDir: string,
   edgeFunction: EdgeFunction,
   path: string,
-  existingFunctions?: Map<Lambda | EdgeFunction, string>
+  existingFunctions?: Map<Lambda | EdgeFunction, string>,
+  standalone: boolean = false
 ) {
   const dest = join(outputDir, 'functions', `${path}.func`);
 
@@ -404,11 +644,17 @@ async function writeEdgeFunction(
 
   await fs.mkdirp(dest);
   const ops: Promise<any>[] = [];
-  const { files, filePathMap } = filesWithoutFsRefs(
+  const sharedDest = join(outputDir, 'shared');
+  const { files, filePathMap, shared } = filesWithoutFsRefs(
     edgeFunction.files,
-    repoRootPath
+    repoRootPath,
+    sharedDest,
+    standalone
   );
   ops.push(download(files, dest));
+  if (shared) {
+    ops.push(download(shared, sharedDest));
+  }
 
   const config = {
     runtime: 'edge',
@@ -442,7 +688,8 @@ async function writeLambda(
   lambda: Lambda,
   path: string,
   functionConfiguration?: FunctionConfiguration,
-  existingFunctions?: Map<Lambda | EdgeFunction, string>
+  existingFunctions?: Map<Lambda | EdgeFunction, string>,
+  standalone: boolean = false
 ) {
   const dest = join(outputDir, 'functions', `${path}.func`);
 
@@ -459,10 +706,19 @@ async function writeLambda(
   const ops: Promise<any>[] = [];
   let filePathMap: Record<string, string> | undefined;
   if (lambda.files) {
+    const sharedDest = join(outputDir, 'shared');
     // `files` is defined
-    const f = filesWithoutFsRefs(lambda.files, repoRootPath);
+    const f = filesWithoutFsRefs(
+      lambda.files,
+      repoRootPath,
+      sharedDest,
+      standalone
+    );
     filePathMap = f.filePathMap;
     ops.push(download(f.files, dest));
+    if (f.shared) {
+      ops.push(download(f.shared, sharedDest));
+    }
   } else if (lambda.zipBuffer) {
     // Builders that use the deprecated `createLambda()` might only have `zipBuffer`
     ops.push(unzip(lambda.zipBuffer, dest));
@@ -474,6 +730,14 @@ async function writeLambda(
     functionConfiguration?.architecture ?? lambda.architecture;
   const memory = functionConfiguration?.memory ?? lambda.memory;
   const maxDuration = functionConfiguration?.maxDuration ?? lambda.maxDuration;
+  const regions = functionConfiguration?.regions ?? lambda.regions;
+  const functionFailoverRegions =
+    functionConfiguration?.functionFailoverRegions ??
+    lambda.functionFailoverRegions;
+  const experimentalTriggers =
+    functionConfiguration?.experimentalTriggers ?? lambda.experimentalTriggers;
+  const supportsCancellation =
+    functionConfiguration?.supportsCancellation ?? lambda.supportsCancellation;
 
   const config = {
     ...lambda,
@@ -481,6 +745,10 @@ async function writeLambda(
     architecture,
     memory,
     maxDuration,
+    regions,
+    functionFailoverRegions,
+    experimentalTriggers,
+    supportsCancellation,
     filePathMap,
     type: undefined,
     files: undefined,
@@ -523,15 +791,90 @@ async function writeLambda(
  */
 async function mergeBuilderOutput(
   outputDir: string,
-  buildResult: BuildResultBuildOutput
+  buildResult: BuildResultBuildOutput,
+  workPath: string,
+  rootOutputDir: string
 ) {
   const absOutputDir = resolve(outputDir);
+  const absRootOutputDir = resolve(rootOutputDir);
+  const { ig } = await getVercelIgnore(workPath);
+  const filter = ig.createFilter();
+
   if (absOutputDir === buildResult.buildOutputPath) {
-    // `.vercel/output` dir is already in the correct location,
-    // so no need to do anything
+    const staticDir = join(outputDir, 'static');
+    try {
+      await cleanIgnoredFiles(staticDir, staticDir, filter);
+    } catch (err: any) {
+      if (err.code !== 'ENOENT') throw err;
+    }
     return;
   }
-  await merge(buildResult.buildOutputPath, outputDir);
+
+  if (resolve(buildResult.buildOutputPath) === absRootOutputDir) {
+    await relocateBuildOutputApiEntries(rootOutputDir, outputDir, workPath);
+    return;
+  }
+
+  const ignoreFilter = (path: string) => {
+    const normalizedPath = path.replace(/\\/g, '/');
+    if (normalizedPath.startsWith('static/')) {
+      return filter(normalizedPath.substring('static/'.length));
+    }
+    return true;
+  };
+
+  await merge(buildResult.buildOutputPath, outputDir, ignoreFilter);
+}
+
+async function relocateBuildOutputApiEntries(
+  rootOutputDir: string,
+  outputDir: string,
+  workPath: string
+) {
+  const { ig } = await getVercelIgnore(workPath);
+  const filter = ig.createFilter();
+
+  await fs.mkdirp(outputDir);
+  await Promise.all(
+    BUILD_OUTPUT_API_ENTRIES.map(async entry => {
+      const src = join(rootOutputDir, entry);
+      if (!(await fs.pathExists(src))) return;
+
+      const dest = join(outputDir, entry);
+      if (entry === 'static') {
+        await merge(src, dest, path => filter(path));
+      } else {
+        await merge(src, dest);
+      }
+    })
+  );
+}
+
+async function cleanIgnoredFiles(
+  dir: string,
+  staticRoot: string,
+  filter: (path: string) => boolean
+): Promise<void> {
+  const entries = await fs.readdir(dir);
+
+  await Promise.all(
+    entries.map(async entry => {
+      const entryPath = join(dir, entry);
+      const stat = await fs.stat(entryPath);
+      const relativePath = relative(staticRoot, entryPath);
+
+      if (stat.isDirectory()) {
+        await cleanIgnoredFiles(entryPath, staticRoot, filter);
+        const remaining = await fs.readdir(entryPath);
+        if (remaining.length === 0) {
+          await fs.rmdir(entryPath);
+        }
+      } else if (!filter(relativePath)) {
+        outputManager.debug(`Removing ignored file: ${relativePath}`);
+        await fs.remove(entryPath);
+      }
+    })
+  );
 }
 
 /**
@@ -591,25 +934,76 @@ export async function* findDirs(
 }
 
 /**
+ * Re-anchors a Lambda file key that escapes the function root back inside it.
+ *
+ * When `vc build` runs from a monorepo subdirectory without a Root Directory
+ * setting, the repo root is detected as the app directory while dependencies
+ * are hoisted to the actual monorepo root above it. Builders then emit Lambda
+ * file keys that climb out of the function root, e.g.
+ * `../../node_modules/.pnpm/next@.../next/dist/.../server.runtime.prod.js`.
+ *
+ * Such keys cannot be used as zip entry names (`yazl` rejects any path
+ * containing a `..` segment with "invalid relative path"), and they would not
+ * resolve at runtime since nothing exists above a deployed function's root.
+ * Stripping the leading `..` segments anchors the file inside the function
+ * (e.g. `node_modules/.pnpm/.../server.runtime.prod.js`), matching the layout
+ * a root-level build produces. Relative paths between these files (such as the
+ * symlinks inside the pnpm store) are unaffected because every escaping key
+ * shares the same leading prefix and is re-anchored consistently.
+ */
+function stripParentSegments(path: string): string {
+  const normalized = normalizePath(path);
+  const segments = normalized.split('/');
+  let i = 0;
+  while (i < segments.length && segments[i] === '..') {
+    i++;
+  }
+  return segments.slice(i).join('/');
+}
+
+/**
  * Removes the `FileFsRef` instances from the `Files` object
  * and returns them in a JSON serializable map of repo root
  * relative paths to Lambda destination paths.
  */
 export function filesWithoutFsRefs(
   files: Files,
-  repoRootPath: string
-): { files: Files; filePathMap?: Record<string, string> } {
+  repoRootPath: string,
+  sharedDest?: string,
+  standalone?: boolean
+): { files: Files; filePathMap?: Record<string, string>; shared?: Files } {
   let filePathMap: Record<string, string> | undefined;
   const out: Files = {};
+  const shared: Files = {};
   for (const [path, file] of Object.entries(files)) {
     if (file.type === 'FileFsRef') {
       if (!filePathMap) filePathMap = {};
-      filePathMap[normalizePath(path)] = normalizePath(
-        relative(repoRootPath, file.fsPath)
-      );
+      if (standalone && sharedDest) {
+        // pnpm and other package managers create symlinks in node_modules that
+        // point outside the app directory (e.g. ../../node_modules/.pnpm/...).
+        // These targets are rejected during prebuilt deploys, so skip them.
+        // The traced dependency files are included at their logical paths.
+        if (isExternalSymlink(file)) {
+          continue;
+        }
+        // A standalone function must be self-contained, so any remaining file
+        // whose key escapes the function root (e.g. `../../node_modules/...`,
+        // produced when building from a monorepo subdirectory) is re-anchored
+        // inside the function. The shared bytes are placed under the same
+        // anchored key so the recorded `filePathMap` value points at them.
+        const funcPath = stripParentSegments(path);
+        shared[funcPath] = file;
+        filePathMap[funcPath] = normalizePath(
+          relative(repoRootPath, join(sharedDest, funcPath))
+        );
+      } else {
+        filePathMap[normalizePath(path)] = normalizePath(
+          relative(repoRootPath, file.fsPath)
+        );
+      }
     } else {
       out[path] = file;
     }
   }
-  return { files: out, filePathMap };
+  return { files: out, filePathMap, shared };
 }

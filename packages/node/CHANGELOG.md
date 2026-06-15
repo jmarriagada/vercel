@@ -1,5 +1,928 @@
 # @vercel/node
 
+## 5.8.17
+
+### Patch Changes
+
+- Updated dependencies [01e18e8]
+  - @vercel/build-utils@13.30.0
+
+## 5.8.16
+
+### Patch Changes
+
+- Updated dependencies [32a730e]
+  - @vercel/build-utils@13.29.1
+
+## 5.8.15
+
+### Patch Changes
+
+- Updated dependencies [8d8e871]
+  - @vercel/build-utils@13.29.0
+
+## 5.8.14
+
+### Patch Changes
+
+- Updated dependencies [4e849dd]
+  - @vercel/build-utils@13.28.0
+
+## 5.8.13
+
+### Patch Changes
+
+- Updated dependencies [c5eeb30]
+- Updated dependencies [09c39af]
+  - @vercel/build-utils@13.27.2
+
+## 5.8.12
+
+### Patch Changes
+
+- Updated dependencies [0a170fd]
+  - @vercel/build-utils@13.27.1
+
+## 5.8.11
+
+### Patch Changes
+
+- Updated dependencies [338cc35]
+  - @vercel/build-utils@13.27.0
+
+## 5.8.10
+
+### Patch Changes
+
+- Updated dependencies [3019788]
+- Updated dependencies [fe893ec]
+- Updated dependencies [fddeb55]
+  - @vercel/build-utils@13.26.6
+  - @vercel/error-utils@2.2.0
+
+## 5.8.9
+
+### Patch Changes
+
+- Updated dependencies [1180675]
+  - @vercel/build-utils@13.26.5
+
+## 5.8.8
+
+### Patch Changes
+
+- ab0e5aa: Bump @vercel/nft to 1.10.0 and enable moduleSyncCatchall tracing in node, backends, and next builders.
+
+## 5.8.7
+
+### Patch Changes
+
+- Updated dependencies [6495585]
+  - @vercel/build-utils@13.26.4
+
+## 5.8.6
+
+### Patch Changes
+
+- eecd10d: Allow opting into the Web API handler interface (`Request` → `Response`) from the static `config` export of a Node.js Serverless Function by setting `useWebApi: true`.
+- Updated dependencies [b66bd3e]
+- Updated dependencies [eecd10d]
+  - @vercel/build-utils@13.26.3
+  - @vercel/static-config@3.4.0
+
+## 5.8.5
+
+### Patch Changes
+
+- ecf5033: Pass service type and framework to node manifest.
+- Updated dependencies [647c1e8]
+  - @vercel/build-utils@13.26.2
+
+## 5.8.4
+
+### Patch Changes
+
+- Updated dependencies [fa25cb7]
+- Updated dependencies [972cc84]
+  - @vercel/build-utils@13.26.1
+
+## 5.8.3
+
+### Patch Changes
+
+- Updated dependencies [bb61428]
+- Updated dependencies [137e5d1]
+  - @vercel/build-utils@13.26.0
+
+## 5.8.2
+
+### Patch Changes
+
+- Updated dependencies [fb0cb8d]
+- Updated dependencies [4fc110b]
+  - @vercel/build-utils@13.25.0
+
+## 5.8.1
+
+### Patch Changes
+
+- Updated dependencies [d874af6]
+  - @vercel/build-utils@13.24.0
+
+## 5.8.0
+
+### Minor Changes
+
+- 22f77b9: Add project manifest to node builder.
+
+### Patch Changes
+
+- Updated dependencies [22f77b9]
+- Updated dependencies [979d70a]
+  - @vercel/build-utils@13.23.0
+
+## 5.7.17
+
+### Patch Changes
+
+- f0d7d32: Disable response streaming for lambdas with `awsLambdaHandler` set inside `getLambdaSupportsStreaming`. This closes a gap where non-Node builders (e.g. `@vercel/redwood`) constructed `NodejsLambda` with `awsLambdaHandler` but no explicit `supportsResponseStreaming`, causing `finalizeLambda` to silently flip streaming on for AWS custom handlers. With the gate now enforced centrally in `finalizeLambda`, the equivalent `@vercel/node` build-time check from #16266 is consolidated away — all builders go through the same gate.
+- Updated dependencies [f0d7d32]
+  - @vercel/build-utils@13.22.1
+
+## 5.7.16
+
+### Patch Changes
+
+- 94c29b8: Disable response streaming for AWS custom handler lambdas
+- Updated dependencies [e53dd86]
+  - @vercel/build-utils@13.22.0
+
+## 5.7.15
+
+### Patch Changes
+
+- f7b5377: fix(node): replace deprecated `url.parse()` with WHATWG URL API to silence DEP0169 deprecation warning on cold starts
+
+## 5.7.14
+
+### Patch Changes
+
+- Updated dependencies [c56f851]
+  - @vercel/static-config@3.3.0
+  - @vercel/build-utils@13.21.0
+  - @vercel/error-utils@2.1.0
+
+## 5.7.13
+
+### Patch Changes
+
+- Updated dependencies [[`2aa78415831fe89d1b21dd89704706bd1ad5e78d`](https://github.com/vercel/vercel/commit/2aa78415831fe89d1b21dd89704706bd1ad5e78d), [`2aa78415831fe89d1b21dd89704706bd1ad5e78d`](https://github.com/vercel/vercel/commit/2aa78415831fe89d1b21dd89704706bd1ad5e78d)]:
+  - @vercel/build-utils@13.20.0
+
+## 5.7.12
+
+### Patch Changes
+
+- Updated dependencies [[`c1866cf1add2107f91cae8292e38e4854bfe0aca`](https://github.com/vercel/vercel/commit/c1866cf1add2107f91cae8292e38e4854bfe0aca)]:
+  - @vercel/build-utils@13.19.1
+
+## 5.7.11
+
+### Patch Changes
+
+- Updated dependencies [[`93be6d188176cdd4451a6c62155f3ccd7dfa89e1`](https://github.com/vercel/vercel/commit/93be6d188176cdd4451a6c62155f3ccd7dfa89e1), [`0793b7d31e4ff21dd12ff727f2906be2fd63fe3e`](https://github.com/vercel/vercel/commit/0793b7d31e4ff21dd12ff727f2906be2fd63fe3e)]:
+  - @vercel/build-utils@13.19.0
+
+## 5.7.10
+
+### Patch Changes
+
+- Updated dependencies [[`055f6239a4fe763b9f3b33cfbb5baa2e0e214767`](https://github.com/vercel/vercel/commit/055f6239a4fe763b9f3b33cfbb5baa2e0e214767)]:
+  - @vercel/build-utils@13.18.0
+
+## 5.7.9
+
+### Patch Changes
+
+- Updated dependencies [[`2a6344e205910dafc05cb74a80f98165d95322d7`](https://github.com/vercel/vercel/commit/2a6344e205910dafc05cb74a80f98165d95322d7)]:
+  - @vercel/build-utils@13.17.2
+
+## 5.7.8
+
+### Patch Changes
+
+- Updated dependencies [[`5219572d21a2ba4b49cc1c27d244c1ff5d76c591`](https://github.com/vercel/vercel/commit/5219572d21a2ba4b49cc1c27d244c1ff5d76c591)]:
+  - @vercel/build-utils@13.17.1
+
+## 5.7.7
+
+### Patch Changes
+
+- Fix bundled vanilla Node API routing for projects that build from a root directory. ([#15891](https://github.com/vercel/vercel/pull/15891))
+
+- Updated dependencies [[`44897297d569742e93725d71ca481803c9b0b9cc`](https://github.com/vercel/vercel/commit/44897297d569742e93725d71ca481803c9b0b9cc)]:
+  - @vercel/build-utils@13.17.0
+
+## 5.7.6
+
+### Patch Changes
+
+- Updated dependencies [[`86d1f5b3cbd520af2632d4a3d6a1f24557448c0e`](https://github.com/vercel/vercel/commit/86d1f5b3cbd520af2632d4a3d6a1f24557448c0e), [`1056be976b6ba9b42cc1e2ffe895d255ab6c9850`](https://github.com/vercel/vercel/commit/1056be976b6ba9b42cc1e2ffe895d255ab6c9850), [`c27eedaa1b0e3f6e3770b578f62e5463d82f06e0`](https://github.com/vercel/vercel/commit/c27eedaa1b0e3f6e3770b578f62e5463d82f06e0)]:
+  - @vercel/build-utils@13.16.0
+
+## 5.7.5
+
+### Patch Changes
+
+- Updated dependencies [[`4e62f6c2204dd148643f86f140f0ae7995778017`](https://github.com/vercel/vercel/commit/4e62f6c2204dd148643f86f140f0ae7995778017), [`42a70e1e6318615bd420933f9cc978bed3a43936`](https://github.com/vercel/vercel/commit/42a70e1e6318615bd420933f9cc978bed3a43936)]:
+  - @vercel/build-utils@13.15.0
+
+## 5.7.4
+
+### Patch Changes
+
+- Updated dependencies [[`9b3ea340f23c1faad6d56c2a54d75bb2e77b0162`](https://github.com/vercel/vercel/commit/9b3ea340f23c1faad6d56c2a54d75bb2e77b0162)]:
+  - @vercel/build-utils@13.14.2
+
+## 5.7.3
+
+### Patch Changes
+
+- Updated dependencies [[`2e15ee828f14de4a849a462429ca03feab161174`](https://github.com/vercel/vercel/commit/2e15ee828f14de4a849a462429ca03feab161174), [`a31c84d1bda56a60da6d7bc6d611b0b18ba3bf57`](https://github.com/vercel/vercel/commit/a31c84d1bda56a60da6d7bc6d611b0b18ba3bf57)]:
+  - @vercel/build-utils@13.14.1
+
+## 5.7.2
+
+### Patch Changes
+
+- Updated dependencies [[`42b6ff3113eb7ba5302b8469f8dd10070ecec6f0`](https://github.com/vercel/vercel/commit/42b6ff3113eb7ba5302b8469f8dd10070ecec6f0)]:
+  - @vercel/build-utils@13.14.0
+
+## 5.7.1
+
+### Patch Changes
+
+- Updated dependencies [[`a80217a9ed60d7b7f3e98537b0468cc5488078c1`](https://github.com/vercel/vercel/commit/a80217a9ed60d7b7f3e98537b0468cc5488078c1)]:
+  - @vercel/build-utils@13.13.0
+
+## 5.7.0
+
+### Minor Changes
+
+- Add experimental bundling to node bundler ([#15691](https://github.com/vercel/vercel/pull/15691))
+
+## 5.6.24
+
+### Patch Changes
+
+- Updated dependencies [[`c98a02d87276f41b1580b78d37f9f671fd9d1f12`](https://github.com/vercel/vercel/commit/c98a02d87276f41b1580b78d37f9f671fd9d1f12)]:
+  - @vercel/build-utils@13.12.2
+
+## 5.6.23
+
+### Patch Changes
+
+- Updated dependencies [[`6cb5c6e1216d7a0dbaa6f740875a36f1b7166900`](https://github.com/vercel/vercel/commit/6cb5c6e1216d7a0dbaa6f740875a36f1b7166900)]:
+  - @vercel/build-utils@13.12.1
+
+## 5.6.22
+
+### Patch Changes
+
+- Updated dependencies [[`3427149c3751192b54bb4fad9d3b50f171a28666`](https://github.com/vercel/vercel/commit/3427149c3751192b54bb4fad9d3b50f171a28666)]:
+  - @vercel/build-utils@13.12.0
+
+## 5.6.21
+
+### Patch Changes
+
+- Updated dependencies [[`a54b8f246ac6b43ac8f1674093402e3fe145fd64`](https://github.com/vercel/vercel/commit/a54b8f246ac6b43ac8f1674093402e3fe145fd64)]:
+  - @vercel/build-utils@13.11.0
+
+## 5.6.20
+
+### Patch Changes
+
+- Bump @vercel/nft to 1.5.0 ([#15683](https://github.com/vercel/vercel/pull/15683))
+
+- Updated dependencies [[`4839214ae9cbcc95d448429bf93133e58284e03f`](https://github.com/vercel/vercel/commit/4839214ae9cbcc95d448429bf93133e58284e03f), [`ece813e0a9a75e3ad262817f00050c62f5ad67eb`](https://github.com/vercel/vercel/commit/ece813e0a9a75e3ad262817f00050c62f5ad67eb), [`d7107d025500d6be305895dfd5cd89d87e6eb9f0`](https://github.com/vercel/vercel/commit/d7107d025500d6be305895dfd5cd89d87e6eb9f0), [`25a6a2daa46baba6e8d7dec90eb49213b8150b8c`](https://github.com/vercel/vercel/commit/25a6a2daa46baba6e8d7dec90eb49213b8150b8c)]:
+  - @vercel/build-utils@13.10.0
+
+## 5.6.19
+
+### Patch Changes
+
+- Updated dependencies [[`e5564b684ee40dd60f745327ef206bbe58a5191a`](https://github.com/vercel/vercel/commit/e5564b684ee40dd60f745327ef206bbe58a5191a)]:
+  - @vercel/build-utils@13.9.0
+
+## 5.6.18
+
+### Patch Changes
+
+- Update @vercel/nft to 1.4.0 across packages ([#15626](https://github.com/vercel/vercel/pull/15626))
+
+## 5.6.17
+
+### Patch Changes
+
+- Updated dependencies [[`761dd2d91fd2d21f5cb99ece4539c257c83ef3bf`](https://github.com/vercel/vercel/commit/761dd2d91fd2d21f5cb99ece4539c257c83ef3bf)]:
+  - @vercel/build-utils@13.8.2
+
+## 5.6.16
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @vercel/build-utils@13.8.1
+
+## 5.6.15
+
+### Patch Changes
+
+- Updated dependencies [[`b5542a65e3f1b0e1d1a4b93b89ef7b14d1abfab6`](https://github.com/vercel/vercel/commit/b5542a65e3f1b0e1d1a4b93b89ef7b14d1abfab6), [`8a3558f680d592b4ea47ac7e48c99145d6368941`](https://github.com/vercel/vercel/commit/8a3558f680d592b4ea47ac7e48c99145d6368941)]:
+  - @vercel/build-utils@13.8.0
+  - @vercel/static-config@3.2.0
+
+## 5.6.14
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @vercel/build-utils@13.7.2
+
+## 5.6.13
+
+### Patch Changes
+
+- Updated dependencies [[`768300b7bfb247613908984d8d86974434ee5473`](https://github.com/vercel/vercel/commit/768300b7bfb247613908984d8d86974434ee5473)]:
+  - @vercel/build-utils@13.7.1
+
+## 5.6.12
+
+### Patch Changes
+
+- Updated dependencies [[`83e804013528fc54de31082960ae31f58339bd71`](https://github.com/vercel/vercel/commit/83e804013528fc54de31082960ae31f58339bd71), [`921314f958c4ec85adb09e020310a5becb7f866c`](https://github.com/vercel/vercel/commit/921314f958c4ec85adb09e020310a5becb7f866c)]:
+  - @vercel/build-utils@13.7.0
+
+## 5.6.11
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @vercel/build-utils@13.6.3
+
+## 5.6.10
+
+### Patch Changes
+
+- Updated dependencies [[`9721f4948a72d273f792c54f5393aa50ac279209`](https://github.com/vercel/vercel/commit/9721f4948a72d273f792c54f5393aa50ac279209)]:
+  - @vercel/build-utils@13.6.2
+
+## 5.6.9
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @vercel/build-utils@13.6.1
+
+## 5.6.8
+
+### Patch Changes
+
+- Rename fetch to nodeFetch when importing from node-fetch ([#15232](https://github.com/vercel/vercel/pull/15232))
+
+- Updated dependencies [[`2db57840669ca2fa8dadf492bd38c21bf9e3cfeb`](https://github.com/vercel/vercel/commit/2db57840669ca2fa8dadf492bd38c21bf9e3cfeb), [`0d42acfd22e51e51cb0e4a5aea7c19f3886ed496`](https://github.com/vercel/vercel/commit/0d42acfd22e51e51cb0e4a5aea7c19f3886ed496), [`8404a7315260851495d708f1c7c6e870d7ffa007`](https://github.com/vercel/vercel/commit/8404a7315260851495d708f1c7c6e870d7ffa007), [`b3a96cc4f276ce8d16c695eabd499d3a17e73aa8`](https://github.com/vercel/vercel/commit/b3a96cc4f276ce8d16c695eabd499d3a17e73aa8), [`9a6358529f0737415110cf03d626dc9ee8e99126`](https://github.com/vercel/vercel/commit/9a6358529f0737415110cf03d626dc9ee8e99126)]:
+  - @vercel/build-utils@13.6.0
+
+## 5.6.7
+
+### Patch Changes
+
+- Updated dependencies [[`cb79f6f8080fddd3673a8911566085e0265b060b`](https://github.com/vercel/vercel/commit/cb79f6f8080fddd3673a8911566085e0265b060b)]:
+  - @vercel/build-utils@13.5.0
+
+## 5.6.6
+
+### Patch Changes
+
+- Updated dependencies [[`09b3540742ac86b768de9775929fef1ef36db412`](https://github.com/vercel/vercel/commit/09b3540742ac86b768de9775929fef1ef36db412)]:
+  - @vercel/build-utils@13.4.3
+
+## 5.6.5
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @vercel/build-utils@13.4.2
+
+## 5.6.4
+
+### Patch Changes
+
+- Updated dependencies [[`e7685ebeba19b30ae6549860aa8fcd07ba49a6d0`](https://github.com/vercel/vercel/commit/e7685ebeba19b30ae6549860aa8fcd07ba49a6d0)]:
+  - @vercel/build-utils@13.4.1
+
+## 5.6.3
+
+### Patch Changes
+
+- Updated dependencies [[`8f2c79045858cd41fa89522ee13f2ce5d6c81be1`](https://github.com/vercel/vercel/commit/8f2c79045858cd41fa89522ee13f2ce5d6c81be1), [`2686071de8e17161babea397fcd12226de8ecce9`](https://github.com/vercel/vercel/commit/2686071de8e17161babea397fcd12226de8ecce9), [`2b9147bd5678dd9c6b4710aa5c1e8388f993898c`](https://github.com/vercel/vercel/commit/2b9147bd5678dd9c6b4710aa5c1e8388f993898c)]:
+  - @vercel/build-utils@13.4.0
+
+## 5.6.2
+
+### Patch Changes
+
+- Updated dependencies [[`012a8e410d09d9a5dcf060b30b4b24b08500823d`](https://github.com/vercel/vercel/commit/012a8e410d09d9a5dcf060b30b4b24b08500823d)]:
+  - @vercel/build-utils@13.3.5
+
+## 5.6.1
+
+### Patch Changes
+
+- Updated dependencies [[`45963f54f26a3e54df58a3b6a30e383de4094dd1`](https://github.com/vercel/vercel/commit/45963f54f26a3e54df58a3b6a30e383de4094dd1), [`87ff85b1277d84021bc83aec6fc97021d3fdab9d`](https://github.com/vercel/vercel/commit/87ff85b1277d84021bc83aec6fc97021d3fdab9d)]:
+  - @vercel/build-utils@13.3.4
+
+## 5.6.0
+
+### Minor Changes
+
+- [services] add a dev lock for `vercel dev` to prevent launching multiple `vercel dev` processes for a multi-service projects. ([#14897](https://github.com/vercel/vercel/pull/14897))
+
+## 5.5.33
+
+### Patch Changes
+
+- Remove TypeScript 4 and use TypeScript 5 as the default built-in compiler. Replace ts-node with tsx for dev server transpilation. ([#14892](https://github.com/vercel/vercel/pull/14892))
+
+- Updated dependencies []:
+  - @vercel/build-utils@13.3.3
+
+## 5.5.32
+
+### Patch Changes
+
+- Updated dependencies [[`fc357e11cb4b00ab8ec413a0ea3586a87e733f0e`](https://github.com/vercel/vercel/commit/fc357e11cb4b00ab8ec413a0ea3586a87e733f0e), [`ff320caa5c8a0857aad0b989699207a6a703256f`](https://github.com/vercel/vercel/commit/ff320caa5c8a0857aad0b989699207a6a703256f)]:
+  - @vercel/build-utils@13.3.2
+
+## 5.5.31
+
+### Patch Changes
+
+- Updated dependencies [[`f45189244c2ca28083b0077532be4e2d9945faf0`](https://github.com/vercel/vercel/commit/f45189244c2ca28083b0077532be4e2d9945faf0)]:
+  - @vercel/build-utils@13.3.1
+
+## 5.5.30
+
+### Patch Changes
+
+- Updated dependencies [[`3ee91bd6782888e626486c706dcba65fd51ba0e5`](https://github.com/vercel/vercel/commit/3ee91bd6782888e626486c706dcba65fd51ba0e5), [`ce9208286ed6d29d6764ea4d290680ad98e65d22`](https://github.com/vercel/vercel/commit/ce9208286ed6d29d6764ea4d290680ad98e65d22)]:
+  - @vercel/build-utils@13.3.0
+
+## 5.5.29
+
+### Patch Changes
+
+- Updated dependencies [[`4500f1f482cdc19e0904be3b0e5922ceffc6de62`](https://github.com/vercel/vercel/commit/4500f1f482cdc19e0904be3b0e5922ceffc6de62), [`6d87d02723d4385ed1d08bb855fcc43f9466a984`](https://github.com/vercel/vercel/commit/6d87d02723d4385ed1d08bb855fcc43f9466a984)]:
+  - @vercel/build-utils@13.2.17
+
+## 5.5.28
+
+### Patch Changes
+
+- Updated dependencies [[`556d9b418d411e74bd59f682264a31dc71163026`](https://github.com/vercel/vercel/commit/556d9b418d411e74bd59f682264a31dc71163026), [`556d9b418d411e74bd59f682264a31dc71163026`](https://github.com/vercel/vercel/commit/556d9b418d411e74bd59f682264a31dc71163026)]:
+  - @vercel/build-utils@13.2.16
+
+## 5.5.27
+
+### Patch Changes
+
+- Updated dependencies [[`ee4463453cfe0711bf46491c080f97b196bdaa5a`](https://github.com/vercel/vercel/commit/ee4463453cfe0711bf46491c080f97b196bdaa5a)]:
+  - @vercel/build-utils@13.2.15
+
+## 5.5.26
+
+### Patch Changes
+
+- Updated dependencies [[`c762e424822819ba1bd8dd0f1fe6496741f7b586`](https://github.com/vercel/vercel/commit/c762e424822819ba1bd8dd0f1fe6496741f7b586)]:
+  - @vercel/build-utils@13.2.14
+
+## 5.5.25
+
+### Patch Changes
+
+- Updated dependencies [[`5f085b86b26310e027de5b757a4aac3ff88a9c02`](https://github.com/vercel/vercel/commit/5f085b86b26310e027de5b757a4aac3ff88a9c02)]:
+  - @vercel/build-utils@13.2.13
+
+## 5.5.24
+
+### Patch Changes
+
+- Updated dependencies [[`186967277069593406948c0e3099477ba43e181a`](https://github.com/vercel/vercel/commit/186967277069593406948c0e3099477ba43e181a)]:
+  - @vercel/build-utils@13.2.12
+
+## 5.5.23
+
+### Patch Changes
+
+- Updated dependencies [[`06bf941478bf7bfe479193ca77cfe3b00ff1a85e`](https://github.com/vercel/vercel/commit/06bf941478bf7bfe479193ca77cfe3b00ff1a85e)]:
+  - @vercel/build-utils@13.2.11
+
+## 5.5.22
+
+### Patch Changes
+
+- Updated dependencies [[`f46cab88668c148f2ff9728dd8cafc4f4ea6dda6`](https://github.com/vercel/vercel/commit/f46cab88668c148f2ff9728dd8cafc4f4ea6dda6)]:
+  - @vercel/build-utils@13.2.10
+
+## 5.5.21
+
+### Patch Changes
+
+- replace getRuntimeNodeVersion with getNodeVersion ([#14622](https://github.com/vercel/vercel/pull/14622))
+
+- Updated dependencies [[`74a6b49c53a5cee731c89437b06fc875731c0a87`](https://github.com/vercel/vercel/commit/74a6b49c53a5cee731c89437b06fc875731c0a87)]:
+  - @vercel/build-utils@13.2.9
+
+## 5.5.20
+
+### Patch Changes
+
+- Remove getSpawnOptions ([#14604](https://github.com/vercel/vercel/pull/14604))
+
+- Updated dependencies [[`92fe2dfd81c617fb733fec95a2547024d120a408`](https://github.com/vercel/vercel/commit/92fe2dfd81c617fb733fec95a2547024d120a408)]:
+  - @vercel/build-utils@13.2.8
+
+## 5.5.19
+
+### Patch Changes
+
+- Replace getNodeVersion with getRuntimeNodeVersion ([#14600](https://github.com/vercel/vercel/pull/14600))
+
+- Updated dependencies [[`b7fe57260459697e7bb16fabde80f4caf147aec4`](https://github.com/vercel/vercel/commit/b7fe57260459697e7bb16fabde80f4caf147aec4), [`460443ef814240f03bb385f95f22431bf496b5fa`](https://github.com/vercel/vercel/commit/460443ef814240f03bb385f95f22431bf496b5fa)]:
+  - @vercel/build-utils@13.2.7
+
+## 5.5.18
+
+### Patch Changes
+
+- Cleanup esbuild and rolldown dependencies ([#14577](https://github.com/vercel/vercel/pull/14577))
+
+- Updated dependencies [[`984164ff5f148fb6fd397902d16db780e9b98e6c`](https://github.com/vercel/vercel/commit/984164ff5f148fb6fd397902d16db780e9b98e6c), [`6d3c5b66324221f33290022897674af54461333e`](https://github.com/vercel/vercel/commit/6d3c5b66324221f33290022897674af54461333e)]:
+  - @vercel/build-utils@13.2.6
+
+## 5.5.17
+
+### Patch Changes
+
+- Updated dependencies [[`39c95ff6b643a63509571818e67a792df09fd71f`](https://github.com/vercel/vercel/commit/39c95ff6b643a63509571818e67a792df09fd71f), [`d63084dac296ccb2077ed742bc2ade0264da851d`](https://github.com/vercel/vercel/commit/d63084dac296ccb2077ed742bc2ade0264da851d)]:
+  - @vercel/build-utils@13.2.5
+
+## 5.5.16
+
+### Patch Changes
+
+- Updated dependencies [[`c55475f865ecf22f27b8b17f6fc98b9e1455ab5d`](https://github.com/vercel/vercel/commit/c55475f865ecf22f27b8b17f6fc98b9e1455ab5d)]:
+  - @vercel/build-utils@13.2.4
+
+## 5.5.15
+
+### Patch Changes
+
+- Use `workspace:*` for workspace dependencies ([#14396](https://github.com/vercel/vercel/pull/14396))
+
+- Updated dependencies [[`6bdbf9e170507a973a53bd881c8c7ecbaa3a930c`](https://github.com/vercel/vercel/commit/6bdbf9e170507a973a53bd881c8c7ecbaa3a930c)]:
+  - @vercel/build-utils@13.2.3
+
+## 5.5.14
+
+### Patch Changes
+
+- Bump NFT dependency ([#14373](https://github.com/vercel/vercel/pull/14373))
+
+- Updated dependencies [[`f9b8fb23d1d2f873c5c3a0534b12d1e463689bb6`](https://github.com/vercel/vercel/commit/f9b8fb23d1d2f873c5c3a0534b12d1e463689bb6)]:
+  - @vercel/build-utils@13.2.2
+
+## 5.5.13
+
+### Patch Changes
+
+- Disables auto instrumentation when the app has manual instrumentation setup ([#14345](https://github.com/vercel/vercel/pull/14345))
+
+- Updated dependencies [[`2ac2f0ea5597a9cd242707fba3ed28a521a75da3`](https://github.com/vercel/vercel/commit/2ac2f0ea5597a9cd242707fba3ed28a521a75da3)]:
+  - @vercel/build-utils@13.2.1
+
+## 5.5.12
+
+### Patch Changes
+
+- Update NFT dependency ([#14357](https://github.com/vercel/vercel/pull/14357))
+
+## 5.5.11
+
+### Patch Changes
+
+- Updated dependencies [[`2beb1222fbdde06e8a153521871c0a3b33228045`](https://github.com/vercel/vercel/commit/2beb1222fbdde06e8a153521871c0a3b33228045)]:
+  - @vercel/build-utils@13.2.0
+
+## 5.5.10
+
+### Patch Changes
+
+- Updated dependencies [[`fb70f3eef445879bcb28962a86c5691bff618f73`](https://github.com/vercel/vercel/commit/fb70f3eef445879bcb28962a86c5691bff618f73)]:
+  - @vercel/build-utils@13.1.2
+
+## 5.5.9
+
+### Patch Changes
+
+- Updated dependencies [[`a9340f6f5022eed96d1e42344b5bb67f1239ca41`](https://github.com/vercel/vercel/commit/a9340f6f5022eed96d1e42344b5bb67f1239ca41)]:
+  - @vercel/build-utils@13.1.1
+
+## 5.5.8
+
+### Patch Changes
+
+- Updated dependencies [[`0a1db0d2f42aa5c6f80541d6cadf3904d6131a80`](https://github.com/vercel/vercel/commit/0a1db0d2f42aa5c6f80541d6cadf3904d6131a80)]:
+  - @vercel/build-utils@13.1.0
+
+## 5.5.7
+
+### Patch Changes
+
+- Improve warning messages surrounding Elysia ([#14272](https://github.com/vercel/vercel/pull/14272))
+
+- Updated dependencies [[`2329dff0836e8699922eed7e70326511f93dd9f8`](https://github.com/vercel/vercel/commit/2329dff0836e8699922eed7e70326511f93dd9f8)]:
+  - @vercel/build-utils@13.0.2
+
+## 5.5.6
+
+### Patch Changes
+
+- Revert "Remove getSpawnOptions" ([#14261](https://github.com/vercel/vercel/pull/14261))
+
+- Use typescript 5 for backend builders ([#14252](https://github.com/vercel/vercel/pull/14252))
+
+- Updated dependencies [[`6221d3c49375450891d4bb1bba9e9702132f671b`](https://github.com/vercel/vercel/commit/6221d3c49375450891d4bb1bba9e9702132f671b)]:
+  - @vercel/build-utils@13.0.1
+
+## 5.5.5
+
+### Patch Changes
+
+- Remove getSpawnOptions ([#14176](https://github.com/vercel/vercel/pull/14176))
+
+- Updated dependencies [[`314a62920d965765c71b198ca672ff44242fd1fd`](https://github.com/vercel/vercel/commit/314a62920d965765c71b198ca672ff44242fd1fd)]:
+  - @vercel/build-utils@13.0.0
+
+## 5.5.4
+
+### Patch Changes
+
+- Updated dependencies [[`21214ebaf1077f1a9d1d7d4046bffe79db0196d2`](https://github.com/vercel/vercel/commit/21214ebaf1077f1a9d1d7d4046bffe79db0196d2)]:
+  - @vercel/build-utils@12.2.4
+
+## 5.5.3
+
+### Patch Changes
+
+- Add Elysia framework ([#14164](https://github.com/vercel/vercel/pull/14164))
+
+- Updated dependencies [[`55a1f7691ab944e133a43fc859fb8f373c5982c0`](https://github.com/vercel/vercel/commit/55a1f7691ab944e133a43fc859fb8f373c5982c0)]:
+  - @vercel/build-utils@12.2.3
+
+## 5.5.2
+
+### Patch Changes
+
+- Updated dependencies [[`f843e147b71ce44af214647c78eab4a6109db98b`](https://github.com/vercel/vercel/commit/f843e147b71ce44af214647c78eab4a6109db98b)]:
+  - @vercel/build-utils@12.2.2
+
+## 5.5.1
+
+### Patch Changes
+
+- Updated dependencies [[`0e63b0b007dd5705434ff594e7576c86dda939bc`](https://github.com/vercel/vercel/commit/0e63b0b007dd5705434ff594e7576c86dda939bc)]:
+  - @vercel/build-utils@12.2.1
+
+## 5.5.0
+
+### Minor Changes
+
+- Add support for Bun through a vercel.json property ([#14130](https://github.com/vercel/vercel/pull/14130))
+
+### Patch Changes
+
+- Updated dependencies [[`970781cb50ebdb0379056abe1700bba4a53fcf7c`](https://github.com/vercel/vercel/commit/970781cb50ebdb0379056abe1700bba4a53fcf7c)]:
+  - @vercel/build-utils@12.2.0
+
+## 5.4.1
+
+### Patch Changes
+
+- Ensure `vc dev` uses project-level ts when available ([#14115](https://github.com/vercel/vercel/pull/14115))
+
+## 5.4.0
+
+### Minor Changes
+
+- Add vc dev support for NestJS ([#14103](https://github.com/vercel/vercel/pull/14103))
+
+### Patch Changes
+
+- Updated dependencies [[`bcf9c18da437d9566eeff1fdaedb11abb00c080c`](https://github.com/vercel/vercel/commit/bcf9c18da437d9566eeff1fdaedb11abb00c080c)]:
+  - @vercel/build-utils@12.1.3
+
+## 5.3.26
+
+### Patch Changes
+
+- Updated dependencies [[`df38583152228b40060a5b11ef63c6a33cb12249`](https://github.com/vercel/vercel/commit/df38583152228b40060a5b11ef63c6a33cb12249)]:
+  - @vercel/build-utils@12.1.2
+
+## 5.3.25
+
+### Patch Changes
+
+- Updated dependencies [[`0fd2477a7510c7856c6d7e6622c72b712c285fe7`](https://github.com/vercel/vercel/commit/0fd2477a7510c7856c6d7e6622c72b712c285fe7)]:
+  - @vercel/build-utils@12.1.1
+
+## 5.3.24
+
+### Patch Changes
+
+- Add support for public asset folder for Hono preset ([#13958](https://github.com/vercel/vercel/pull/13958))
+
+## 5.3.23
+
+### Patch Changes
+
+- Add support for inlclude/exclude files config from vercel.json ([#13946](https://github.com/vercel/vercel/pull/13946))
+
+## 5.3.22
+
+### Patch Changes
+
+- Revert change to module resolution which slowed down Typescript builds for functions ([#13897](https://github.com/vercel/vercel/pull/13897))
+
+## 5.3.21
+
+### Patch Changes
+
+- Add support for public asset folder for Express preset ([#13879](https://github.com/vercel/vercel/pull/13879))
+
+## 5.3.20
+
+### Patch Changes
+
+- Support package.json#main field as the entrypoint ([#13846](https://github.com/vercel/vercel/pull/13846))
+
+- Fix issue where install scripts from project settings didn't pick up the appropriate pnpm version ([#13846](https://github.com/vercel/vercel/pull/13846))
+
+- Updated dependencies [[`fa9310f879f9e4c72c64bbf542e1e242914f800f`](https://github.com/vercel/vercel/commit/fa9310f879f9e4c72c64bbf542e1e242914f800f)]:
+  - @vercel/build-utils@12.1.0
+
+## 5.3.19
+
+### Patch Changes
+
+- Always compile `.mts` to ESM ([#13693](https://github.com/vercel/vercel/pull/13693))
+
+## 5.3.18
+
+### Patch Changes
+
+- Updated dependencies [[`d1ca3ed3ac1b9830403dc9dc3520e963ef8bec8e`](https://github.com/vercel/vercel/commit/d1ca3ed3ac1b9830403dc9dc3520e963ef8bec8e)]:
+  - @vercel/build-utils@12.0.0
+
+## 5.3.17
+
+### Patch Changes
+
+- Add .cts support to express and hono builders ([#13828](https://github.com/vercel/vercel/pull/13828))
+
+- Add support for http listener when it's not default exported ([#13826](https://github.com/vercel/vercel/pull/13826))
+
+- Fix issue where install scripts from project settings didn't pick up the appropriate pnpm version ([#13840](https://github.com/vercel/vercel/pull/13840))
+
+## 5.3.16
+
+### Patch Changes
+
+- Updated dependencies [[`6260486192ca407fc2d91f317ed81533548b8629`](https://github.com/vercel/vercel/commit/6260486192ca407fc2d91f317ed81533548b8629)]:
+  - @vercel/static-config@3.1.2
+
+## 5.3.15
+
+### Patch Changes
+
+- Add support for specifying an output directory for Express and Hono apps ([#13805](https://github.com/vercel/vercel/pull/13805))
+
+- [next][node][redwood][remix] bump `@vercel/nft@0.30.1` ([#13818](https://github.com/vercel/vercel/pull/13818))
+
+## 5.3.14
+
+### Patch Changes
+
+- Updated dependencies [[`28a41c6fddc7a3bc92fa54279063428b329e3104`](https://github.com/vercel/vercel/commit/28a41c6fddc7a3bc92fa54279063428b329e3104)]:
+  - @vercel/build-utils@11.0.2
+
+## 5.3.13
+
+### Patch Changes
+
+- Support running project build script for node builder if its being treated as the project's primary builder ([#13767](https://github.com/vercel/vercel/pull/13767))
+
+## 5.3.12
+
+### Patch Changes
+
+- Add `.mts` support to node builder ([#13687](https://github.com/vercel/vercel/pull/13687))
+
+- Skip lib check on node dev server ([#13696](https://github.com/vercel/vercel/pull/13696))
+
+- Updated dependencies [[`8a020e07c2116833bbe39ee43f62efad9f7de0de`](https://github.com/vercel/vercel/commit/8a020e07c2116833bbe39ee43f62efad9f7de0de)]:
+  - @vercel/build-utils@11.0.1
+
+## 5.3.11
+
+### Patch Changes
+
+- Support fetchable apps out of the box for Node dev server. ([#13664](https://github.com/vercel/vercel/pull/13664))
+
+  Support CommonJS for Hono
+
+## 5.3.10
+
+### Patch Changes
+
+- Fix issue where .mjs files weren't transpiled properly for Hono ([#13658](https://github.com/vercel/vercel/pull/13658))
+
+## 5.3.9
+
+### Patch Changes
+
+- Fix relative path issue when Hono builder uses the Node builder ([#13649](https://github.com/vercel/vercel/pull/13649))
+
+## 5.3.8
+
+### Patch Changes
+
+- Fix issue with hono support in monorepos ([#13642](https://github.com/vercel/vercel/pull/13642))
+
+## 5.3.7
+
+### Patch Changes
+
+- Adds framework detection and an associated builder for Hono. ([#13594](https://github.com/vercel/vercel/pull/13594))
+
+- Updated dependencies [[`b79db72d870a8d2e98e36a7413c656ae80fed01f`](https://github.com/vercel/vercel/commit/b79db72d870a8d2e98e36a7413c656ae80fed01f)]:
+  - @vercel/build-utils@11.0.0
+
+## 5.3.6
+
+### Patch Changes
+
+- Reverting support for `preferredRegion` ([#13566](https://github.com/vercel/vercel/pull/13566))
+
+- Updated dependencies [[`bae121f5ba238a7e98ac6159bc4cf36e23c33142`](https://github.com/vercel/vercel/commit/bae121f5ba238a7e98ac6159bc4cf36e23c33142)]:
+  - @vercel/build-utils@10.6.7
+
+## 5.3.5
+
+### Patch Changes
+
+- Updated dependencies [[`f37cd4e2eb35764a658f617643e2ab228191e7e2`](https://github.com/vercel/vercel/commit/f37cd4e2eb35764a658f617643e2ab228191e7e2)]:
+  - @vercel/build-utils@10.6.6
+
+## 5.3.4
+
+### Patch Changes
+
+- Updated dependencies [[`ed2d1c1ea934e803c5e656b1663034176aef2f27`](https://github.com/vercel/vercel/commit/ed2d1c1ea934e803c5e656b1663034176aef2f27)]:
+  - @vercel/build-utils@10.6.5
+
+## 5.3.3
+
+### Patch Changes
+
+- Updated dependencies [[`dc424e1b09230e35f4953e2c4d1ccdab18f57d8c`](https://github.com/vercel/vercel/commit/dc424e1b09230e35f4953e2c4d1ccdab18f57d8c)]:
+  - @vercel/build-utils@10.6.4
+
+## 5.3.2
+
+### Patch Changes
+
+- Updated dependencies [[`612f2af54c05ed758243122fe9ef2743c8ebd4c8`](https://github.com/vercel/vercel/commit/612f2af54c05ed758243122fe9ef2743c8ebd4c8), [`abf657ed5d52caa8965dcd3147174e940cca72b1`](https://github.com/vercel/vercel/commit/abf657ed5d52caa8965dcd3147174e940cca72b1)]:
+  - @vercel/build-utils@10.6.3
+
+## 5.3.1
+
+### Patch Changes
+
+- Updated dependencies [[`7103cde0b7e0468773d1c596e223105233260e40`](https://github.com/vercel/vercel/commit/7103cde0b7e0468773d1c596e223105233260e40)]:
+  - @vercel/build-utils@10.6.2
+
 ## 5.3.0
 
 ### Minor Changes

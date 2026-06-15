@@ -1,0 +1,14 @@
+query GetAllPackages {
+  packages {
+    length
+    items {
+      name
+      path
+      tasks {
+        items {
+          name
+        }
+      }
+    }
+  }
+}

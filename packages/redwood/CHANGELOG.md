@@ -1,5 +1,129 @@
 # @vercel/redwood
 
+## 2.5.0
+
+### Minor Changes
+
+- 78e5d4f: Add project manifest to node frontend builders.
+
+## 2.4.15
+
+### Patch Changes
+
+- ab0e5aa: Bump @vercel/nft to 1.10.0 and enable moduleSyncCatchall tracing in node, backends, and next builders.
+
+## 2.4.14
+
+### Patch Changes
+
+- Updated dependencies [eecd10d]
+  - @vercel/static-config@3.4.0
+
+## 2.4.13
+
+### Patch Changes
+
+- Updated dependencies [c56f851]
+  - @vercel/static-config@3.3.0
+
+## 2.4.12
+
+### Patch Changes
+
+- Bump @vercel/nft to 1.5.0 ([#15683](https://github.com/vercel/vercel/pull/15683))
+
+## 2.4.11
+
+### Patch Changes
+
+- Update @vercel/nft to 1.4.0 across packages ([#15626](https://github.com/vercel/vercel/pull/15626))
+
+## 2.4.10
+
+### Patch Changes
+
+- Updated dependencies [[`8a3558f680d592b4ea47ac7e48c99145d6368941`](https://github.com/vercel/vercel/commit/8a3558f680d592b4ea47ac7e48c99145d6368941)]:
+  - @vercel/static-config@3.2.0
+
+## 2.4.9
+
+### Patch Changes
+
+- replace getRuntimeNodeVersion with getNodeVersion ([#14622](https://github.com/vercel/vercel/pull/14622))
+
+## 2.4.8
+
+### Patch Changes
+
+- Remove getSpawnOptions ([#14604](https://github.com/vercel/vercel/pull/14604))
+
+## 2.4.7
+
+### Patch Changes
+
+- Replace getNodeVersion with getRuntimeNodeVersion ([#14600](https://github.com/vercel/vercel/pull/14600))
+
+## 2.4.6
+
+### Patch Changes
+
+- Use `workspace:*` for workspace dependencies ([#14396](https://github.com/vercel/vercel/pull/14396))
+
+## 2.4.5
+
+### Patch Changes
+
+- Bump NFT dependency ([#14373](https://github.com/vercel/vercel/pull/14373))
+
+## 2.4.4
+
+### Patch Changes
+
+- Disables auto instrumentation when the app has manual instrumentation setup ([#14345](https://github.com/vercel/vercel/pull/14345))
+
+## 2.4.3
+
+### Patch Changes
+
+- Update NFT dependency ([#14357](https://github.com/vercel/vercel/pull/14357))
+
+## 2.4.2
+
+### Patch Changes
+
+- Revert "Remove getSpawnOptions" ([#14261](https://github.com/vercel/vercel/pull/14261))
+
+## 2.4.1
+
+### Patch Changes
+
+- Remove getSpawnOptions ([#14176](https://github.com/vercel/vercel/pull/14176))
+
+## 2.4.0
+
+### Minor Changes
+
+- Add support for Bun through a vercel.json property ([#14130](https://github.com/vercel/vercel/pull/14130))
+
+## 2.3.6
+
+### Patch Changes
+
+- Updated dependencies [[`6260486192ca407fc2d91f317ed81533548b8629`](https://github.com/vercel/vercel/commit/6260486192ca407fc2d91f317ed81533548b8629)]:
+  - @vercel/static-config@3.1.2
+
+## 2.3.5
+
+### Patch Changes
+
+- [next][node][redwood][remix] bump `@vercel/nft@0.30.1` ([#13818](https://github.com/vercel/vercel/pull/13818))
+
+## 2.3.4
+
+### Patch Changes
+
+- Reverting support for `preferredRegion` ([#13566](https://github.com/vercel/vercel/pull/13566))
+
 ## 2.3.3
 
 ### Patch Changes

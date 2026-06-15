@@ -1,5 +1,10 @@
 import { packageName } from '../../util/pkg-name';
-import { limitOption, nextOption, yesOption } from '../../util/arg-common';
+import {
+  formatOption,
+  limitOption,
+  nextOption,
+  yesOption,
+} from '../../util/arg-common';
 
 export const setSubcommand = {
   name: 'set',
@@ -8,7 +13,7 @@ export const setSubcommand = {
   default: true,
   arguments: [
     {
-      name: 'deployment',
+      name: 'id-or-url',
       required: true,
     },
     {
@@ -25,7 +30,7 @@ export const listSubcommand = {
   aliases: ['ls'],
   description: 'Show all aliases',
   arguments: [],
-  options: [limitOption, nextOption],
+  options: [limitOption, nextOption, formatOption],
   examples: [],
 } as const;
 

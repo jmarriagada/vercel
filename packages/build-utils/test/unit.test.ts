@@ -12,6 +12,7 @@ import {
   runNpmInstall,
   runPackageJsonScript,
   scanParentDirs,
+  findPackageJson,
   Prerender,
 } from '../src';
 import type { Files } from '../src';
@@ -51,13 +52,13 @@ afterEach(() => {
 });
 
 it('should only match supported node versions, otherwise throw an error', async () => {
-  expect(await getSupportedNodeVersion('18.x', false)).toHaveProperty(
+  expect(await getSupportedNodeVersion('22.x', false)).toHaveProperty(
     'major',
-    18
+    22
   );
 
   const autoMessage =
-    'Please set Node.js Version to 22.x in your Project Settings to use Node.js 22.';
+    'Please set Node.js Version to 24.x in your Project Settings to use Node.js 24.';
   await expectBuilderError(
     getSupportedNodeVersion('8.11.x', true),
     autoMessage
@@ -71,13 +72,13 @@ it('should only match supported node versions, otherwise throw an error', async 
     autoMessage
   );
 
-  expect(await getSupportedNodeVersion('18.x', true)).toHaveProperty(
+  expect(await getSupportedNodeVersion('22.x', true)).toHaveProperty(
     'major',
-    18
+    22
   );
 
   const foundMessage =
-    'Please set "engines": { "node": "22.x" } in your `package.json` file to use Node.js 22.';
+    'Please set "engines": { "node": "24.x" } in your `package.json` file to use Node.js 24.';
   await expectBuilderError(
     getSupportedNodeVersion('8.11.x', false),
     foundMessage
@@ -95,7 +96,7 @@ it('should only match supported node versions, otherwise throw an error', async 
 });
 
 // https://linear.app/vercel/issue/ZERO-3238/unskip-tests-failing-due-to-node-16-removal
-// eslint-disable-next-line jest/no-disabled-tests
+// biome-ignore lint/suspicious/noSkippedTests: temporarily disabled
 it.skip('should match all semver ranges', async () => {
   // See https://docs.npmjs.com/files/package.json#engines
   expect(await getSupportedNodeVersion('16.0.0')).toHaveProperty('major', 16);
@@ -118,12 +119,6 @@ it.skip('should match all semver ranges', async () => {
   );
 });
 
-it('should allow nodejs18.x', async () => {
-  expect(await getSupportedNodeVersion('18.x')).toHaveProperty('major', 18);
-  expect(await getSupportedNodeVersion('18')).toHaveProperty('major', 18);
-  expect(await getSupportedNodeVersion('18.1.0')).toHaveProperty('major', 18);
-});
-
 it('should allow nodejs20.x', async () => {
   expect(await getSupportedNodeVersion('20.x')).toHaveProperty('major', 20);
   expect(await getSupportedNodeVersion('20')).toHaveProperty('major', 20);
@@ -131,26 +126,22 @@ it('should allow nodejs20.x', async () => {
 });
 
 it('should allow nodejs22.x', async () => {
-  expect(getLatestNodeVersion()).toHaveProperty('major', 22);
   expect(await getSupportedNodeVersion('22.x')).toHaveProperty('major', 22);
   expect(await getSupportedNodeVersion('22')).toHaveProperty('major', 22);
   expect(await getSupportedNodeVersion('22.1.0')).toHaveProperty('major', 22);
-  expect(await getSupportedNodeVersion('>=18')).toHaveProperty('major', 22);
 });
 
-it('should not allow nodejs20.x when not available', async () => {
-  // Simulates AL2 build-container
-  await expect(
-    getSupportedNodeVersion('20.x', true, [14, 16, 18])
-  ).rejects.toThrow(
-    'Found invalid Node.js Version: "20.x". Please set Node.js Version to 18.x in your Project Settings to use Node.js 18.'
-  );
+it('should only nodejs24.x', async () => {
+  expect(await getSupportedNodeVersion('24.x')).toHaveProperty('major', 24);
+  expect(await getSupportedNodeVersion('24')).toHaveProperty('major', 24);
+  expect(await getSupportedNodeVersion('24.3.0')).toHaveProperty('major', 24);
+  expect(await getSupportedNodeVersion('>=24')).toHaveProperty('major', 24);
 });
 
 it('should not allow nodejs18.x when not available', async () => {
   // Simulates AL2023 build-container
   await expect(getSupportedNodeVersion('18.x', true, [20])).rejects.toThrow(
-    'Found invalid Node.js Version: "18.x". Please set Node.js Version to 20.x in your Project Settings to use Node.js 20.'
+    'Found invalid or discontinued Node.js Version: "18.x". Please set Node.js Version to 20.x in your Project Settings to use Node.js 20.'
   );
 });
 
@@ -165,22 +156,45 @@ it('should ignore node version in vercel dev getNodeVersion()', async () => {
   ).toHaveProperty('runtime', 'nodejs');
 });
 
+it('should resolve to the provided bunVersion when its valid', async () => {
+  await expect(
+    getNodeVersion('/tmp', undefined, { bunVersion: '1.x' }, { isDev: false })
+  ).resolves.toHaveProperty('runtime', 'bun1.x');
+});
+
+it('should resolve to the provided bunVersion on dev', async () => {
+  await expect(
+    getNodeVersion('/tmp', undefined, { bunVersion: '1.x' }, { isDev: true })
+  ).resolves.toHaveProperty('runtime', 'bun1.x');
+});
+
+it('should fail if the provided bun version is not valid', async () => {
+  await expect(
+    getNodeVersion(
+      '/tmp',
+      undefined,
+      { bunVersion: 'bun1.x' },
+      { isDev: false }
+    )
+  ).rejects.toThrow();
+});
+
 it('should select project setting from config when no package.json is found and fallback undefined', async () => {
   expect(
-    await getNodeVersion('/tmp', undefined, { nodeVersion: '18.x' }, {})
-  ).toHaveProperty('range', '18.x');
+    await getNodeVersion('/tmp', undefined, { nodeVersion: '22.x' }, {})
+  ).toHaveProperty('range', '22.x');
   expect(warningMessages).toStrictEqual([]);
 });
 
 it('should select project setting from config when no package.json is found and fallback is null', async () => {
   expect(
-    await getNodeVersion('/tmp', null as any, { nodeVersion: '18.x' }, {})
-  ).toHaveProperty('range', '18.x');
+    await getNodeVersion('/tmp', null as any, { nodeVersion: '22.x' }, {})
+  ).toHaveProperty('range', '22.x');
   expect(warningMessages).toStrictEqual([]);
 });
 
 it('should select project setting from fallback when no package.json is found', async () => {
-  expect(await getNodeVersion('/tmp', '18.x')).toHaveProperty('range', '18.x');
+  expect(await getNodeVersion('/tmp', '22.x')).toHaveProperty('range', '22.x');
   expect(warningMessages).toStrictEqual([]);
 });
 
@@ -192,9 +206,9 @@ it('should prefer package.json engines over project setting from config and warn
       { nodeVersion: '12.x' },
       {}
     )
-  ).toHaveProperty('range', '18.x');
+  ).toHaveProperty('range', '22.x');
   expect(warningMessages).toStrictEqual([
-    'Warning: Due to "engines": { "node": "18.x" } in your `package.json` file, the Node.js Version defined in your Project Settings ("12.x") will not apply, Node.js Version "18.x" will be used instead. Learn More: http://vercel.link/node-version',
+    'Warning: Due to "engines": { "node": "22.x" } in your `package.json` file, the Node.js Version defined in your Project Settings ("12.x") will not apply, Node.js Version "22.x" will be used instead. Learn More: https://vercel.link/node-version',
   ]);
 });
 
@@ -206,9 +220,9 @@ it('should warn when package.json engines is exact version', async () => {
       {},
       {}
     )
-  ).toHaveProperty('range', '18.x');
+  ).toHaveProperty('range', '22.x');
   expect(warningMessages).toStrictEqual([
-    'Warning: Detected "engines": { "node": "18.2.0" } in your `package.json` with major.minor.patch, but only major Node.js Version can be selected. Learn More: http://vercel.link/node-version',
+    'Warning: Detected "engines": { "node": "22.11.0" } in your `package.json` with major.minor.patch, but only major Node.js Version can be selected. Learn More: https://vercel.link/node-version',
   ]);
 });
 
@@ -220,9 +234,9 @@ it('should warn when package.json engines is greater than', async () => {
       {},
       {}
     )
-  ).toHaveProperty('range', '22.x');
+  ).toHaveProperty('range', '24.x');
   expect(warningMessages).toStrictEqual([
-    'Warning: Detected "engines": { "node": ">=16" } in your `package.json` that will automatically upgrade when a new major Node.js Version is released. Learn More: http://vercel.link/node-version',
+    'Warning: Detected "engines": { "node": ">=16" } in your `package.json` that will automatically upgrade when a new major Node.js Version is released. Learn More: https://vercel.link/node-version',
   ]);
 });
 
@@ -234,10 +248,10 @@ it('should warn when project settings gets overrided', async () => {
       { nodeVersion: '16.x' },
       {}
     )
-  ).toHaveProperty('range', '22.x');
+  ).toHaveProperty('range', '24.x');
   expect(warningMessages).toStrictEqual([
-    'Warning: Due to "engines": { "node": ">=16" } in your `package.json` file, the Node.js Version defined in your Project Settings ("16.x") will not apply, Node.js Version "22.x" will be used instead. Learn More: http://vercel.link/node-version',
-    'Warning: Detected "engines": { "node": ">=16" } in your `package.json` that will automatically upgrade when a new major Node.js Version is released. Learn More: http://vercel.link/node-version',
+    'Warning: Due to "engines": { "node": ">=16" } in your `package.json` file, the Node.js Version defined in your Project Settings ("16.x") will not apply, Node.js Version "24.x" will be used instead. Learn More: https://vercel.link/node-version',
+    'Warning: Detected "engines": { "node": ">=16" } in your `package.json` that will automatically upgrade when a new major Node.js Version is released. Learn More: https://vercel.link/node-version',
   ]);
 });
 
@@ -246,40 +260,35 @@ it('should not warn when package.json engines matches project setting from confi
     await getNodeVersion(
       path.join(__dirname, 'pkg-engine-node'),
       undefined,
-      { nodeVersion: '18' },
+      { nodeVersion: '22' },
       {}
     )
-  ).toHaveProperty('range', '18.x');
+  ).toHaveProperty('range', '22.x');
   expect(warningMessages).toStrictEqual([]);
 
   expect(
     await getNodeVersion(
       path.join(__dirname, 'pkg-engine-node'),
       undefined,
-      { nodeVersion: '18.x' },
+      { nodeVersion: '22.x' },
       {}
     )
-  ).toHaveProperty('range', '18.x');
+  ).toHaveProperty('range', '22.x');
   expect(warningMessages).toStrictEqual([]);
 
   expect(
     await getNodeVersion(
       path.join(__dirname, 'pkg-engine-node'),
       undefined,
-      { nodeVersion: '<19' },
+      { nodeVersion: '<23' },
       {}
     )
-  ).toHaveProperty('range', '18.x');
+  ).toHaveProperty('range', '22.x');
   expect(warningMessages).toStrictEqual([]);
 });
 
 it('should get latest node version', async () => {
-  expect(getLatestNodeVersion()).toHaveProperty('major', 22);
-});
-
-it('should get latest node version with Node 18.x in build-container', async () => {
-  // Simulates AL2 build-container
-  expect(getLatestNodeVersion([14, 16, 18])).toHaveProperty('major', 18);
+  expect(getLatestNodeVersion()).toHaveProperty('major', 24);
 });
 
 it('should get latest node version with Node 22.x in build-container', async () => {
@@ -288,10 +297,10 @@ it('should get latest node version with Node 22.x in build-container', async () 
 });
 
 it('should throw for discontinued versions', async () => {
-  // Mock a future date so that Node 16 becomes discontinued
+  // Mock a future date so that Node 18 becomes discontinued
   const realDateNow = Date.now;
   try {
-    global.Date.now = () => new Date('2025-03-01').getTime();
+    global.Date.now = () => new Date('2025-10-01').getTime();
 
     expect(getSupportedNodeVersion('8.10.x', false)).rejects.toThrow();
     expect(getSupportedNodeVersion('8.10.x', true)).rejects.toThrow();
@@ -303,44 +312,38 @@ it('should throw for discontinued versions', async () => {
     expect(getSupportedNodeVersion('14.x', true)).rejects.toThrow();
     expect(getSupportedNodeVersion('16.x', false)).rejects.toThrow();
     expect(getSupportedNodeVersion('16.x', true)).rejects.toThrow();
+    expect(getSupportedNodeVersion('18.x', false)).rejects.toThrow();
+    expect(getSupportedNodeVersion('18.x', true)).rejects.toThrow();
 
     const discontinued = getDiscontinuedNodeVersions();
-    expect(discontinued.length).toBe(5);
-    expect(discontinued[0]).toHaveProperty('range', '16.x');
-    expect(discontinued[1]).toHaveProperty('range', '14.x');
-    expect(discontinued[2]).toHaveProperty('range', '12.x');
-    expect(discontinued[3]).toHaveProperty('range', '10.x');
-    expect(discontinued[4]).toHaveProperty('range', '8.10.x');
+    expect(discontinued.length).toBe(6);
+    expect(discontinued[0]).toHaveProperty('range', '18.x');
+    expect(discontinued[1]).toHaveProperty('range', '16.x');
+    expect(discontinued[2]).toHaveProperty('range', '14.x');
+    expect(discontinued[3]).toHaveProperty('range', '12.x');
+    expect(discontinued[4]).toHaveProperty('range', '10.x');
+    expect(discontinued[5]).toHaveProperty('range', '8.10.x');
   } finally {
     global.Date.now = realDateNow;
   }
 });
 
-it('should only allow nodejs22.x when env var is set', async () => {
-  expect(getLatestNodeVersion()).toHaveProperty('major', 22);
-  expect(await getSupportedNodeVersion('22.x')).toHaveProperty('major', 22);
-  expect(await getSupportedNodeVersion('22')).toHaveProperty('major', 22);
-  expect(await getSupportedNodeVersion('22.1.0')).toHaveProperty('major', 22);
-  expect(await getSupportedNodeVersion('>=20')).toHaveProperty('major', 22);
-});
-
 it('should warn for deprecated versions, soon to be discontinued', async () => {
-  // Mock a future date so that Node 16 warns
   const realDateNow = Date.now;
   try {
-    global.Date.now = () => new Date('2021-02-23').getTime();
+    global.Date.now = () => new Date('2025-08-31').getTime();
 
-    expect(await getSupportedNodeVersion('16.x', false)).toHaveProperty(
+    expect(await getSupportedNodeVersion('18.x', false)).toHaveProperty(
       'major',
-      16
+      18
     );
-    expect(await getSupportedNodeVersion('16.x', true)).toHaveProperty(
+    expect(await getSupportedNodeVersion('18.x', true)).toHaveProperty(
       'major',
-      16
+      18
     );
     expect(warningMessages).toStrictEqual([
-      'Error: Node.js version 16.x is deprecated. Deployments created on or after 2025-02-03 will fail to build. Please set "engines": { "node": "22.x" } in your `package.json` file to use Node.js 22.',
-      'Error: Node.js version 16.x is deprecated. Deployments created on or after 2025-02-03 will fail to build. Please set Node.js Version to 22.x in your Project Settings to use Node.js 22.',
+      'Error: Node.js version 18.x is deprecated. Deployments created on or after 2025-09-01 will fail to build. Please set "engines": { "node": "24.x" } in your `package.json` file to use Node.js 24.',
+      'Error: Node.js version 18.x is deprecated. Deployments created on or after 2025-09-01 will fail to build. Please set Node.js Version to 24.x in your Project Settings to use Node.js 24.',
     ]);
   } finally {
     global.Date.now = realDateNow;
@@ -549,6 +552,186 @@ it('should support experimentalBypassFor correctly', async () => {
   );
 });
 
+it('should round-trip hasPostponed as a tri-state', async () => {
+  // The api repo relies on telling `false` (PPR machinery but fully static)
+  // apart from `undefined` (no signal), so `false` must NOT collapse to
+  // `undefined` the way other boolean options do.
+  const postponed = new Prerender({
+    expiration: 1,
+    fallback: null,
+    group: 1,
+    bypassToken: 'some-long-bypass-token-to-make-it-work',
+    hasPostponed: true,
+  });
+  expect(postponed.hasPostponed).toBe(true);
+
+  const notPostponed = new Prerender({
+    expiration: 1,
+    fallback: null,
+    group: 1,
+    bypassToken: 'some-long-bypass-token-to-make-it-work',
+    hasPostponed: false,
+  });
+  expect(notPostponed.hasPostponed).toBe(false);
+
+  const omitted = new Prerender({
+    expiration: 1,
+    fallback: null,
+    group: 1,
+    bypassToken: 'some-long-bypass-token-to-make-it-work',
+  });
+  expect(omitted.hasPostponed).toBeUndefined();
+
+  expect(
+    () =>
+      new Prerender({
+        expiration: 1,
+        fallback: null,
+        group: 1,
+        bypassToken: 'some-long-bypass-token-to-make-it-work',
+        // @ts-expect-error - intentionally invalid to assert validation
+        hasPostponed: 'yes',
+      })
+  ).toThrow('The `hasPostponed` argument for `Prerender` must be a boolean');
+});
+
+it('should round-trip hasFallback as a tri-state', async () => {
+  // Like `hasPostponed`, the api repo needs to tell `false` (blocking/omitted
+  // template, no fallback) apart from `undefined` (concrete prerender, the
+  // concept doesn't apply), so `false` must NOT collapse to `undefined`.
+  const withFallback = new Prerender({
+    expiration: 1,
+    fallback: null,
+    group: 1,
+    bypassToken: 'some-long-bypass-token-to-make-it-work',
+    hasFallback: true,
+  });
+  expect(withFallback.hasFallback).toBe(true);
+
+  const noFallback = new Prerender({
+    expiration: 1,
+    fallback: null,
+    group: 1,
+    bypassToken: 'some-long-bypass-token-to-make-it-work',
+    hasFallback: false,
+  });
+  expect(noFallback.hasFallback).toBe(false);
+
+  const concrete = new Prerender({
+    expiration: 1,
+    fallback: null,
+    group: 1,
+    bypassToken: 'some-long-bypass-token-to-make-it-work',
+  });
+  expect(concrete.hasFallback).toBeUndefined();
+
+  expect(
+    () =>
+      new Prerender({
+        expiration: 1,
+        fallback: null,
+        group: 1,
+        bypassToken: 'some-long-bypass-token-to-make-it-work',
+        // @ts-expect-error - intentionally invalid to assert validation
+        hasFallback: 'yes',
+      })
+  ).toThrow('The `hasFallback` argument for `Prerender` must be a boolean');
+});
+
+it('should round-trip isDynamicRoute as a tri-state', async () => {
+  const dynamic = new Prerender({
+    expiration: 1,
+    fallback: null,
+    group: 1,
+    bypassToken: 'some-long-bypass-token-to-make-it-work',
+    isDynamicRoute: true,
+  });
+  expect(dynamic.isDynamicRoute).toBe(true);
+
+  const concrete = new Prerender({
+    expiration: 1,
+    fallback: null,
+    group: 1,
+    bypassToken: 'some-long-bypass-token-to-make-it-work',
+    isDynamicRoute: false,
+  });
+  expect(concrete.isDynamicRoute).toBe(false);
+
+  const unset = new Prerender({
+    expiration: 1,
+    fallback: null,
+    group: 1,
+    bypassToken: 'some-long-bypass-token-to-make-it-work',
+  });
+  expect(unset.isDynamicRoute).toBeUndefined();
+
+  expect(
+    () =>
+      new Prerender({
+        expiration: 1,
+        fallback: null,
+        group: 1,
+        bypassToken: 'some-long-bypass-token-to-make-it-work',
+        // @ts-expect-error - intentionally invalid to assert validation
+        isDynamicRoute: 'yes',
+      })
+  ).toThrow('The `isDynamicRoute` argument for `Prerender` must be a boolean');
+});
+
+it('should validate htmlSize as a non-negative integer', async () => {
+  const emptyShell = new Prerender({
+    expiration: 1,
+    fallback: null,
+    group: 1,
+    bypassToken: 'some-long-bypass-token-to-make-it-work',
+    htmlSize: 0,
+  });
+  expect(emptyShell.htmlSize).toBe(0);
+
+  const fullShell = new Prerender({
+    expiration: 1,
+    fallback: null,
+    group: 1,
+    bypassToken: 'some-long-bypass-token-to-make-it-work',
+    htmlSize: 5491,
+  });
+  expect(fullShell.htmlSize).toBe(5491);
+
+  const noHtml = new Prerender({
+    expiration: 1,
+    fallback: null,
+    group: 1,
+    bypassToken: 'some-long-bypass-token-to-make-it-work',
+  });
+  expect(noHtml.htmlSize).toBeUndefined();
+
+  expect(
+    () =>
+      new Prerender({
+        expiration: 1,
+        fallback: null,
+        group: 1,
+        bypassToken: 'some-long-bypass-token-to-make-it-work',
+        htmlSize: -1,
+      })
+  ).toThrow(
+    'The `htmlSize` argument for `Prerender` must be a non-negative integer'
+  );
+
+  expect(
+    () =>
+      new Prerender({
+        expiration: 1,
+        fallback: null,
+        group: 1,
+        bypassToken: 'some-long-bypass-token-to-make-it-work',
+        htmlSize: 1.5,
+      })
+  ).toThrow(
+    'The `htmlSize` argument for `Prerender` must be a non-negative integer'
+  );
+});
+
 it('should support passQuery correctly', async () => {
   new Prerender({
     expiration: 1,
@@ -589,6 +772,132 @@ it('should support passQuery correctly', async () => {
     });
   }).toThrowError(
     `The \`passQuery\` argument for \`Prerender\` must be a boolean.`
+  );
+});
+
+it('should support exposeErrBody correctly', async () => {
+  const prerenderWithTrue = new Prerender({
+    expiration: 1,
+    fallback: null,
+    group: 1,
+    bypassToken: 'some-long-bypass-token-to-make-it-work',
+    exposeErrBody: true,
+  });
+  expect(prerenderWithTrue.exposeErrBody).toBe(true);
+
+  const prerenderWithFalse = new Prerender({
+    expiration: 1,
+    fallback: null,
+    group: 1,
+    bypassToken: 'some-long-bypass-token-to-make-it-work',
+    exposeErrBody: false,
+  });
+  expect(prerenderWithFalse.exposeErrBody).toBeUndefined();
+
+  const prerenderWithUndefined = new Prerender({
+    expiration: 1,
+    fallback: null,
+    group: 1,
+    bypassToken: 'some-long-bypass-token-to-make-it-work',
+    exposeErrBody: undefined,
+  });
+  expect(prerenderWithUndefined.exposeErrBody).toBeUndefined();
+
+  const prerenderWithoutProperty = new Prerender({
+    expiration: 1,
+    fallback: null,
+    group: 1,
+    bypassToken: 'some-long-bypass-token-to-make-it-work',
+  });
+  expect(prerenderWithoutProperty.exposeErrBody).toBeUndefined();
+
+  expect(() => {
+    new Prerender({
+      expiration: 1,
+      fallback: null,
+      group: 1,
+      bypassToken: 'some-long-bypass-token-to-make-it-work',
+      // @ts-expect-error testing invalid field
+      exposeErrBody: 'true',
+    });
+  }).toThrowError(
+    `The \`exposeErrBody\` argument for \`Prerender\` must be a boolean.`
+  );
+
+  expect(() => {
+    new Prerender({
+      expiration: 1,
+      fallback: null,
+      group: 1,
+      bypassToken: 'some-long-bypass-token-to-make-it-work',
+      // @ts-expect-error testing invalid field
+      exposeErrBody: 1,
+    });
+  }).toThrowError(
+    `The \`exposeErrBody\` argument for \`Prerender\` must be a boolean.`
+  );
+});
+
+it('should support partialFallback correctly', async () => {
+  const prerenderWithTrue = new Prerender({
+    expiration: 1,
+    fallback: null,
+    group: 1,
+    bypassToken: 'some-long-bypass-token-to-make-it-work',
+    partialFallback: true,
+  });
+  expect(prerenderWithTrue.partialFallback).toBe(true);
+
+  const prerenderWithFalse = new Prerender({
+    expiration: 1,
+    fallback: null,
+    group: 1,
+    bypassToken: 'some-long-bypass-token-to-make-it-work',
+    partialFallback: false,
+  });
+  expect(prerenderWithFalse.partialFallback).toBeUndefined();
+
+  const prerenderWithUndefined = new Prerender({
+    expiration: 1,
+    fallback: null,
+    group: 1,
+    bypassToken: 'some-long-bypass-token-to-make-it-work',
+    partialFallback: undefined,
+  });
+  expect(prerenderWithUndefined.partialFallback).toBeUndefined();
+
+  const prerenderWithoutProperty = new Prerender({
+    expiration: 1,
+    fallback: null,
+    group: 1,
+    bypassToken: 'some-long-bypass-token-to-make-it-work',
+  });
+  expect(prerenderWithoutProperty.partialFallback).toBeUndefined();
+
+  expect(() => {
+    new Prerender({
+      expiration: 1,
+      fallback: null,
+      group: 1,
+      bypassToken: 'some-long-bypass-token-to-make-it-work',
+      // @ts-expect-error testing invalid field
+      partialFallback: 'true',
+    });
+  }).toThrowError(
+    `The \`partialFallback\` argument for \`Prerender\` must be a boolean.`
+  );
+
+  expect(() => {
+    new Prerender({
+      expiration: 1,
+      fallback: null,
+      group: 1,
+      bypassToken: 'some-long-bypass-token-to-make-it-work',
+      // @ts-expect-error testing invalid field
+      partialFallback: 1,
+    });
+  }).toThrowError(
+    `The \`partialFallback\` argument for \`Prerender\` must be a boolean.`
   );
 });
 
@@ -871,7 +1180,7 @@ it('should detect pnpm without workspace', async () => {
   const fixture = path.join(__dirname, 'fixtures', '22-pnpm');
   const result = await scanParentDirs(fixture);
   expect(result.cliType).toEqual('pnpm');
-  expect(result.lockfileVersion).toEqual(5.3);
+  expect(result.lockfileVersion).toEqual(9);
   expect(result.lockfilePath).toEqual(path.join(fixture, 'pnpm-lock.yaml'));
   expect(result.packageJsonPath).toEqual(path.join(fixture, 'package.json'));
 });
@@ -880,7 +1189,7 @@ it('should detect pnpm with workspaces', async () => {
   const fixture = path.join(__dirname, 'fixtures', '23-pnpm-workspaces/c');
   const result = await scanParentDirs(fixture);
   expect(result.cliType).toEqual('pnpm');
-  expect(result.lockfileVersion).toEqual(5.3);
+  expect(result.lockfileVersion).toEqual(9);
   expect(result.lockfilePath).toEqual(
     path.join(fixture, '..', 'pnpm-lock.yaml')
   );
@@ -895,7 +1204,7 @@ it('should detect package.json in nested backend', async () => {
   const result = await scanParentDirs(fixture);
   expect(result.cliType).toEqual('pnpm');
   // There is no lockfile but this test will pick up vercel/vercel/pnpm-lock.yaml
-  expect(result.lockfileVersion).toEqual(6);
+  expect(result.lockfileVersion).toEqual(9);
   expect(result.packageJsonPath).toEqual(path.join(fixture, 'package.json'));
 });
 
@@ -907,7 +1216,7 @@ it('should detect package.json in nested frontend', async () => {
   const result = await scanParentDirs(fixture);
   expect(result.cliType).toEqual('pnpm');
   // There is no lockfile but this test will pick up vercel/vercel/pnpm-lock.yaml
-  expect(result.lockfileVersion).toEqual(6);
+  expect(result.lockfileVersion).toEqual(9);
   expect(result.packageJsonPath).toEqual(path.join(fixture, 'package.json'));
 });
 
@@ -927,6 +1236,17 @@ it('should handle turborepo project with comments in turbo.json', async () => {
     __dirname,
     'fixtures',
     '43-turborepo-with-comments-in-turbo-json'
+  );
+  const fixture = path.join(base, '/apps/web');
+  const result = await scanParentDirs(fixture, true, base);
+  expect(result.turboSupportsCorepackHome).toEqual(true);
+});
+
+it('should handle turborepo project with turbo.jsonc', async () => {
+  const base = path.join(
+    __dirname,
+    'fixtures',
+    '44-turborepo-with-turbo-jsonc'
   );
   const fixture = path.join(base, '/apps/web');
   const result = await scanParentDirs(fixture, true, base);
@@ -986,6 +1306,46 @@ it('should detect `packageManager` in pnpm monorepo', async () => {
   }
 });
 
+describe('findPackageJson', () => {
+  it('should find package.json and return path without reading contents', async () => {
+    const fixture = path.join(__dirname, 'fixtures', '20-npm-7');
+    const result = await findPackageJson(fixture, false);
+    expect(result.packageJsonPath).toEqual(path.join(fixture, 'package.json'));
+    expect(result.packageJson).toBeUndefined();
+  });
+
+  it('should find package.json and read contents when readPackageJson is true', async () => {
+    const fixture = path.join(__dirname, 'fixtures', '20-npm-7');
+    const result = await findPackageJson(fixture, true);
+    expect(result.packageJsonPath).toEqual(path.join(fixture, 'package.json'));
+    expect(result.packageJson).toBeDefined();
+    expect(result.packageJson?.name).toBeDefined();
+  });
+
+  it('should traverse up directories to find package.json', async () => {
+    const base = path.join(__dirname, 'fixtures', '21-npm-workspaces');
+    const fixture = path.join(base, 'a');
+    const result = await findPackageJson(fixture, true);
+    expect(result.packageJsonPath).toEqual(path.join(fixture, 'package.json'));
+    expect(result.packageJson).toBeDefined();
+  });
+
+  it('should respect the base parameter boundary', async () => {
+    const base = path.join(__dirname, 'fixtures', '23-pnpm-workspaces');
+    const fixture = path.join(base, 'c');
+    const result = await findPackageJson(fixture, true, base);
+    expect(result.packageJsonPath).toEqual(path.join(fixture, 'package.json'));
+    expect(result.packageJson).toBeDefined();
+  });
+
+  it('should return undefined when no package.json is found', async () => {
+    // Use a directory that definitely has no package.json
+    const result = await findPackageJson('/tmp', false, '/tmp');
+    expect(result.packageJsonPath).toBeUndefined();
+    expect(result.packageJson).toBeUndefined();
+  });
+});
+
 it('should retry npm install when peer deps invalid and npm@8 on node@16', async () => {
   const nodeMajor = Number(process.versions.node.split('.')[0]);
   if (nodeMajor !== 16) {
@@ -1002,8 +1362,7 @@ it('should retry npm install when peer deps invalid and npm@8 on node@16', async
   }
 
   const fixture = path.join(__dirname, 'fixtures', '15-npm-8-legacy-peer-deps');
-  const nodeVersion = { major: nodeMajor } as any;
-  await runNpmInstall(fixture, [], {}, {}, nodeVersion);
+  await runNpmInstall(fixture, [], {}, {});
   expect(warningMessages).toStrictEqual([
     'Warning: Retrying "Install Command" with `--legacy-peer-deps` which may accept a potentially broken dependency and slow install time.',
   ]);

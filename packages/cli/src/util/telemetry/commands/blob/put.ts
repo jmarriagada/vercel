@@ -6,6 +6,15 @@ export class BlobPutTelemetryClient
   extends TelemetryClient
   implements TelemetryMethods<typeof putSubcommand>
 {
+  trackCliOptionAccess(value: string | undefined) {
+    if (value) {
+      this.trackCliOption({
+        option: 'access',
+        value,
+      });
+    }
+  }
+
   trackCliArgumentPathToFile(pathToFile: string | undefined) {
     if (pathToFile) {
       this.trackCliArgument({
@@ -13,6 +22,13 @@ export class BlobPutTelemetryClient
         value: this.redactedValue,
       });
     }
+  }
+
+  trackCliInputSourceStdin() {
+    this.trackCliArgument({
+      arg: 'pathToFile',
+      value: '__vercel_stdin__',
+    });
   }
 
   trackCliFlagAddRandomSuffix(addRandomSuffix: boolean | undefined) {
@@ -54,9 +70,18 @@ export class BlobPutTelemetryClient
     }
   }
 
-  trackCliFlagForce(force: boolean | undefined) {
-    if (force) {
-      this.trackCliFlag('force');
+  trackCliFlagAllowOverwrite(allowOverwrite: boolean | undefined) {
+    if (allowOverwrite) {
+      this.trackCliFlag('allow-overwrite');
+    }
+  }
+
+  trackCliOptionIfMatch(ifMatch: string | undefined) {
+    if (ifMatch) {
+      this.trackCliOption({
+        option: 'if-match',
+        value: this.redactedValue,
+      });
     }
   }
 }

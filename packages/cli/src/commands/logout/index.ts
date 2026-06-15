@@ -1,8 +1,5 @@
 import { printError } from '../../util/error';
-import {
-  writeToConfigFile,
-  writeToAuthConfigFile,
-} from '../../util/config/files';
+import { persistAuthConfig, writeToConfigFile } from '../../util/config/files';
 import { parseArguments } from '../../util/get-args';
 import type Client from '../../util/client';
 import { getCommandName } from '../../util/pkg-name';
@@ -39,12 +36,15 @@ export default async function logout(client: Client): Promise<number> {
   if (parsedArgs.flags['--help']) {
     telemetry.trackCliFlagHelp('logout');
     output.print(help(logoutCommand, { columns: client.stderr.columns }));
-    return 2;
+    return 0;
   }
 
-  if (authConfig.type === 'oauth') {
+  // Unless the authConfig has a refreshToken, fall back to legacy logout
+  if ('refreshToken' in authConfig) {
     return await future(client);
   }
+
+  output.debug('Falling back to legacy logout');
 
   if (!authConfig.token) {
     output.note(
@@ -75,10 +75,13 @@ export default async function logout(client: Client): Promise<number> {
   delete config.currentTeam;
 
   delete authConfig.token;
+  delete authConfig.userId;
 
   try {
-    writeToConfigFile(config);
-    writeToAuthConfigFile(authConfig);
+    if (!authConfig.skipWrite) {
+      writeToConfigFile(config);
+      persistAuthConfig(authConfig, config);
+    }
     output.debug('Configuration has been deleted');
   } catch (err: unknown) {
     output.debug(errorToString(err));

@@ -1,12 +1,20 @@
-import { bold, gray } from 'chalk';
+import { bold, gray, red, yellow, bgRed, white } from 'chalk';
 import checkbox from '@inquirer/checkbox';
 import confirm from '@inquirer/confirm';
 import expand from '@inquirer/expand';
 import input from '@inquirer/input';
+import password from '@inquirer/password';
+import search from '@inquirer/search';
 import select from '@inquirer/select';
+import { join, resolve } from 'node:path';
 import { EventEmitter } from 'events';
 import { URL } from 'url';
 import type { VercelConfig } from '@vercel/client';
+import {
+  getGlobalPathConfig as getSharedGlobalPathConfig,
+  readConfigFile as readSharedConfigFile,
+  writeConfigFile as writeSharedConfigFile,
+} from '@vercel/cli-config';
 import retry, {
   type RetryFunction,
   type Options as RetryOptions,
@@ -17,21 +25,24 @@ import fetch, {
   type RequestInit,
   type Response,
 } from 'node-fetch';
+import pkg from './pkg';
 import ua from './ua';
 import responseError from './response-error';
 import printIndications from './print-indications';
 import reauthenticate from './login/reauthenticate';
 import type { SAMLError } from './login/types';
-import { writeToAuthConfigFile, writeToConfigFile } from './config/files';
+import { persistAuthConfig, writeToConfigFile } from './config/files';
 import type { TelemetryEventStore } from './telemetry';
+import type { Span } from '@vercel/build-utils';
 import type {
   AuthConfig,
   GlobalConfig,
   JSONObject,
+  Team,
   Stdio,
   ReadableTTY,
   PaginationOptions,
-  OAuthAuthConfig,
+  User,
 } from '@vercel-internals/types';
 import { sharedPromise } from './promise';
 import { APIError } from './errors-ts';
@@ -39,11 +50,20 @@ import { normalizeError } from '@vercel/error-utils';
 import type { Agent } from 'http';
 import sleep from './sleep';
 import type * as tty from 'tty';
+import type { z } from 'zod';
 import output from '../output-manager';
+import { parseArguments } from './get-args';
 import { processTokenResponse, refreshTokenRequest } from './oauth';
+
+const DOMAINS_API_PATH = /^\/v\d+\/(?:domains|registrar)(?:\/|$)/;
 
 const isSAMLError = (v: any): v is SAMLError => {
   return v && v.saml;
+};
+
+type ParsedArgsCache = {
+  args: string[];
+  flags: Record<string, string | boolean | undefined>;
 };
 
 export interface FetchOptions extends Omit<RequestInit, 'body'> {
@@ -52,6 +72,8 @@ export interface FetchOptions extends Omit<RequestInit, 'body'> {
   retry?: RetryOptions;
   useCurrentTeam?: boolean;
   accountId?: string;
+  /** When true, 429 responses are returned immediately instead of waiting for Retry-After and retrying */
+  bailOn429?: boolean;
 }
 
 export interface ClientOptions extends Stdio {
@@ -63,30 +85,39 @@ export interface ClientOptions extends Stdio {
   localConfigPath?: string;
   agent?: Agent;
   telemetryEventStore: TelemetryEventStore;
+  /** Whether the CLI is being run by an AI agent */
+  isAgent?: boolean;
+  /** Name of the agent running the CLI (e.g., 'claude', 'cursor') */
+  agentName?: string;
+  /** Run without interactive prompts; true when --non-interactive or when agent is detected */
+  nonInteractive?: boolean;
+  /** Dangerously skip all permission prompts (--dangerously-skip-permissions flag) */
+  dangerouslySkipPermissions?: boolean;
 }
 
 export const isJSONObject = (v: any): v is JSONObject => {
   return v && typeof v == 'object' && v.constructor === Object;
 };
 
-export function isOAuthAuth(
-  authConfig: AuthConfig
-): authConfig is OAuthAuthConfig {
-  return authConfig.type === 'oauth';
-}
+export function isValidAccessToken(authConfig: AuthConfig): boolean {
+  if (!authConfig.token) return false;
 
-export function isValidAccessToken(authConfig: OAuthAuthConfig): boolean {
-  return 'token' in authConfig && (authConfig.expiresAt ?? 0) >= Date.now();
+  // When `--token` is passed to a command, `expiresAt` will be missing.
+  // We assume the token is valid in this case and handle errors further down.
+  if (typeof authConfig.expiresAt !== 'number') return true;
+
+  const nowInSeconds = Math.floor(Date.now() / 1000);
+  return authConfig.expiresAt >= nowInSeconds;
 }
 
 export function hasRefreshToken(
-  authConfig: OAuthAuthConfig
-): authConfig is OAuthAuthConfig & { refreshToken: string } {
+  authConfig: AuthConfig
+): authConfig is AuthConfig & { refreshToken: string } {
   return 'refreshToken' in authConfig;
 }
 
 export default class Client extends EventEmitter implements Stdio {
-  argv: string[];
+  private _argv: string[] = [];
   apiUrl: string;
   authConfig: AuthConfig;
   stdin: ReadableTTY;
@@ -99,11 +130,31 @@ export default class Client extends EventEmitter implements Stdio {
   requestIdCounter: number;
   input;
   telemetryEventStore: TelemetryEventStore;
+  /** Whether the CLI is being run by an AI agent */
+  isAgent: boolean;
+  /** Name of the agent running the CLI */
+  agentName?: string;
+  /** Run without interactive prompts; true when --non-interactive or when agent is detected */
+  nonInteractive: boolean;
+  /** Dangerously skip all permission prompts (--dangerously-skip-permissions flag) */
+  dangerouslySkipPermissions: boolean;
+  /** Root trace span for CLI diagnostics */
+  rootSpan?: Span;
+  /** Path to write CLI trace diagnostics. Only set by `vc build`; other commands do not write traces. */
+  traceDiagnosticsPath?: string;
+  /** Track if we've already logged the token source debug message */
+  private _loggedTokenSource: boolean = false;
+  private _parsedArgsCache?: ParsedArgsCache;
+  /** Request-scoped identity caches used to avoid repeated scope lookups. */
+  user?: User;
+  userPromise?: Promise<User>;
+  teams?: Team[];
+  teamsPromise?: Promise<Team[]>;
 
   constructor(opts: ClientOptions) {
     super();
     this.agent = opts.agent;
-    this.argv = opts.argv;
+    this.setArgv(opts.argv);
     this.apiUrl = opts.apiUrl;
     this.authConfig = opts.authConfig;
     this.stdin = opts.stdin;
@@ -114,6 +165,10 @@ export default class Client extends EventEmitter implements Stdio {
     this.localConfigPath = opts.localConfigPath;
     this.requestIdCounter = 1;
     this.telemetryEventStore = opts.telemetryEventStore;
+    this.isAgent = opts.isAgent ?? false;
+    this.agentName = opts.agentName;
+    this.nonInteractive = opts.nonInteractive ?? this.isAgent;
+    this.dangerouslySkipPermissions = opts.dangerouslySkipPermissions ?? false;
 
     const theme = {
       prefix: gray('?'),
@@ -122,6 +177,11 @@ export default class Client extends EventEmitter implements Stdio {
     this.input = {
       text: (opts: Parameters<typeof input>[0]) =>
         input({ theme, ...opts }, { input: this.stdin, output: this.stderr }),
+      password: (opts: Parameters<typeof password>[0]) =>
+        password(
+          { theme, ...opts },
+          { input: this.stdin, output: this.stderr }
+        ),
       checkbox: <T>(opts: Parameters<typeof checkbox<T>>[0]) =>
         checkbox<T>(
           { theme, ...opts },
@@ -139,7 +199,41 @@ export default class Client extends EventEmitter implements Stdio {
           { theme, ...opts },
           { input: this.stdin, output: this.stderr }
         ),
+      search: <T>(opts: Parameters<typeof search<T>>[0]) =>
+        search<T>(
+          { theme, ...opts },
+          { input: this.stdin, output: this.stderr }
+        ),
     };
+  }
+
+  get argv(): string[] {
+    return this._argv;
+  }
+
+  setArgv(argv: string[]): void;
+  setArgv(...argv: string[]): void;
+  setArgv(argvOrFirst: string[] | string, ...rest: string[]) {
+    const argv = Array.isArray(argvOrFirst)
+      ? argvOrFirst
+      : [argvOrFirst, ...rest];
+
+    this._argv = argv;
+    this._parsedArgsCache = undefined;
+  }
+
+  private getParsedArgs(): ParsedArgsCache {
+    if (!this._parsedArgsCache) {
+      this._parsedArgsCache = parseArguments(
+        this.argv.slice(2),
+        {},
+        {
+          permissive: true,
+        }
+      ) as ParsedArgsCache;
+    }
+
+    return this._parsedArgsCache;
   }
 
   retry<T>(fn: RetryFunction<T>, { retries = 3, maxTimeout = Infinity } = {}) {
@@ -151,20 +245,30 @@ export default class Client extends EventEmitter implements Stdio {
   }
 
   /**
-   * When the auth config is of type `OAuthAuthConfig`,
-   * this method silently tries to refresh the access_token if it is expired.
+   * This method silently tries to refresh the access_token if it is expired.
    *
    * If the refresh_token is also expired, it will not attempt to refresh it.
    * If there is any error during the refresh process, it will not throw an error.
    */
   private async ensureAuthorized(): Promise<void> {
-    if (!isOAuthAuth(this.authConfig)) return;
-
     const { authConfig } = this;
 
     // If we have a valid access token, do nothing
     if (isValidAccessToken(authConfig)) {
-      output.debug('Valid access token, skipping token refresh.');
+      if (!this._loggedTokenSource) {
+        if (authConfig.tokenSource === 'flag') {
+          output.debug(
+            'Using token from `--token` argument, skipping token refresh.'
+          );
+        } else if (authConfig.tokenSource === 'env') {
+          output.debug(
+            'Using token from VERCEL_TOKEN environment variable, skipping token refresh.'
+          );
+        } else {
+          output.debug('Valid access token, skipping token refresh.');
+        }
+        this._loggedTokenSource = true;
+      }
       return;
     }
 
@@ -173,7 +277,7 @@ export default class Client extends EventEmitter implements Stdio {
     if (!hasRefreshToken(authConfig)) {
       output.debug('No refresh token found, emptying auth config.');
       this.emptyAuthConfig();
-      this.writeToAuthConfigFile();
+      this.persistAuthConfig();
       return;
     }
 
@@ -188,12 +292,13 @@ export default class Client extends EventEmitter implements Stdio {
     if (tokensError) {
       output.debug('Error refreshing token, emptying auth config.');
       this.emptyAuthConfig();
-      this.writeToAuthConfigFile();
+      this.persistAuthConfig();
       return;
     }
 
+    // Token refresh does not change the authenticated user, so the cached
+    // userId is intentionally preserved here.
     this.updateAuthConfig({
-      type: 'oauth',
       token: tokens.access_token,
       expiresAt: Math.floor(Date.now() / 1000) + tokens.expires_in,
     });
@@ -202,10 +307,48 @@ export default class Client extends EventEmitter implements Stdio {
       this.updateAuthConfig({ refreshToken: tokens.refresh_token });
     }
 
-    this.writeToAuthConfigFile();
+    this.persistAuthConfig();
     this.writeToConfigFile();
 
     output.debug('Tokens refreshed successfully.');
+  }
+
+  getGlobalPathConfig(): string {
+    const confFlag = this.getParsedArgs().flags['--global-config'];
+
+    if (typeof confFlag === 'string') {
+      return resolve(this.cwd, confFlag);
+    }
+
+    return getSharedGlobalPathConfig();
+  }
+
+  async readConfig<S extends z.ZodType>(
+    fileName: string,
+    schema: S
+  ): Promise<z.output<S>> {
+    const filePath = join(this.getGlobalPathConfig(), fileName);
+    return readSharedConfigFile(filePath, schema);
+  }
+
+  async maybeReadConfig<S extends z.ZodType>(
+    fileName: string,
+    schema: S
+  ): Promise<z.output<S> | null> {
+    try {
+      return await this.readConfig(fileName, schema);
+    } catch {
+      return null;
+    }
+  }
+
+  async writeConfig<S extends z.ZodType>(
+    fileName: string,
+    schema: S,
+    value: z.output<S>
+  ): Promise<void> {
+    const filePath = join(this.getGlobalPathConfig(), fileName);
+    writeSharedConfigFile(filePath, schema, value);
   }
 
   updateConfig(config: Partial<GlobalConfig>) {
@@ -217,15 +360,94 @@ export default class Client extends EventEmitter implements Stdio {
   }
 
   updateAuthConfig(authConfig: Partial<AuthConfig>) {
+    if (authConfig.token && authConfig.token !== this.authConfig.token) {
+      this.user = undefined;
+      this.userPromise = undefined;
+      this.teams = undefined;
+      this.teamsPromise = undefined;
+    }
     this.authConfig = { ...this.authConfig, ...authConfig };
   }
 
   emptyAuthConfig() {
-    this.authConfig = {};
+    this.user = undefined;
+    this.userPromise = undefined;
+    this.teams = undefined;
+    this.teamsPromise = undefined;
+    this.authConfig = this.authConfig.skipWrite ? { skipWrite: true } : {};
   }
 
-  writeToAuthConfigFile() {
-    writeToAuthConfigFile(this.authConfig);
+  persistAuthConfig() {
+    persistAuthConfig(this.authConfig, this.config);
+  }
+
+  /**
+   * Confirms DELETE operations with the user.
+   *
+   * - DELETE operations always require confirmation (unless --dangerously-skip-permissions is used)
+   * - When running under an AI agent with --dangerously-skip-permissions,
+   *   a warning is displayed for visibility
+   *
+   * @returns true if the operation should proceed, false if canceled
+   */
+  async confirmMutatingOperation(
+    url: string,
+    method: string | undefined
+  ): Promise<boolean> {
+    const normalizedMethod = (method || 'GET').toUpperCase();
+    const isDelete = normalizedMethod === 'DELETE';
+
+    // Only DELETE operations require confirmation
+    if (!isDelete) {
+      return true;
+    }
+
+    // Show agent mode warning when --dangerously-skip-permissions is used
+    if (this.isAgent && this.dangerouslySkipPermissions) {
+      const agentInfo = this.agentName ? ` (${this.agentName})` : '';
+      output.print('\n');
+      output.print(
+        bgRed(white(bold(' ⚠ WARNING '))) +
+          red(bold(' AGENT MODE - DELETE CONFIRMATION BYPASSED\n'))
+      );
+      output.print(
+        yellow(
+          `  An AI agent${agentInfo} is executing a ${bold('DELETE')} request with --dangerously-skip-permissions flag.\n`
+        )
+      );
+      output.print(yellow(`  This operation will delete data: ${bold(url)}\n`));
+      output.print(
+        yellow(
+          `  The --dangerously-skip-permissions flag has bypassed the confirmation prompt.\n\n`
+        )
+      );
+    }
+
+    // If --dangerously-skip-permissions flag is set, skip confirmation
+    if (this.dangerouslySkipPermissions) {
+      return true;
+    }
+
+    // Check if we have a TTY for interactive prompts
+    if (!this.stdin.isTTY) {
+      output.error(
+        `DELETE operations require confirmation. Use ${bold('--dangerously-skip-permissions')} to skip confirmation in non-interactive mode.`
+      );
+      return false;
+    }
+
+    // Prompt for DELETE confirmation
+    const message = `You are about to perform a ${red(bold('DELETE'))} operation on:\n  ${bold(url)}\n\nAre you sure you want to proceed?`;
+
+    output.print('\n');
+    const confirmed = await this.input.confirm(message, false);
+    output.print('\n');
+
+    if (!confirmed) {
+      output.log('Operation canceled by user.');
+    }
+
+    return confirmed;
   }
 
   private async _fetch(_url: string, opts: FetchOptions = {}) {
@@ -238,13 +460,23 @@ export default class Client extends EventEmitter implements Stdio {
         } else {
           url.searchParams.delete('teamId');
         }
-      } else if (opts.useCurrentTeam !== false && this.config.currentTeam) {
+      } else if (
+        opts.useCurrentTeam !== false &&
+        this.config.currentTeam &&
+        !url.searchParams.has('teamId')
+      ) {
         url.searchParams.set('teamId', this.config.currentTeam);
       }
     }
 
     const headers = new Headers(opts.headers);
     headers.set('user-agent', ua);
+    if (DOMAINS_API_PATH.test(url.pathname)) {
+      headers.set('x-vercel-cli-version', pkg.version);
+    }
+    if (this.agentName) {
+      headers.set('x-ai-agent', this.agentName);
+    }
 
     await this.ensureAuthorized();
 
@@ -279,11 +511,28 @@ export default class Client extends EventEmitter implements Stdio {
   fetch<T>(url: string, opts?: FetchOptions): Promise<T>;
   fetch(url: string, opts: FetchOptions = {}) {
     return this.retry(async bail => {
-      const res = await this._fetch(url, opts);
+      let res: Awaited<ReturnType<Client['_fetch']>>;
+      try {
+        res = await this._fetch(url, opts);
+      } catch (err: unknown) {
+        if (err instanceof Error && err.name === 'AbortError') {
+          return bail(err);
+        }
+        throw err;
+      }
 
       printIndications(res);
 
       if (!res.ok) {
+        // Return 3xx responses directly when manual redirect is requested
+        if (
+          opts.redirect === 'manual' &&
+          res.status >= 300 &&
+          res.status < 400
+        ) {
+          return res;
+        }
+
         const error = await responseError(res);
 
         // we should force reauth only if error has a teamId
@@ -297,6 +546,25 @@ export default class Client extends EventEmitter implements Stdio {
             // there's no sense in retrying
             return bail(normalizeError(reauthError));
           }
+        } else if (res.status === 429 && opts.bailOn429) {
+          return bail(error);
+        } else if (typeof error.retryAfterMs === 'number') {
+          // Respect the Retry-After header and then try again below.
+          // This covers 429 responses which would otherwise bail out
+          //
+          // The `Retry-After` header from the api tells us when the next rate
+          // limit token is available. There may only be a single rate limit
+          // token available at that time. Add a random skew to prevent creating
+          // a thundering herd.
+          //
+          // Many of our APIs use 1 minute rate limit buckets, so 30s of skew is
+          // likely more than enough.
+          //
+          // Note: The `async-retry` library already provides some random skew
+          // by default, but it provides much less skew, because it's not aware
+          // of rate limits.
+          const randomSkewMs = 30_000 * Math.random();
+          await sleep(error.retryAfterMs + randomSkewMs);
         } else if (res.status >= 400 && res.status < 500) {
           // Any other 4xx should bail without retrying
           return bail(error);
@@ -360,9 +628,6 @@ export default class Client extends EventEmitter implements Stdio {
       }
       throw error;
     }
-
-    this.authConfig.token = result.token;
-    writeToAuthConfigFile(this.authConfig);
   });
 
   _onRetry = (error: Error) => {

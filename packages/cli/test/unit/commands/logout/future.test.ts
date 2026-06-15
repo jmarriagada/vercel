@@ -38,6 +38,7 @@ describe('logout', () => {
         token_endpoint: 'https://vercel.com',
         revocation_endpoint: 'https://vercel.com',
         jwks_uri: 'https://vercel.com',
+        introspection_endpoint: 'https://vercel.com',
       })
     );
     const _as = await as();
@@ -45,9 +46,12 @@ describe('logout', () => {
     fetch.mockResolvedValueOnce(mockResponse({}));
 
     client.setArgv('logout');
-    client.authConfig.type = 'oauth';
     client.authConfig.token = randomUUID();
     const tokenBefore = client.authConfig.token;
+    client.authConfig.userId = randomUUID();
+    const userIdBefore = client.authConfig.userId;
+    client.authConfig.refreshToken = randomUUID();
+    const refreshTokenBefore = client.authConfig.refreshToken;
     client.config.currentTeam = randomUUID();
     const teamBefore = client.config.currentTeam;
     const exitCode = await logout(client);
@@ -81,6 +85,12 @@ describe('logout', () => {
     const tokenAfter = client.authConfig.token;
     expect(tokenAfter).not.toBe(tokenBefore);
     expect(tokenAfter).toBeUndefined();
+    const userIdAfter = client.authConfig.userId;
+    expect(userIdAfter).not.toBe(userIdBefore);
+    expect(userIdAfter).toBeUndefined();
+    const refreshTokenAfter = client.authConfig.refreshToken;
+    expect(refreshTokenAfter).not.toBe(refreshTokenBefore);
+    expect(refreshTokenAfter).toBeUndefined();
 
     const teamAfter = client.config.currentTeam;
     expect(teamAfter).not.toBe(teamBefore);
@@ -97,8 +107,11 @@ describe('logout', () => {
 
     client.setArgv('logout', '--debug');
     client.authConfig.token = randomUUID();
-    client.authConfig.type = 'oauth';
     const tokenBefore = client.authConfig.token;
+    client.authConfig.userId = randomUUID();
+    const userIdBefore = client.authConfig.userId;
+    client.authConfig.refreshToken = randomUUID();
+    const refreshTokenBefore = client.authConfig.refreshToken;
     client.config.currentTeam = randomUUID();
     const teamBefore = client.config.currentTeam;
 
@@ -116,6 +129,12 @@ describe('logout', () => {
     const tokenAfter = client.authConfig.token;
     expect(tokenAfter).not.toBe(tokenBefore);
     expect(tokenAfter).toBeUndefined();
+    const userIdAfter = client.authConfig.userId;
+    expect(userIdAfter).not.toBe(userIdBefore);
+    expect(userIdAfter).toBeUndefined();
+    const refreshTokenAfter = client.authConfig.refreshToken;
+    expect(refreshTokenAfter).not.toBe(refreshTokenBefore);
+    expect(refreshTokenAfter).toBeUndefined();
 
     const teamAfter = client.config.currentTeam;
     expect(teamAfter).not.toBe(teamBefore);
@@ -125,7 +144,6 @@ describe('logout', () => {
   it('if no token, do nothing', async () => {
     client.setArgv('logout');
     delete client.authConfig.token;
-    client.authConfig.type = 'oauth';
     expect(client.authConfig.token).toBeUndefined();
 
     const exitCode = await logout(client);

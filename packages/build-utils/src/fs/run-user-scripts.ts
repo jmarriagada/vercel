@@ -17,11 +17,13 @@ import { SpawnOptions } from 'child_process';
 import { deprecate } from 'util';
 import debug from '../debug';
 import { NowBuildError } from '../errors';
-import { Meta, PackageJson, NodeVersion, Config } from '../types';
+import { Meta, PackageJson, NodeVersion, Config, BunVersion } from '../types';
 import {
   getSupportedNodeVersion,
   getLatestNodeVersion,
   getAvailableNodeVersions,
+  getSupportedBunVersion,
+  isBunVersion,
 } from './node-version';
 import { readConfigFile } from './read-config-file';
 import { cloneEnv } from '../clone-env';
@@ -34,13 +36,9 @@ const NO_OVERRIDE = {
   path: undefined,
 };
 
-export type CliType = 'yarn' | 'npm' | 'pnpm' | 'bun';
+export type CliType = 'yarn' | 'npm' | 'pnpm' | 'bun' | 'vlt';
 
-export interface ScanParentDirsResult {
-  /**
-   * "yarn", "npm", or "pnpm" depending on the presence of lockfiles.
-   */
-  cliType: CliType;
+export interface FindPackageJsonResult {
   /**
    * The file path of found `package.json` file, or `undefined` if not found.
    */
@@ -50,6 +48,13 @@ export interface ScanParentDirsResult {
    * option is enabled.
    */
   packageJson?: PackageJson;
+}
+
+export interface ScanParentDirsResult extends FindPackageJsonResult {
+  /**
+   * "yarn", "npm", or "pnpm" depending on the presence of lockfiles.
+   */
+  cliType: CliType;
   /**
    * The file path of the lockfile (`yarn.lock`, `package-lock.json`, or `pnpm-lock.yaml`)
    * or `undefined` if not found.
@@ -112,6 +117,29 @@ export interface SpawnOptionsExtended extends SpawnOptions {
    * the error code, stdout and stderr.
    */
   ignoreNon0Exit?: boolean;
+
+  /**
+   * Writable stream to pipe stdout to (e.g., for prefixing output in multi-service mode).
+   * When provided, stdio is automatically set to 'pipe'.
+   */
+  outputStream?: NodeJS.WritableStream;
+
+  /**
+   * Writable stream to pipe stderr to (e.g., for prefixing output in multi-service mode).
+   * When provided, stdio is automatically set to 'pipe'.
+   */
+  errorStream?: NodeJS.WritableStream;
+}
+
+export interface NpmInstallOutput {
+  /**
+   * Writable stream for stdout (e.g., for prefixing output in multi-service mode)
+   */
+  stdout?: NodeJS.WritableStream;
+  /**
+   * Writable stream for stderr (e.g., for prefixing output in multi-service mode)
+   */
+  stderr?: NodeJS.WritableStream;
 }
 
 export function spawnAsync(
@@ -121,10 +149,24 @@ export function spawnAsync(
 ) {
   return new Promise<void>((resolve, reject) => {
     const stderrLogs: Buffer[] = [];
-    opts = { stdio: 'inherit', ...opts };
+    const hasCustomStreams = opts.outputStream || opts.errorStream;
+
+    if (hasCustomStreams) {
+      opts = { ...opts, stdio: ['inherit', 'pipe', 'pipe'] };
+    } else {
+      opts = { stdio: 'inherit', ...opts };
+    }
+
     const child = spawn(command, args, opts);
 
-    if (opts.stdio === 'pipe' && child.stderr) {
+    if (hasCustomStreams) {
+      if (child.stdout && opts.outputStream) {
+        child.stdout.pipe(opts.outputStream);
+      }
+      if (child.stderr && opts.errorStream) {
+        child.stderr.pipe(opts.errorStream);
+      }
+    } else if (opts.stdio === 'pipe' && child.stderr) {
       child.stderr.on('data', data => stderrLogs.push(data));
     }
 
@@ -141,7 +183,7 @@ export function spawnAsync(
         new NowBuildError({
           code: `BUILD_UTILS_SPAWN_${code || signal}`,
           message:
-            opts.stdio === 'inherit'
+            opts.stdio === 'inherit' || hasCustomStreams
               ? `${cmd} exited with ${code || signal}`
               : stderrLogs.map(line => line.toString()).join(''),
         })
@@ -234,7 +276,7 @@ export function getNodeBinPaths({
 
 async function chmodPlusX(fsPath: string) {
   const s = await fs.stat(fsPath);
-  const newMode = s.mode | 64 | 8 | 1; // eslint-disable-line no-bitwise
+  const newMode = s.mode | 64 | 8 | 1;
   if (s.mode === newMode) return;
   const base8 = newMode.toString(8).slice(-3);
   await fs.chmod(fsPath, base8);
@@ -257,6 +299,11 @@ export async function runShellScript(
   return true;
 }
 
+/**
+ * @deprecated Don't use this function directly.
+ *
+ * Use getEnvForPackageManager() instead when within a builder.
+ */
 export function getSpawnOptions(
   meta: Meta,
   nodeVersion: NodeVersion
@@ -264,6 +311,10 @@ export function getSpawnOptions(
   const opts = {
     env: cloneEnv(process.env),
   };
+
+  if (isBunVersion(nodeVersion)) {
+    return opts;
+  }
 
   if (!meta.isDev) {
     let found = false;
@@ -294,14 +345,18 @@ export async function getNodeVersion(
   config: Config = {},
   meta: Meta = {},
   availableVersions = getAvailableNodeVersions()
-): Promise<NodeVersion> {
+): Promise<NodeVersion | BunVersion> {
+  if (config.bunVersion) {
+    return getSupportedBunVersion(config.bunVersion);
+  }
+
   const latestVersion = getLatestNodeVersion(availableVersions);
   if (meta.isDev) {
     // Use the system-installed version of `node` in PATH for `vercel dev`
     latestVersion.runtime = 'nodejs';
     return latestVersion;
   }
-  const { packageJson } = await scanParentDirs(destPath, true);
+  const { packageJson } = await findPackageJson(destPath, true);
   const configuredVersion = config.nodeVersion || fallbackVersion;
 
   const packageJsonVersion = packageJson?.engines?.node;
@@ -318,31 +373,36 @@ export async function getNodeVersion(
       !intersects(configuredVersion, supportedNodeVersion.range)
     ) {
       console.warn(
-        `Warning: Due to "engines": { "node": "${node}" } in your \`package.json\` file, the Node.js Version defined in your Project Settings ("${configuredVersion}") will not apply, Node.js Version "${supportedNodeVersion.range}" will be used instead. Learn More: http://vercel.link/node-version`
+        `Warning: Due to "engines": { "node": "${node}" } in your \`package.json\` file, the Node.js Version defined in your Project Settings ("${configuredVersion}") will not apply, Node.js Version "${supportedNodeVersion.range}" will be used instead. Learn More: https://vercel.link/node-version`
       );
     }
 
     if (coerce(node)?.raw === node) {
       console.warn(
-        `Warning: Detected "engines": { "node": "${node}" } in your \`package.json\` with major.minor.patch, but only major Node.js Version can be selected. Learn More: http://vercel.link/node-version`
+        `Warning: Detected "engines": { "node": "${node}" } in your \`package.json\` with major.minor.patch, but only major Node.js Version can be selected. Learn More: https://vercel.link/node-version`
       );
     } else if (
       validRange(node) &&
       intersects(`${latestVersion.major + 1}.x`, node)
     ) {
       console.warn(
-        `Warning: Detected "engines": { "node": "${node}" } in your \`package.json\` that will automatically upgrade when a new major Node.js Version is released. Learn More: http://vercel.link/node-version`
+        `Warning: Detected "engines": { "node": "${node}" } in your \`package.json\` that will automatically upgrade when a new major Node.js Version is released. Learn More: https://vercel.link/node-version`
       );
     }
   }
   return supportedNodeVersion;
 }
 
-export async function scanParentDirs(
+/**
+ * Traverses up directories to find and optionally read package.json.
+ * This is a lightweight alternative to `scanParentDirs` when only
+ * package.json information is needed (without lockfile detection).
+ */
+export async function findPackageJson(
   destPath: string,
   readPackageJson = false,
   base = '/'
-): Promise<ScanParentDirsResult> {
+): Promise<FindPackageJsonResult> {
   assert(path.isAbsolute(destPath));
 
   const pkgJsonPath = await walkParentDirs({
@@ -361,6 +421,25 @@ export async function scanParentDirs(
       );
     }
   }
+
+  return {
+    packageJsonPath: pkgJsonPath || undefined,
+    packageJson,
+  };
+}
+
+export async function scanParentDirs(
+  destPath: string,
+  readPackageJson = false,
+  base = '/'
+): Promise<ScanParentDirsResult> {
+  assert(path.isAbsolute(destPath));
+
+  const { packageJsonPath: pkgJsonPath, packageJson } = await findPackageJson(
+    destPath,
+    readPackageJson,
+    base
+  );
   const {
     paths: [
       yarnLockPath,
@@ -368,6 +447,7 @@ export async function scanParentDirs(
       pnpmLockPath,
       bunLockTextPath,
       bunLockBinPath,
+      vltLockPath,
     ],
     packageJsonPackageManager,
   } = await walkParentDirsMulti({
@@ -379,6 +459,7 @@ export async function scanParentDirs(
       'pnpm-lock.yaml',
       'bun.lock',
       'bun.lockb',
+      'vlt-lock.json',
     ],
   });
   let lockfilePath: string | undefined;
@@ -386,16 +467,18 @@ export async function scanParentDirs(
   let cliType: CliType;
 
   const bunLockPath = bunLockTextPath ?? bunLockBinPath;
-  const [packageLockJson, pnpmLockYaml, bunLock, yarnLock] = await Promise.all([
-    npmLockPath
-      ? readConfigFile<{ lockfileVersion: number }>(npmLockPath)
-      : null,
-    pnpmLockPath
-      ? readConfigFile<{ lockfileVersion: number }>(pnpmLockPath)
-      : null,
-    bunLockPath ? fs.readFile(bunLockPath) : null,
-    yarnLockPath ? fs.readFile(yarnLockPath, 'utf8') : null,
-  ]);
+  const [packageLockJson, pnpmLockYaml, bunLock, yarnLock, vltLock] =
+    await Promise.all([
+      npmLockPath
+        ? readConfigFile<{ lockfileVersion: number }>(npmLockPath)
+        : null,
+      pnpmLockPath
+        ? readConfigFile<{ lockfileVersion: number }>(pnpmLockPath)
+        : null,
+      bunLockPath ? fs.readFile(bunLockPath) : null,
+      yarnLockPath ? fs.readFile(yarnLockPath, 'utf8') : null,
+      vltLockPath ? readConfigFile(vltLockPath) : null,
+    ]);
 
   const rootProjectInfo = readPackageJson
     ? await readProjectRootInfo({
@@ -412,7 +495,7 @@ export async function scanParentDirs(
       )
     : undefined;
 
-  // Priority order is bun with yarn lock > yarn > pnpm > npm > bun
+  // Priority order is bun with yarn lock > yarn > pnpm > npm > bun > vlt (lowest priority)
   if (bunLock && yarnLock) {
     cliType = 'bun';
     lockfilePath = bunLockPath;
@@ -433,6 +516,9 @@ export async function scanParentDirs(
     cliType = 'bun';
     lockfilePath = bunLockPath;
     lockfileVersion = bunLockTextPath ? 1 : 0;
+  } else if (vltLock) {
+    cliType = 'vlt';
+    lockfilePath = vltLockPath;
   } else {
     cliType = detectPackageManagerNameWithoutLockfile(
       packageJsonPackageManager,
@@ -472,15 +558,31 @@ async function checkTurboSupportsCorepack(
   if (turboVersionSpecifierSupportsCorepack(turboVersionRange)) {
     return true;
   }
+
+  // Check for both turbo.json and turbo.jsonc
   const turboJsonPath = path.join(rootDir, 'turbo.json');
-  const turboJsonExists = await fs.pathExists(turboJsonPath);
+  const turboJsoncPath = path.join(rootDir, 'turbo.jsonc');
+  const [turboJsonExists, turboJsoncExists] = await Promise.all([
+    fs.pathExists(turboJsonPath),
+    fs.pathExists(turboJsoncPath),
+  ]);
 
   let turboJson: null | unknown = null;
+  let turboConfigPath: string | null = null;
+
   if (turboJsonExists) {
+    turboConfigPath = turboJsonPath;
+  } else if (turboJsoncExists) {
+    turboConfigPath = turboJsoncPath;
+  }
+
+  if (turboConfigPath) {
     try {
-      turboJson = json5.parse(await fs.readFile(turboJsonPath, 'utf8'));
-    } catch (err) {
-      console.warn(`WARNING: Failed to parse turbo.json`);
+      turboJson = json5.parse(await fs.readFile(turboConfigPath, 'utf8'));
+    } catch (_err) {
+      console.warn(
+        `WARNING: Failed to parse ${path.basename(turboConfigPath)}`
+      );
     }
   }
 
@@ -574,7 +676,6 @@ export async function walkParentDirs({
   for (const dir of traverseUpDirectories({ start, base })) {
     const fullPath = path.join(dir, filename);
 
-    // eslint-disable-next-line no-await-in-loop
     if (await fs.pathExists(fullPath)) {
       return fullPath;
     }
@@ -632,7 +733,7 @@ function getInstallCommandForPackageManager(
         prettyCommand: 'npm install',
         commandArguments: args
           .filter(a => a !== '--prefer-offline')
-          .concat(['install', '--no-audit', '--unsafe-perm']),
+          .concat(['install', '--no-audit']),
       };
     case 'pnpm':
       return {
@@ -654,6 +755,11 @@ function getInstallCommandForPackageManager(
         prettyCommand: 'yarn install',
         commandArguments: ['install', ...args],
       };
+    case 'vlt':
+      return {
+        prettyCommand: 'vlt install',
+        commandArguments: ['install', ...args],
+      };
   }
 }
 
@@ -661,10 +767,12 @@ async function runInstallCommand({
   packageManager,
   args,
   opts,
+  output,
 }: {
   packageManager: CliType;
   args: string[];
   opts: SpawnOptionsExtended;
+  output?: NpmInstallOutput;
 }) {
   const { commandArguments, prettyCommand } =
     getInstallCommandForPackageManager(packageManager, args);
@@ -673,6 +781,9 @@ async function runInstallCommand({
   if (process.env.NPM_ONLY_PRODUCTION) {
     commandArguments.push('--production');
   }
+
+  opts.outputStream = output?.stdout;
+  opts.errorStream = output?.stderr;
 
   await spawnAsync(packageManager, commandArguments, opts);
 }
@@ -698,13 +809,25 @@ function checkIfAlreadyInstalled(
 // Only allow one `runNpmInstall()` invocation to run concurrently
 const runNpmInstallSema = new Sema(1);
 
+// Track paths where custom install commands have already run (module-level since no meta object)
+let customInstallCommandSet: Set<string> | undefined;
+
+/**
+ * Reset the customInstallCommandSet. This should be called at the start of each build
+ * to prevent custom install commands from being skipped due to the set persisting
+ * across multiple builds in the same Node process (e.g., in unit tests).
+ */
+export function resetCustomInstallCommandSet(): void {
+  customInstallCommandSet = undefined;
+}
+
 export async function runNpmInstall(
   destPath: string,
   args: string[] = [],
   spawnOpts?: SpawnOptions,
   meta?: Meta,
-  nodeVersion?: NodeVersion,
-  projectCreatedAt?: number
+  projectCreatedAt?: number,
+  output?: NpmInstallOutput
 ): Promise<boolean> {
   if (meta?.isDev) {
     debug('Skipping dependency installation because dev mode is enabled');
@@ -733,6 +856,9 @@ export async function runNpmInstall(
 
     // Only allow `runNpmInstall()` to run once per `package.json`
     // when doing a default install (no additional args)
+    // VERCEL_INSTALL_COMPLETED indicates install already ran for the root,
+    // so we add that path to the set to prevent duplicate installs while
+    // still allowing subdirectory installs to proceed
     const defaultInstall = args.length === 0;
     if (meta && packageJsonPath && defaultInstall) {
       const { alreadyInstalled, runNpmInstallSet } = checkIfAlreadyInstalled(
@@ -740,6 +866,14 @@ export async function runNpmInstall(
         packageJsonPath
       );
       if (alreadyInstalled) {
+        return false;
+      }
+      if (process.env.VERCEL_INSTALL_COMPLETED === '1') {
+        debug(
+          `Skipping dependency installation for ${packageJsonPath} because VERCEL_INSTALL_COMPLETED is set`
+        );
+        runNpmInstallSet.add(packageJsonPath);
+        meta.runNpmInstallSet = runNpmInstallSet;
         return false;
       }
       meta.runNpmInstallSet = runNpmInstallSet;
@@ -758,7 +892,11 @@ export async function runNpmInstall(
     }
 
     const installTime = Date.now();
-    console.log('Installing dependencies...');
+    if (output?.stdout) {
+      output.stdout.write('Installing dependencies...\n');
+    } else {
+      console.log('Installing dependencies...');
+    }
     debug(`Installing to ${destPath}`);
 
     const opts: SpawnOptionsExtended = { cwd: destPath, ...spawnOpts };
@@ -768,7 +906,6 @@ export async function runNpmInstall(
       cliType,
       lockfileVersion,
       packageJsonPackageManager,
-      nodeVersion,
       env,
       packageJsonEngines: packageJson?.engines,
       turboSupportsCorepackHome,
@@ -790,6 +927,7 @@ export async function runNpmInstall(
       packageManager: cliType,
       args,
       opts,
+      output,
     });
 
     debug(`Install complete [${Date.now() - installTime}ms]`);
@@ -807,7 +945,6 @@ export function getEnvForPackageManager({
   cliType,
   lockfileVersion,
   packageJsonPackageManager,
-  nodeVersion,
   env,
   packageJsonEngines,
   turboSupportsCorepackHome,
@@ -816,7 +953,6 @@ export function getEnvForPackageManager({
   cliType: CliType;
   lockfileVersion: number | undefined;
   packageJsonPackageManager?: string | undefined;
-  nodeVersion: NodeVersion | undefined;
   env: { [x: string]: string | undefined };
   packageJsonEngines?: PackageJson.Engines;
   turboSupportsCorepackHome?: boolean | undefined;
@@ -836,7 +972,6 @@ export function getEnvForPackageManager({
     cliType,
     lockfileVersion,
     corepackPackageManager: packageJsonPackageManager,
-    nodeVersion,
     corepackEnabled,
     packageJsonEngines,
     projectCreatedAt,
@@ -891,12 +1026,6 @@ export function getEnvForPackageManager({
         // For pnpm we also show the version of the lockfile we found
         console.log(
           `Detected \`${detectedLockfile}\` ${versionString}generated by ${detectedPackageManager}`
-        );
-      }
-
-      if (cliType === 'bun') {
-        console.warn(
-          'Warning: Bun is used as a package manager at build time only, not at runtime with Functions'
         );
       }
     }
@@ -969,6 +1098,7 @@ function validLockfileForPackageManager(
     case 'npm':
     case 'bun':
     case 'yarn':
+    case 'vlt':
       return true;
     case 'pnpm':
       switch (packageManagerMajorVersion) {
@@ -1010,7 +1140,6 @@ export function getPathOverrideForPackageManager({
   cliType: CliType;
   lockfileVersion: number | undefined;
   corepackPackageManager: string | undefined;
-  nodeVersion: NodeVersion | undefined;
   corepackEnabled?: boolean;
   packageJsonEngines?: PackageJson.Engines;
   projectCreatedAt?: number;
@@ -1240,6 +1369,12 @@ export function detectPackageManager(
         detectedLockfile: 'yarn.lock',
         detectedPackageManager: detectYarnVersion(lockfileVersion),
       };
+    case 'vlt':
+      return {
+        path: undefined,
+        detectedLockfile: 'vlt-lock.json',
+        detectedPackageManager: 'vlt@0.x',
+      };
   }
 }
 
@@ -1251,12 +1386,10 @@ export function detectPackageManager(
 export function getPathForPackageManager({
   cliType,
   lockfileVersion,
-  nodeVersion,
   env,
 }: {
   cliType: CliType;
   lockfileVersion: number | undefined;
-  nodeVersion: NodeVersion | undefined;
   env: { [x: string]: string | undefined };
 }): {
   /**
@@ -1287,7 +1420,6 @@ export function getPathForPackageManager({
     cliType,
     lockfileVersion,
     corepackPackageManager: undefined,
-    nodeVersion,
   });
 
   if (corepackEnabled) {
@@ -1319,16 +1451,38 @@ export function getPathForPackageManager({
 export async function runCustomInstallCommand({
   destPath,
   installCommand,
-  nodeVersion,
   spawnOpts,
   projectCreatedAt,
 }: {
   destPath: string;
   installCommand: string;
-  nodeVersion: NodeVersion;
   spawnOpts?: SpawnOptions;
   projectCreatedAt?: number;
-}) {
+}): Promise<boolean> {
+  const normalizedPath = path.normalize(destPath);
+
+  const { alreadyInstalled, runNpmInstallSet } = checkIfAlreadyInstalled(
+    customInstallCommandSet,
+    normalizedPath
+  );
+  customInstallCommandSet = runNpmInstallSet;
+
+  if (alreadyInstalled) {
+    debug(
+      `Skipping custom install command for ${normalizedPath} because it was already run`
+    );
+    return false;
+  }
+
+  // Skip if VERCEL_INSTALL_COMPLETED is set (e.g., for vercel.ts config compilation)
+  // Path is already marked as installed above, allowing subdirectory installs to proceed
+  if (process.env.VERCEL_INSTALL_COMPLETED === '1') {
+    debug(
+      `Skipping custom install command for ${normalizedPath} because VERCEL_INSTALL_COMPLETED is set`
+    );
+    return false;
+  }
+
   console.log(`Running "install" command: \`${installCommand}\`...`);
   const {
     cliType,
@@ -1341,7 +1495,6 @@ export async function runCustomInstallCommand({
     cliType,
     lockfileVersion,
     packageJsonPackageManager,
-    nodeVersion,
     env: spawnOpts?.env || {},
     packageJsonEngines: packageJson?.engines,
     turboSupportsCorepackHome,
@@ -1353,6 +1506,7 @@ export async function runCustomInstallCommand({
     env,
     cwd: destPath,
   });
+  return true;
 }
 
 export async function runPackageJsonScript(
@@ -1386,7 +1540,6 @@ export async function runPackageJsonScript(
       cliType,
       lockfileVersion,
       packageJsonPackageManager,
-      nodeVersion: undefined,
       env: cloneEnv(process.env, spawnOpts?.env),
       packageJsonEngines: packageJson?.engines,
       turboSupportsCorepackHome,
@@ -1400,6 +1553,8 @@ export async function runPackageJsonScript(
     opts.prettyCommand = `pnpm run ${scriptName}`;
   } else if (cliType === 'bun') {
     opts.prettyCommand = `bun run ${scriptName}`;
+  } else if (cliType === 'vlt') {
+    opts.prettyCommand = `vlt run ${scriptName}`;
   } else {
     opts.prettyCommand = `yarn run ${scriptName}`;
   }
@@ -1428,25 +1583,45 @@ export async function runBundleInstall(
   await spawnAsync('bundle', args.concat(['install']), opts);
 }
 
+export type PipInstallResult =
+  | { installed: false }
+  | {
+      installed: true;
+      /**
+       * The directory where packages were installed.
+       * Add this to PYTHONPATH when running Python commands.
+       */
+      targetDir: string;
+    };
+
 export async function runPipInstall(
   destPath: string,
   args: string[] = [],
   spawnOpts?: SpawnOptions,
   meta?: Meta
-) {
+): Promise<PipInstallResult> {
   if (meta && meta.isDev) {
     debug('Skipping dependency installation because dev mode is enabled');
-    return;
+    return { installed: false };
   }
 
   assert(path.isAbsolute(destPath));
-  const opts = { ...spawnOpts, cwd: destPath, prettyCommand: 'pip3 install' };
 
+  // Install to a target directory so we can set PYTHONPATH to point to it
+  const targetDir = path.join(destPath, '.vercel_python_packages');
+
+  const opts = {
+    ...spawnOpts,
+    cwd: destPath,
+    prettyCommand: 'uv pip install',
+  };
   await spawnAsync(
-    'pip3',
-    ['install', '--disable-pip-version-check', ...args],
+    'uv',
+    ['pip', 'install', '--target', targetDir, ...args],
     opts
   );
+
+  return { installed: true, targetDir };
 }
 
 export function getScriptName(

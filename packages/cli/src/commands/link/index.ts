@@ -1,33 +1,90 @@
 import type Client from '../../util/client';
 import { parseArguments } from '../../util/get-args';
+import getSubcommand from '../../util/get-subcommand';
 import cmd from '../../util/output/cmd';
 import { ensureLink } from '../../util/link/ensure-link';
-import { ensureRepoLink } from '../../util/link/repo';
-import { help } from '../help';
-import { linkCommand } from './command';
+import { addRepoLink, ensureRepoLink } from '../../util/link/repo';
+import { type Command, help } from '../help';
+import { addSubcommand, linkCommand } from './command';
 import { getFlagsSpecification } from '../../util/get-flags-specification';
 import { printError } from '../../util/error';
 import output from '../../output-manager';
 import { LinkTelemetryClient } from '../../util/telemetry/commands/link';
+import { getCommandAliases } from '..';
+import { autoInstallVercelPlugin } from '../../util/agent/auto-install-agentic';
+import getScope, { detectExplicitScope } from '../../util/get-scope';
+
+const COMMAND_CONFIG = {
+  add: getCommandAliases(addSubcommand),
+};
 
 export default async function link(client: Client) {
   let parsedArgs = null;
 
   const flagsSpecification = getFlagsSpecification(linkCommand.options);
 
-  // Parse CLI args
+  // Parse CLI args (permissive to allow subcommand flags to pass through)
   try {
-    parsedArgs = parseArguments(client.argv.slice(2), flagsSpecification);
+    parsedArgs = parseArguments(client.argv.slice(2), flagsSpecification, {
+      permissive: true,
+    });
   } catch (error) {
     printError(error);
     return 1;
   }
+
+  const { subcommand, subcommandOriginal } = getSubcommand(
+    parsedArgs.args.slice(1),
+    COMMAND_CONFIG
+  );
 
   const telemetry = new LinkTelemetryClient({
     opts: {
       store: client.telemetryEventStore,
     },
   });
+
+  function printHelp(command: Command) {
+    output.print(
+      help(command, { parent: linkCommand, columns: client.stderr.columns })
+    );
+  }
+
+  if (subcommand === 'add') {
+    // `vc link add` subcommand
+    // `--yes` is shared with the parent and already parsed by the permissive parse
+    if (parsedArgs.flags['--help']) {
+      telemetry.trackCliFlagHelp('link', subcommandOriginal);
+      printHelp(addSubcommand);
+      return 2;
+    }
+
+    telemetry.trackCliSubcommandAdd(subcommandOriginal);
+
+    const yes = !!parsedArgs.flags['--yes'];
+
+    try {
+      await addRepoLink(client, client.cwd, { yes });
+    } catch (err) {
+      output.prettyError(err);
+      return 1;
+    }
+
+    await autoInstallVercelPlugin(client, {
+      autoConfirm: yes,
+    });
+
+    return 0;
+  }
+
+  // Default behavior (no subcommand) - original `vc link` flow
+  // Re-parse strictly now that we know there's no subcommand
+  try {
+    parsedArgs = parseArguments(client.argv.slice(2), flagsSpecification);
+  } catch (error) {
+    printError(error);
+    return 1;
+  }
 
   if (parsedArgs.flags['--help']) {
     telemetry.trackCliFlagHelp('link');
@@ -68,17 +125,32 @@ export default async function link(client: Client) {
       return 1;
     }
   } else {
+    const explicitScopeProvided = detectExplicitScope(client);
+    if (explicitScopeProvided) {
+      await getScope(client, { resolveLocalScope: true });
+    }
+
+    // Non-interactive when flag is passed or when agent (e.g. no TTY) so JSON is output when confirmation needed
+    const linkNonInteractive =
+      client.nonInteractive || client.argv.includes('--non-interactive');
+
     const link = await ensureLink('link', client, cwd, {
       autoConfirm: yes,
       forceDelete: true,
       projectName: parsedArgs.flags['--project'],
       successEmoji: 'success',
+      nonInteractive: linkNonInteractive,
+      searchAcrossTeams: !explicitScopeProvided,
     });
 
     if (typeof link === 'number') {
       return link;
     }
   }
+
+  await autoInstallVercelPlugin(client, {
+    autoConfirm: yes,
+  });
 
   return 0;
 }

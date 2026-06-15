@@ -1,16 +1,52 @@
-import { describe, beforeEach, afterEach, expect, it } from 'vitest';
+import { describe, beforeEach, afterEach, expect, it, vi } from 'vitest';
 import { join } from 'path';
 import fs from 'fs-extra';
 import { useUser } from '../../../mocks/user';
-import { useTeams } from '../../../mocks/team';
+import { useTeams, createTeam } from '../../../mocks/team';
 import { defaultProject, useProject } from '../../../mocks/project';
 import { client } from '../../../mocks/client';
 import git from '../../../../src/commands/git';
 import type { Project } from '@vercel-internals/types';
+import { setupTmpDir } from '../../../helpers/setup-unit-fixture';
 
 describe('git connect', () => {
   const fixture = (name: string) =>
     join(__dirname, '../../../fixtures/unit/commands/git/connect', name);
+
+  describe('--non-interactive', () => {
+    it('outputs action_required JSON and exits when not linked and multiple teams (no --scope)', async () => {
+      const cwd = setupTmpDir();
+      useUser({ version: 'northstar' });
+      useTeams('team_dummy');
+      createTeam();
+      client.cwd = cwd;
+      client.setArgv('git', 'connect', '--non-interactive');
+      (client as { nonInteractive: boolean }).nonInteractive = true;
+
+      const exitSpy = vi
+        .spyOn(process, 'exit')
+        .mockImplementation((code?: number) => {
+          throw new Error(`process.exit(${code})`);
+        });
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+      await expect(git(client)).rejects.toThrow('process.exit(1)');
+
+      expect(logSpy).toHaveBeenCalledTimes(1);
+      const payload = JSON.parse(logSpy.mock.calls[0][0]);
+      expect(payload.status).toBe('action_required');
+      expect(payload.reason).toBe('missing_scope');
+      expect(payload.message).toContain('--scope');
+      expect(payload.message).toContain('non-interactive');
+      expect(Array.isArray(payload.choices)).toBe(true);
+      expect(payload.choices.length).toBeGreaterThanOrEqual(2);
+      expect(exitSpy).toHaveBeenCalledWith(1);
+
+      exitSpy.mockRestore();
+      logSpy.mockRestore();
+      (client as { nonInteractive: boolean }).nonInteractive = false;
+    });
+  });
 
   describe('--help', () => {
     it('tracks telemetry', async () => {
@@ -42,6 +78,7 @@ describe('git connect', () => {
       });
 
       client.cwd = cwd;
+      (client as { nonInteractive: boolean }).nonInteractive = false;
       await fs.rename(join(cwd, 'git'), join(cwd, '.git'));
     });
 
@@ -56,15 +93,17 @@ describe('git connect', () => {
         const gitPromise = git(client);
 
         await expect(client.stderr).toOutput('Set up');
-        client.stdin.write('y\n');
 
-        await expect(client.stderr).toOutput(
-          'Which scope should contain your project?'
-        );
+        await expect(client.stderr).toOutput('Which team?');
         client.stdin.write('\r');
 
         await expect(client.stderr).toOutput('Found project');
         client.stdin.write('y\n');
+
+        await expect(client.stderr).toOutput(
+          'Would you like to pull environment variables now?'
+        );
+        client.stdin.write('n\n');
 
         await expect(client.stderr).toOutput(
           `Do you still want to connect https://github.com/user2/repo2?`
@@ -72,13 +111,11 @@ describe('git connect', () => {
         client.stdin.write('y\n');
 
         await expect(client.stderr).toOutput(
-          `Connecting Git remote: https://github.com/user2/repo2`
+          `Connecting GitHub repository: https://github.com/user2/repo2`
         );
 
         const exitCode = await gitPromise;
-        await expect(client.stderr).toOutput(
-          'Connected GitHub repository user2/repo2!'
-        );
+        await expect(client.stderr).toOutput('Connected');
 
         expect(exitCode).toEqual(0);
         expect(client.telemetryEventStore).toHaveTelemetryEvents([
@@ -100,11 +137,9 @@ describe('git connect', () => {
         const gitPromise = git(client);
 
         await expect(client.stderr).toOutput(
-          `Connecting Git remote: https://github.com/user/repo`
+          `Connecting GitHub repository: https://github.com/user/repo`
         );
-        await expect(client.stderr).toOutput(
-          `> Connected GitHub repository user/repo!\n`
-        );
+        await expect(client.stderr).toOutput(`> Connected\n`);
 
         const exitCode = await gitPromise;
         expect(exitCode).toEqual(0);
@@ -112,6 +147,10 @@ describe('git connect', () => {
           {
             key: 'subcommand:connect',
             value: 'connect',
+          },
+          {
+            key: 'flag:yes',
+            value: 'TRUE',
           },
           {
             key: 'flag:yes',
@@ -127,11 +166,9 @@ describe('git connect', () => {
         const gitPromise = git(client);
 
         await expect(client.stderr).toOutput(
-          `Connecting Git remote: https://github.com/user/repo`
+          `Connecting GitHub repository: https://github.com/user/repo`
         );
-        await expect(client.stderr).toOutput(
-          `> Connected GitHub repository user/repo!\n`
-        );
+        await expect(client.stderr).toOutput(`> Connected\n`);
 
         const exitCode = await gitPromise;
         expect(exitCode).toEqual(0);
@@ -145,6 +182,10 @@ describe('git connect', () => {
             key: 'flag:confirm',
             value: 'TRUE',
           },
+          {
+            key: 'flag:yes',
+            value: 'TRUE',
+          },
         ]);
       });
     });
@@ -156,24 +197,24 @@ describe('git connect', () => {
       const gitPromise = git(client);
 
       await expect(client.stderr).toOutput('Set up');
-      client.stdin.write('y\n');
 
-      await expect(client.stderr).toOutput(
-        'Which scope should contain your project?'
-      );
+      await expect(client.stderr).toOutput('Which team?');
       client.stdin.write('\r');
 
       await expect(client.stderr).toOutput('Found project');
       client.stdin.write('y\n');
 
       await expect(client.stderr).toOutput(
-        `Connecting Git remote: https://github.com/user/repo.git`
+        'Would you like to pull environment variables now?'
+      );
+      client.stdin.write('n\n');
+
+      await expect(client.stderr).toOutput(
+        `Connecting GitHub repository: https://github.com/user/repo`
       );
 
       const exitCode = await gitPromise;
-      await expect(client.stderr).toOutput(
-        'Connected GitHub repository user/repo!'
-      );
+      await expect(client.stderr).toOutput('Connected');
 
       expect(exitCode).toEqual(0);
 
@@ -202,19 +243,22 @@ describe('git connect', () => {
         id: 'unlinked',
         name: 'unlinked',
       });
+      (client as { nonInteractive: boolean }).nonInteractive = false;
       client.setArgv('git', 'connect', 'https://github.com/user2/repo2');
       const gitPromise = git(client);
 
       await expect(client.stderr).toOutput('Set up');
-      client.stdin.write('y\n');
 
-      await expect(client.stderr).toOutput(
-        'Which scope should contain your project?'
-      );
+      await expect(client.stderr).toOutput('Which team?');
       client.stdin.write('\r');
 
       await expect(client.stderr).toOutput('Found project');
       client.stdin.write('y\n');
+
+      await expect(client.stderr).toOutput(
+        'Would you like to pull environment variables now?'
+      );
+      client.stdin.write('n\n');
 
       await expect(client.stderr).toOutput(
         `Do you still want to connect https://github.com/user2/repo2?`
@@ -222,13 +266,11 @@ describe('git connect', () => {
       client.stdin.write('y\n');
 
       await expect(client.stderr).toOutput(
-        `Connecting Git remote: https://github.com/user2/repo2`
+        `Connecting GitHub repository: https://github.com/user2/repo2`
       );
 
       const exitCode = await gitPromise;
-      await expect(client.stderr).toOutput(
-        'Connected GitHub repository user2/repo2!'
-      );
+      await expect(client.stderr).toOutput('Connected');
 
       expect(exitCode).toEqual(0);
 
@@ -303,7 +345,9 @@ describe('git connect', () => {
       const exitCode = await git(client);
       expect(exitCode).toEqual(1);
 
-      await expect(client.stderr).toOutput(`Connecting Git remote: bababooey`);
+      await expect(client.stderr).toOutput(
+        `Connecting Git repository: bababooey`
+      );
       await expect(client.stderr).toOutput(
         `Error: Failed to parse Git repo data from the following remote URL: bababooey\n`
       );
@@ -328,11 +372,9 @@ describe('git connect', () => {
       const gitPromise = git(client);
 
       await expect(client.stderr).toOutput(
-        `Connecting Git remote: https://github.com/user/repo`
+        `Connecting GitHub repository: https://github.com/user/repo`
       );
-      await expect(client.stderr).toOutput(
-        `> Connected GitHub repository user/repo!\n`
-      );
+      await expect(client.stderr).toOutput(`> Connected\n`);
 
       const exitCode = await gitPromise;
       expect(exitCode).toEqual(0);
@@ -381,11 +423,9 @@ describe('git connect', () => {
       const gitPromise = git(client);
 
       await expect(client.stderr).toOutput(
-        `Connecting Git remote: https://github.com/user2/repo2`
+        `Connecting GitHub repository: https://github.com/user2/repo2`
       );
-      await expect(client.stderr).toOutput(
-        `> Connected GitHub repository user2/repo2!\n`
-      );
+      await expect(client.stderr).toOutput(`> Connected\n`);
 
       const exitCode = await gitPromise;
       expect(exitCode).toEqual(0);
@@ -433,7 +473,7 @@ describe('git connect', () => {
       const gitPromise = git(client);
 
       await expect(client.stderr).toOutput(
-        `Connecting Git remote: https://github.com/user/repo`
+        `Connecting GitHub repository: https://github.com/user/repo`
       );
       await expect(client.stderr).toOutput(
         `> user/repo is already connected to your project.\n`
@@ -463,7 +503,7 @@ describe('git connect', () => {
       const gitPromise = git(client);
 
       await expect(client.stderr).toOutput(
-        `Connecting Git remote: https://github.com/laksfj/asdgklsadkl`
+        `Connecting GitHub repository: https://github.com/laksfj/asdgklsadkl`
       );
       await expect(client.stderr).toOutput(
         `Failed to connect laksfj/asdgklsadkl to project. Make sure there aren't any typos and that you have access to the repository if it's private.`
@@ -500,11 +540,9 @@ describe('git connect', () => {
       client.stdin.write('\r');
 
       await expect(client.stderr).toOutput(
-        'Connecting Git remote: https://github.com/user/repo.git'
+        'Connecting GitHub repository: https://github.com/user/repo'
       );
-      await expect(client.stderr).toOutput(
-        'Connected GitHub repository user/repo!'
-      );
+      await expect(client.stderr).toOutput('Connected');
 
       const exitCode = await gitPromise;
       expect(exitCode).toEqual(0);
@@ -543,11 +581,9 @@ describe('git connect', () => {
       const gitPromise = git(client);
 
       await expect(client.stderr).toOutput(
-        `Connecting Git remote: https://github.com/user2/repo2`
+        `Connecting GitHub repository: https://github.com/user2/repo2`
       );
-      await expect(client.stderr).toOutput(
-        `Connected GitHub repository user2/repo2!`
-      );
+      await expect(client.stderr).toOutput(`Connected`);
 
       const newProjectData: Project = await client.fetch(
         `/v8/projects/no-remote-url`
@@ -592,11 +628,9 @@ describe('git connect', () => {
       );
       client.stdin.write('y\n');
       await expect(client.stderr).toOutput(
-        `Connecting Git remote: https://github.com/user2/repo2`
+        `Connecting GitHub repository: https://github.com/user2/repo2`
       );
-      await expect(client.stderr).toOutput(
-        `Connected GitHub repository user2/repo2!`
-      );
+      await expect(client.stderr).toOutput(`Connected`);
 
       const newProjectData: Project = await client.fetch(
         `/v8/projects/new-connection`
@@ -642,11 +676,9 @@ describe('git connect', () => {
       client.stdin.write('y\n');
 
       await expect(client.stderr).toOutput(
-        `Connecting Git remote: https://github.com/user3/repo3`
+        `Connecting GitHub repository: https://github.com/user3/repo3`
       );
-      await expect(client.stderr).toOutput(
-        `Connected GitHub repository user3/repo3!`
-      );
+      await expect(client.stderr).toOutput(`Connected`);
 
       const newProjectData: Project = await client.fetch(
         `/v8/projects/multiple-remotes`
@@ -684,11 +716,9 @@ describe('git connect', () => {
       const gitPromise = git(client);
 
       await expect(client.stderr).toOutput(
-        `Connecting Git remote: https://github.com/user/repo`
+        `Connecting GitHub repository: https://github.com/user/repo`
       );
-      await expect(client.stderr).toOutput(
-        `Connected GitHub repository user/repo!`
-      );
+      await expect(client.stderr).toOutput(`Connected`);
 
       const newProjectData: Project = await client.fetch(
         `/v8/projects/new-connection`

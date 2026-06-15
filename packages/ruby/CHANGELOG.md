@@ -1,5 +1,63 @@
 # @vercel/ruby
 
+## 2.4.0
+
+### Minor Changes
+
+- 73dbbe6: Add project manifest to ruby builder.
+
+## 2.3.2
+
+### Patch Changes
+
+- [services] strip services route prefix in ruby runtime by mounting the app at `SCRIPT_NAME` when service route prefix is auto configured ([#15099](https://github.com/vercel/vercel/pull/15099))
+
+## 2.3.1
+
+### Patch Changes
+
+- Forward Go and Ruby dev server output through `startDevServer` stdout/stderr callbacks so service logs are correctly prefixed in multi-service `vercel dev`. ([#14989](https://github.com/vercel/vercel/pull/14989))
+
+## 2.3.0
+
+### Minor Changes
+
+- [services] add a dev lock for `vercel dev` to prevent launching multiple `vercel dev` processes for a multi-service projects. ([#14897](https://github.com/vercel/vercel/pull/14897))
+
+## 2.2.5
+
+### Patch Changes
+
+- [ruby] Add experimental Ruby runtime framework preset ([#14762](https://github.com/vercel/vercel/pull/14762))
+
+  Also fixed a bug in the Ruby version parsing where `ruby "~> 3.3.x"` in Gemfile would fail due to a trailing space not being trimmed after removing the `~>` prefix.
+
+## 2.2.4
+
+### Patch Changes
+
+- Replace bundle install flags with environment variables. ([#14499](https://github.com/vercel/vercel/pull/14499))
+
+## 2.2.3
+
+### Patch Changes
+
+- Use `workspace:*` for workspace dependencies ([#14396](https://github.com/vercel/vercel/pull/14396))
+
+## 2.2.2
+
+### Patch Changes
+
+- [ruby] support local `vercel build` with ruby ([#14216](https://github.com/vercel/vercel/pull/14216))
+
+- [ruby] support `vc dev` ([#14220](https://github.com/vercel/vercel/pull/14220))
+
+## 2.2.1
+
+### Patch Changes
+
+- Reverting support for `preferredRegion` ([#13566](https://github.com/vercel/vercel/pull/13566))
+
 ## 2.2.0
 
 ### Minor Changes

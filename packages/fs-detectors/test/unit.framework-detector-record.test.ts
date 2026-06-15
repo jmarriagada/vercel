@@ -1,4 +1,4 @@
-import frameworkList from '@vercel/frameworks';
+import { frameworkList } from '@vercel/frameworks';
 import { detectFrameworkRecord } from '../src';
 import VirtualFilesystem from './virtual-file-system';
 
@@ -220,7 +220,7 @@ describe('detectFrameworkRecord', () => {
         });
 
         const framework = await detectFrameworkRecord({ fs, frameworkList });
-        expect(framework?.slug).toBe('sanity');
+        expect(framework?.slug).toBe('sanity-v2');
       });
     });
 
@@ -248,8 +248,116 @@ describe('detectFrameworkRecord', () => {
         });
 
         const framework = await detectFrameworkRecord({ fs, frameworkList });
-        expect(framework?.slug).toBe('sanity-v3');
+        expect(framework?.slug).toBe('sanity');
       });
     });
+
+    describe('v4', () => {
+      it('detects', async () => {
+        const fs = new VirtualFilesystem({
+          'sanity.config.ts': '',
+          'package.json': JSON.stringify({
+            dependencies: {
+              '@sanity/vision': '^4.20.0',
+              react: '^19.0.4',
+              'react-dom': '^19.0.4',
+              sanity: '^4.20.0',
+              'styled-components': '^6.1.8',
+            },
+            devDependencies: {
+              '@types/react': '^19.2.7',
+              typescript: '^5.8.3',
+            },
+          }),
+        });
+
+        const framework = await detectFrameworkRecord({ fs, frameworkList });
+        expect(framework?.slug).toBe('sanity');
+      });
+    });
+
+    describe('v5', () => {
+      it('detects', async () => {
+        const fs = new VirtualFilesystem({
+          'sanity.config.ts': '',
+          'package.json': JSON.stringify({
+            dependencies: {
+              '@sanity/vision': '^5.17.0',
+              react: '^19.2.4',
+              'react-dom': '^19.2.4',
+              sanity: '^5.17.0',
+              'styled-components': '^6.3.12',
+            },
+            devDependencies: {
+              '@types/react': '^19.2.14',
+              typescript: '^5.9.3',
+            },
+          }),
+        });
+
+        const framework = await detectFrameworkRecord({ fs, frameworkList });
+        expect(framework?.slug).toBe('sanity');
+      });
+    });
+  });
+
+  it('Detects Hono', async () => {
+    const fs = new VirtualFilesystem({
+      'package.json': JSON.stringify({
+        dependencies: {
+          hono: 'latest',
+        },
+        devDependencies: {
+          eslint: '^8.6.0',
+          prettier: '^3.0.2',
+          typescript: '^5.1.6',
+        },
+      }),
+      'index.ts':
+        'import { Hono } from "hono";\n\nconst app = new Hono();\n\nexport default app;',
+    });
+
+    const framework = await detectFrameworkRecord({ fs, frameworkList });
+    expect(framework?.slug).toBe('hono');
+  });
+
+  it('Detects h3', async () => {
+    const fs = new VirtualFilesystem({
+      'package.json': JSON.stringify({
+        dependencies: {
+          h3: 'latest',
+        },
+        devDependencies: {
+          eslint: '^8.6.0',
+          prettier: '^3.0.2',
+          typescript: '^5.1.6',
+        },
+      }),
+      'index.ts':
+        'import { H3 } from "h3";\nconst app = new H3();\n app.get("/", () => "Hello World!");\nexport default app;',
+    });
+
+    const framework = await detectFrameworkRecord({ fs, frameworkList });
+    expect(framework?.slug).toBe('h3');
+  });
+
+  it('Detects NestJS', async () => {
+    const fs = new VirtualFilesystem({
+      'package.json': JSON.stringify({
+        dependencies: {
+          '@nestjs/core': 'latest',
+        },
+        devDependencies: {
+          eslint: '^8.6.0',
+          prettier: '^3.0.2',
+          typescript: '^5.1.6',
+        },
+      }),
+      'src/main.ts':
+        'import { NestFactory } from "@nestjs/core";\nimport { AppModule } from "./app.module";\n\nasync function bootstrap() {\n  const app = await NestFactory.create(AppModule);\n  await app.listen(3000);\n}\nbootstrap();',
+    });
+
+    const framework = await detectFrameworkRecord({ fs, frameworkList });
+    expect(framework?.slug).toBe('nestjs');
   });
 });

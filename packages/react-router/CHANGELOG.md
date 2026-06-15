@@ -1,5 +1,69 @@
 # @vercel/react-router
 
+## 1.3.1
+
+### Patch Changes
+
+- Updated dependencies [eecd10d]
+  - @vercel/static-config@3.4.0
+
+## 1.3.0
+
+### Minor Changes
+
+- c56f851: Upgrade to TypeScript 5.9
+
+### Patch Changes
+
+- Updated dependencies [c56f851]
+  - @vercel/static-config@3.3.0
+
+## 1.2.6
+
+### Patch Changes
+
+- Updated dependencies [[`8a3558f680d592b4ea47ac7e48c99145d6368941`](https://github.com/vercel/vercel/commit/8a3558f680d592b4ea47ac7e48c99145d6368941)]:
+  - @vercel/static-config@3.2.0
+
+## 1.2.5
+
+### Patch Changes
+
+- Add syncpack to enforce @types/node version consistency across the monorepo. ([#14665](https://github.com/vercel/vercel/pull/14665))
+
+  Update @types/node to 20.11.0 and fix type compatibility issues.
+
+## 1.2.4
+
+### Patch Changes
+
+- Use `workspace:*` for workspace dependencies ([#14396](https://github.com/vercel/vercel/pull/14396))
+
+## 1.2.3
+
+### Patch Changes
+
+- Updated dependencies [[`6260486192ca407fc2d91f317ed81533548b8629`](https://github.com/vercel/vercel/commit/6260486192ca407fc2d91f317ed81533548b8629)]:
+  - @vercel/static-config@3.1.2
+
+## 1.2.2
+
+### Patch Changes
+
+- Reverting support for `preferredRegion` ([#13566](https://github.com/vercel/vercel/pull/13566))
+
+## 1.2.1
+
+### Patch Changes
+
+- Use cookie method for Vercel Skew Protection ([#13552](https://github.com/vercel/vercel/pull/13552))
+
+## 1.2.0
+
+### Minor Changes
+
+- Add support for Vercel Skew Protection ([#13536](https://github.com/vercel/vercel/pull/13536))
+
 ## 1.1.2
 
 ### Patch Changes

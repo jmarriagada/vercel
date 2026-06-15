@@ -1,5 +1,5 @@
 import { join } from 'path';
-import frameworkList from '@vercel/frameworks';
+import { frameworkList } from '@vercel/frameworks';
 import workspaceManagers from '../src/workspaces/workspace-managers';
 import {
   detectFramework,
@@ -20,7 +20,7 @@ describe('DetectorFilesystem', () => {
     };
 
     const fs = new VirtualFilesystem(files);
-    const hasPathSpy = jest.spyOn(fs, '_hasPath');
+    const hasPathSpy = vi.spyOn(fs, '_hasPath');
 
     expect(await fs.readdir('/', { potentialFiles: ['config.rb'] })).toEqual([
       { name: 'package.json', path: 'package.json', type: 'file' },
@@ -75,9 +75,9 @@ describe('DetectorFilesystem', () => {
   it('should be able to write files', async () => {
     const files = {};
     const fs = new VirtualFilesystem(files);
-    const hasPathSpy = jest.spyOn(fs, '_hasPath');
-    const isFileSpy = jest.spyOn(fs, '_isFile');
-    const readFileSpy = jest.spyOn(fs, '_readFile');
+    const hasPathSpy = vi.spyOn(fs, '_hasPath');
+    const isFileSpy = vi.spyOn(fs, '_isFile');
+    const readFileSpy = vi.spyOn(fs, '_readFile');
 
     await fs.writeFile('file.txt', 'Hello World');
 
@@ -88,6 +88,16 @@ describe('DetectorFilesystem', () => {
     expect(hasPathSpy).not.toHaveBeenCalled();
     expect(isFileSpy).not.toHaveBeenCalled();
     expect(readFileSpy).not.toHaveBeenCalled();
+  });
+
+  it('should ignore nested potential files for caching', async () => {
+    const files = {
+      'package.json': '{}',
+      'packages/app1/package.json': '{}',
+    };
+    const fs = new VirtualFilesystem(files);
+    await fs.readdir('packages', { potentialFiles: ['app1/package.json'] });
+    expect(await fs.hasPath('packages/app1/package.json')).toEqual(true);
   });
 
   it('should be able to change directories', async () => {
@@ -234,6 +244,59 @@ describe('detectFramework()', () => {
     expect(await detectFramework({ fs, frameworkList })).toBe('nextjs');
   });
 
+  it.each([
+    'server.cjs',
+    'server.js',
+    'server.mjs',
+    'server.mts',
+    'server.ts',
+    'server.cts',
+    'src/server.cjs',
+    'src/server.js',
+    'src/server.mjs',
+    'src/server.mts',
+    'src/server.ts',
+    'src/server.cts',
+  ])('Detect Node via `%s`', async entrypoint => {
+    const fs = new VirtualFilesystem({
+      'package.json': JSON.stringify({}),
+      [entrypoint]: '// server entrypoint',
+    });
+
+    expect(
+      await detectFramework({
+        fs,
+        frameworkList,
+      })
+    ).toBe('node');
+  });
+
+  it.each([
+    'server.cjs',
+    'server.js',
+    'server.mjs',
+    'server.mts',
+    'server.ts',
+    'server.cts',
+    'src/server.cjs',
+    'src/server.js',
+    'src/server.mjs',
+    'src/server.mts',
+    'src/server.ts',
+    'src/server.cts',
+  ])('Detect Node via `%s` without a package.json', async entrypoint => {
+    const fs = new VirtualFilesystem({
+      [entrypoint]: '// server entrypoint',
+    });
+
+    expect(
+      await detectFramework({
+        fs,
+        frameworkList,
+      })
+    ).toBe('node');
+  });
+
   it('Detect frameworks based on ascending order in framework list', async () => {
     const fs = new VirtualFilesystem({
       'package.json': JSON.stringify({
@@ -245,6 +308,50 @@ describe('detectFramework()', () => {
     });
 
     expect(await detectFramework({ fs, frameworkList })).toBe('nextjs');
+  });
+
+  it.each([
+    'server.cjs',
+    'server.js',
+    'server.mjs',
+    'server.mts',
+    'server.ts',
+    'server.cts',
+    'src/server.cjs',
+    'src/server.js',
+    'src/server.mjs',
+    'src/server.mts',
+    'src/server.ts',
+    'src/server.cts',
+  ])('Detect Bun via `%s` + bun.lock', async entrypoint => {
+    const fs = new VirtualFilesystem({
+      'package.json': JSON.stringify({}),
+      'bun.lock': '',
+      [entrypoint]: '// server entrypoint',
+    });
+
+    expect(
+      await detectFramework({
+        fs,
+        frameworkList,
+        useExperimentalFrameworks: true,
+      })
+    ).toBe('bun');
+  });
+
+  it('Bun is not detected without a server entrypoint', async () => {
+    const fs = new VirtualFilesystem({
+      'package.json': JSON.stringify({}),
+      'bun.lock': '',
+    });
+
+    expect(
+      await detectFramework({
+        fs,
+        frameworkList,
+        useExperimentalFrameworks: true,
+      })
+    ).toBeNull();
   });
 
   it('Detect Nuxt.js', async () => {
@@ -466,6 +573,33 @@ describe('detectFramework()', () => {
     expect(await detectFramework({ fs, frameworkList })).toBe('remix');
   });
 
+  it('Should detect TanStack Start without `nitro` via `@tanstack/react-start`', async () => {
+    const fs = new VirtualFilesystem({
+      'package.json': JSON.stringify({
+        dependencies: {
+          '@tanstack/router-plugin': 'latest',
+          '@tanstack/react-start': 'latest',
+          vite: 'latest',
+        },
+      }),
+    });
+
+    expect(await detectFramework({ fs, frameworkList })).toBe('tanstack-start');
+  });
+
+  it('Should keep TanStack Router apps as `vite` without Start packages', async () => {
+    const fs = new VirtualFilesystem({
+      'package.json': JSON.stringify({
+        dependencies: {
+          '@tanstack/router-plugin': 'latest',
+          vite: 'latest',
+        },
+      }),
+    });
+
+    expect(await detectFramework({ fs, frameworkList })).toBe('vite');
+  });
+
   it('Should detect React Router v7 as `react-router` via `vite.config.ts`', async () => {
     const fs = new VirtualFilesystem({
       'vite.config.ts': 'import { reactRouter } from "@react-router/dev/vite"',
@@ -559,13 +693,102 @@ describe('detectFrameworks()', () => {
     expect(slugs).toEqual(['remix']);
   });
 
-  it('Should detect "hydrogen" template as `hydrogen`', async () => {
-    const fs = new LocalFileSystemDetector(join(EXAMPLES_DIR, 'hydrogen'));
+  it('Should detect TanStack Start without `nitro` and supersede `vite`', async () => {
+    const fs = new VirtualFilesystem({
+      'package.json': JSON.stringify({
+        dependencies: {
+          '@tanstack/router-plugin': 'latest',
+          '@tanstack/react-start': 'latest',
+          vite: 'latest',
+        },
+      }),
+    });
 
     const slugs = (await detectFrameworks({ fs, frameworkList })).map(
       f => f.slug
     );
-    expect(slugs).toEqual(['hydrogen']);
+    expect(slugs).toEqual(['tanstack-start']);
+  });
+
+  describe('Hono', () => {
+    const importSyntaxes = [
+      'import { Hono } from "hono"',
+      "import { Hono } from 'hono'",
+      'const H = require("hono")',
+      'const H = require("hono")',
+      'import("hono")',
+    ];
+
+    const filePaths = [
+      'index.ts',
+      'index.js',
+      'src/index.ts',
+      'src/index.js',
+      'server.ts',
+      'src/server.ts',
+    ];
+
+    // Test each import syntax with each file path
+    importSyntaxes.forEach(syntax => {
+      filePaths.forEach(filePath => {
+        it(`Should detect Hono with syntax "${syntax}" in ${filePath}`, async () => {
+          const fs = new VirtualFilesystem({
+            'package.json': JSON.stringify({
+              dependencies: {
+                hono: 'latest',
+              },
+            }),
+            [filePath]: syntax,
+          });
+
+          const slugs = (await detectFrameworks({ fs, frameworkList })).map(
+            f => f.slug
+          );
+          expect(slugs).toEqual(['hono']);
+        });
+      });
+    });
+
+    it('Should not detect Hono without the package', async () => {
+      const fs = new VirtualFilesystem({
+        'package.json': JSON.stringify({
+          dependencies: {},
+        }),
+        'index.ts': 'import { Hono } from "hono"',
+      });
+
+      const slugs = (await detectFrameworks({ fs, frameworkList })).map(
+        f => f.slug
+      );
+      expect(slugs).toEqual([]);
+    });
+
+    // Test false positives - should not detect Hono
+    const falsePositiveCases = [
+      // Variable names containing "hono"
+      'const hono = "something"',
+      'let hono = "web framework"',
+      'var hono = "framework"',
+      'const myHono = "app"',
+      'const honoApp = "application"',
+      'const appHono = "server"',
+    ];
+
+    falsePositiveCases.forEach((code, index) => {
+      it(`Should not detect Hono in false positive case ${index + 1}: "${code.substring(0, 50)}..."`, async () => {
+        const fs = new VirtualFilesystem({
+          'package.json': JSON.stringify({
+            dependencies: {},
+          }),
+          'index.ts': code,
+        });
+
+        const slugs = (await detectFrameworks({ fs, frameworkList })).map(
+          f => f.slug
+        );
+        expect(slugs).toEqual([]);
+      });
+    });
   });
 
   it('Should detect "hydrogen-2" template as `remix`', async () => {

@@ -4,10 +4,14 @@ import getScope from '../../util/get-scope';
 import { getLinkedProject } from '../../util/projects/link';
 import type { Resource } from '../../util/integration-resource/types';
 import { getResources } from '../../util/integration-resource/get-resources';
+import { isSandboxResource } from '../../util/integration-resource/claim-status';
+import { packageName } from '../../util/pkg-name';
 import { listSubcommand } from './command';
 import { getFlagsSpecification } from '../../util/get-flags-specification';
 import { parseArguments } from '../../util/get-args';
 import { printError } from '../../util/error';
+import { validateJsonOutput } from '../../util/output-format';
+import { validateLsArgs } from '../../util/validate-ls-args';
 import table from '../../util/output/table';
 import title from 'title';
 import type { Team } from '@vercel-internals/types';
@@ -34,14 +38,25 @@ export async function list(client: Client) {
 
   telemetry.trackCliArgumentProject(parsedArguments.args[1]);
   telemetry.trackCliFlagAll(parsedArguments.flags['--all']);
+  telemetry.trackCliOptionFormat(parsedArguments.flags['--format']);
   // Note: the `--integration` flag is tracked later, after validating
   // whether the value is a known integration name or not.
 
-  if (parsedArguments.args.length > 2) {
-    output.error(
-      'Cannot specify more than one project at a time. Use `--all` to show all resources.'
-    );
+  const formatResult = validateJsonOutput(parsedArguments.flags);
+  if (!formatResult.valid) {
+    output.error(formatResult.error);
     return 1;
+  }
+  const asJson = formatResult.jsonOutput;
+
+  const validationResult = validateLsArgs({
+    commandName: 'integration list [project]',
+    args: parsedArguments.args,
+    maxArgs: 2,
+    exitCode: 1,
+  });
+  if (validationResult !== 0) {
+    return validationResult;
   }
 
   let project: { id?: string; name?: string } | undefined;
@@ -61,6 +76,7 @@ export async function list(client: Client) {
     output.error('Team not found.');
     return 1;
   }
+  client.config.currentTeam = team.id;
 
   if (!project && !parsedArguments.flags['--all']) {
     project = await getLinkedProject(client).then(result => {
@@ -81,7 +97,7 @@ export async function list(client: Client) {
 
   try {
     output.spinner('Retrieving resources…', 500);
-    resources = await getResources(client, team.id);
+    resources = await getResources(client);
   } catch (error) {
     output.error(`Failed to fetch resources: ${(error as Error).message}`);
     return 1;
@@ -128,59 +144,99 @@ export async function list(client: Client) {
         product: resource.product?.name,
         integration: resource.product?.slug,
         configurationId: resource.product?.integrationConfigurationId,
-        projects: resource.projectsMetadata
-          ?.map(metadata => metadata.name)
-          .join(', '),
+        projects: resource.projectsMetadata?.map(project => project.name),
+        isSandbox: isSandboxResource(resource),
       };
     });
+
+  const sandboxCount = results.filter(r => r.isSandbox).length;
 
   telemetry.trackCliOptionIntegration(
     parsedArguments.flags['--integration'],
     knownIntegration
   );
 
+  if (asJson) {
+    output.stopSpinner();
+    const jsonResources = results.map(result => {
+      const obj: Record<string, unknown> = {
+        id: result.id,
+        name: result.name,
+        status: result.status,
+        product: result.product,
+        installationId: result.configurationId,
+        projects: result.projects,
+      };
+      if (result.isSandbox) {
+        obj.claim_status = 'sandbox';
+      }
+      return obj;
+    });
+    client.stdout.write(
+      `${JSON.stringify({ resources: jsonResources }, null, 2)}\n`
+    );
+    return 0;
+  }
+
   if (results.length === 0) {
     output.log('No resources found.');
     return 0;
   }
 
+  const headerMessage = project
+    ? `Integration resources for project ${chalk.bold(project.name)} in ${chalk.bold(contextName)}:`
+    : `Integrations in ${chalk.bold(contextName)}:`;
+
   output.log(
-    `Integrations in ${chalk.bold(contextName)}:\n${table(
+    `${headerMessage}\n${table(
       [
         ['Name', 'Status', 'Product', 'Integration', 'Projects'].map(header =>
           chalk.bold(chalk.cyan(header))
         ),
         ...results.map(result => [
           resourceLink(contextName, result) ?? chalk.gray('–'),
-          resourceStatus(result.status ?? '–'),
+          resourceStatus(result.status ?? '–', result.isSandbox),
           result.product ?? chalk.gray('–'),
           integrationLink(result, team) ?? chalk.gray('–'),
-          chalk.grey(result.projects ? result.projects : '–'),
+          chalk.grey(
+            result.projects?.length ? result.projects.join(', ') : '–'
+          ),
         ]),
       ],
       { hsep: 8 }
     )}`
   );
+
+  if (sandboxCount > 0) {
+    const noun = sandboxCount === 1 ? 'resource' : 'resources';
+    output.log(`${sandboxCount} sandbox ${noun} can be claimed.`);
+    output.print(
+      `  Run \`${packageName} integration-resource claim <name>\` to claim one.\n`
+    );
+  }
+
   return 0;
 }
 
-// Builds a string with an appropriately coloured indicator
-function resourceStatus(status: string) {
+// Builds a string with an appropriately coloured indicator, plus a
+// `[SANDBOX]` annotation for sandbox marketplace resources.
+function resourceStatus(status: string, isSandbox = false) {
   const CIRCLE = '● ';
   const statusTitleCase = title(status);
+  const sandboxTag = isSandbox ? ` ${chalk.yellow('[SANDBOX]')}` : '';
   switch (status) {
     case 'initializing':
-      return chalk.yellow(CIRCLE) + statusTitleCase;
+      return chalk.yellow(CIRCLE) + statusTitleCase + sandboxTag;
     case 'error':
-      return chalk.red(CIRCLE) + statusTitleCase;
+      return chalk.red(CIRCLE) + statusTitleCase + sandboxTag;
     case 'available':
-      return chalk.green(CIRCLE) + statusTitleCase;
+      return chalk.green(CIRCLE) + statusTitleCase + sandboxTag;
     case 'suspended':
-      return chalk.white(CIRCLE) + statusTitleCase;
+      return chalk.white(CIRCLE) + statusTitleCase + sandboxTag;
     case 'limits-exceeded-suspended':
-      return `${chalk.white(CIRCLE)}Limits exceeded`;
+      return `${chalk.white(CIRCLE)}Limits exceeded${sandboxTag}`;
     default:
-      return chalk.gray(statusTitleCase);
+      return chalk.gray(statusTitleCase) + sandboxTag;
   }
 }
 

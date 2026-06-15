@@ -1,9 +1,9 @@
 import ms from 'ms';
 import path from 'path';
-import fetch from 'node-fetch';
+import nodeFetch from 'node-fetch';
 import getPort from 'get-port';
 import isPortReachable from 'is-port-reachable';
-import frameworks, { Framework } from '@vercel/frameworks';
+import { frameworkList as frameworks, Framework } from '@vercel/frameworks';
 import {
   spawn,
   spawnSync,
@@ -30,8 +30,10 @@ import {
   runPipInstall,
   runPackageJsonScript,
   runShellScript,
+  createDiagnostics,
+  generateProjectManifest,
+  getReportedServiceType,
   getNodeVersion,
-  getSpawnOptions,
   debug,
   NowBuildError,
   scanParentDirs,
@@ -71,7 +73,7 @@ async function checkForPort(
   }
 }
 
-function validateDistDir(distDir: string) {
+function validateDistDir(distDir: string, workPath: string) {
   const distDirName = path.basename(distDir);
   const exists = () => existsSync(distDir);
   const isDirectory = () => statSync(distDir).isDirectory();
@@ -80,9 +82,30 @@ function validateDistDir(distDir: string) {
   const link = 'https://vercel.link/missing-public-directory';
 
   if (!exists()) {
+    const vercelJsonPath = path.join(workPath, 'vercel.json');
+    const vercelJsonExists = existsSync(vercelJsonPath);
+    let buildCommandExists = false;
+
+    if (vercelJsonExists) {
+      try {
+        const vercelJson = JSON.parse(readFileSync(vercelJsonPath, 'utf8'));
+        buildCommandExists = vercelJson.buildCommand !== undefined;
+      } catch (_e) {
+        // Ignore JSON parse errors, fallback to default messaging
+      }
+    }
+
+    let message = `No Output Directory named "${distDirName}" found after the Build completed.`;
+
+    if (vercelJsonExists && buildCommandExists) {
+      message += ` Update vercel.json#outputDirectory to ensure the correct output directory is generated.`;
+    } else {
+      message += ` Configure the Output Directory in your Project Settings. Alternatively, configure vercel.json#outputDirectory.`;
+    }
+
     throw new NowBuildError({
       code: 'STATIC_BUILD_NO_OUT_DIR',
-      message: `No Output Directory named "${distDirName}" found after the Build completed. You can configure the Output Directory in your Project Settings.`,
+      message,
       link,
     });
   }
@@ -274,7 +297,7 @@ async function fetchBinary(
   version: string,
   dest = '/usr/local/bin'
 ) {
-  const res = await fetch(url);
+  const res = await nodeFetch(url);
   if (res.status === 404) {
     throw new NowBuildError({
       code: 'STATIC_BUILD_BINARY_NOT_FOUND',
@@ -332,11 +355,18 @@ export const build: BuildV2 = async ({
   repoRootPath,
   config,
   meta = {},
+  service,
 }) => {
   await download(files, workPath, meta);
 
-  const mountpoint = path.dirname(entrypoint);
-  const entrypointDir = path.join(workPath, mountpoint);
+  // Use routePrefix as mountpoint for services to mount static files at the correct path
+  // e.g., routePrefix="/admin" mounts files at "admin/" so they're served at /admin/*
+  // Strip leading slash from routePrefix to create valid mountpoint
+  const routePrefix = config.routePrefix as string | undefined;
+  const mountpoint = routePrefix
+    ? routePrefix.replace(/^\//, '') || '.'
+    : path.dirname(entrypoint);
+  const entrypointDir = path.join(workPath, path.dirname(entrypoint));
 
   let distPath = path.join(
     workPath,
@@ -363,6 +393,7 @@ export const build: BuildV2 = async ({
     let isNpmInstall = false;
     let isBundleInstall = false;
     let isPipInstall = false;
+    let pipTargetDir: string | undefined;
     let output: Files = {};
     let images: ImagesConfig | undefined;
     const routes: Route[] = [];
@@ -464,11 +495,23 @@ export const build: BuildV2 = async ({
       config,
       meta
     );
-    const spawnOpts = getSpawnOptions(meta, nodeVersion);
 
-    if (!spawnOpts.env) {
-      spawnOpts.env = {};
-    }
+    const {
+      cliType,
+      lockfilePath,
+      lockfileVersion,
+      packageJsonPackageManager,
+      turboSupportsCorepackHome,
+    } = await scanParentDirs(entrypointDir, true);
+
+    const spawnEnv = getEnvForPackageManager({
+      cliType,
+      lockfileVersion,
+      packageJsonPackageManager,
+      env: process.env,
+      turboSupportsCorepackHome,
+      projectCreatedAt: config.projectSettings?.createdAt,
+    });
 
     /* Don't fail the build on warnings from Create React App.
     Node.js will load 'false' as a string, not a boolean, so it's truthy still.
@@ -480,25 +523,8 @@ export const build: BuildV2 = async ({
     https://github.com/vercel/community/discussions/30
     */
     if (framework?.slug === 'create-react-app') {
-      spawnOpts.env.CI = 'false';
+      spawnEnv.CI = 'false';
     }
-
-    const {
-      cliType,
-      lockfileVersion,
-      packageJsonPackageManager,
-      turboSupportsCorepackHome,
-    } = await scanParentDirs(entrypointDir, true);
-
-    spawnOpts.env = getEnvForPackageManager({
-      cliType,
-      lockfileVersion,
-      packageJsonPackageManager,
-      nodeVersion,
-      env: spawnOpts.env || {},
-      turboSupportsCorepackHome,
-      projectCreatedAt: config.projectSettings?.createdAt,
-    });
 
     if (meta.isDev) {
       debug('Skipping dependency installation because dev mode is enabled');
@@ -516,9 +542,8 @@ export const build: BuildV2 = async ({
         await runNpmInstall(
           entrypointDir,
           [],
-          spawnOpts,
+          { env: spawnEnv },
           meta,
-          nodeVersion,
           config.projectSettings?.createdAt
         );
         isNpmInstall = true;
@@ -526,7 +551,7 @@ export const build: BuildV2 = async ({
         if (installCommand.trim()) {
           console.log(`Running "install" command: \`${installCommand}\`...`);
           await execCommand(installCommand, {
-            ...spawnOpts,
+            env: spawnEnv,
             cwd: entrypointDir,
           });
           // Its not clear which command was run, so assume all
@@ -559,25 +584,45 @@ export const build: BuildV2 = async ({
         if (existsSync(requirementsPath)) {
           debug('Detected requirements.txt');
           printInstall();
-          await runPipInstall(
+          const pipResult = await runPipInstall(
             workPath,
             ['-r', requirementsPath],
             undefined,
             meta
           );
-          isPipInstall = true;
+          if (pipResult.installed) {
+            pipTargetDir = pipResult.targetDir;
+            isPipInstall = true;
+          }
         }
         if (pkg) {
           await runNpmInstall(
             entrypointDir,
             [],
-            spawnOpts,
+            { env: spawnEnv },
             meta,
-            nodeVersion,
             config.projectSettings?.createdAt
           );
           isNpmInstall = true;
         }
+      }
+    }
+
+    if (framework?.slug) {
+      try {
+        await generateProjectManifest({
+          workPath: entrypointDir,
+          nodeVersion,
+          cliType,
+          lockfilePath,
+          lockfileVersion,
+          framework: framework.slug,
+          serviceType: service ? getReportedServiceType(service) : undefined,
+        });
+      } catch (err) {
+        debug(
+          `Failed to write static-build manifest: ${err instanceof Error ? err.message : String(err)}`
+        );
       }
     }
 
@@ -614,22 +659,44 @@ export const build: BuildV2 = async ({
       if (rubyVersion.status === 0 && typeof rubyVersion.stdout === 'string') {
         gemHome = path.join(dir, rubyVersion.stdout.trim());
         debug(`Set GEM_HOME="${gemHome}" because a Gemfile was found`);
+        // Add gem executable bin directory to PATH (where `bundle install` places executables)
+        const gemBin = path.join(gemHome, 'bin');
+        pathList.push(gemBin);
+        debug(`Added "${gemBin}" to PATH env because a Gemfile was found`);
       }
     }
 
-    if (isPipInstall) {
-      // TODO: Add bins to PATH once we implement pip caching
+    if (isPipInstall && pipTargetDir) {
+      // Add pip bin directory to PATH for CLI commands (e.g., `mkdocs` instead of `python3 -m mkdocs`)
+      const pipBinDir = path.join(pipTargetDir, 'bin');
+      pathList.push(pipBinDir);
+      debug(
+        `Added "${pipBinDir}" to PATH env because a requirements.txt was found`
+      );
     }
 
-    if (spawnOpts?.env?.PATH) {
+    if (spawnEnv.PATH) {
       // Append system path last so others above take precedence
-      pathList.push(spawnOpts.env.PATH);
+      pathList.push(spawnEnv.PATH);
     }
 
-    spawnOpts.env = {
-      ...spawnOpts.env,
+    // Set up PYTHONPATH so Python can find packages installed via pip
+    let pythonPath: string | undefined;
+    if (isPipInstall && pipTargetDir) {
+      const existingPythonPath = process.env.PYTHONPATH;
+      pythonPath = existingPythonPath
+        ? `${pipTargetDir}${path.delimiter}${existingPythonPath}`
+        : pipTargetDir;
+      debug(
+        `Set PYTHONPATH="${pythonPath}" because a requirements.txt was found`
+      );
+    }
+
+    const cliEnv = {
+      ...process.env,
       PATH: pathList.join(path.delimiter),
       GEM_HOME: gemHome,
+      ...(pythonPath && { PYTHONPATH: pythonPath }),
     };
 
     if (
@@ -654,7 +721,7 @@ export const build: BuildV2 = async ({
         const opts: SpawnOptions = {
           cwd: entrypointDir,
           stdio: 'inherit',
-          env: { ...spawnOpts.env, PORT: String(devPort) },
+          env: { ...cliEnv, PORT: String(devPort) },
         };
 
         const cmd = devCommand || `yarn run ${devScript}`;
@@ -668,7 +735,7 @@ export const build: BuildV2 = async ({
         // for this builder.
         try {
           await checkForPort(devPort, DEV_SERVER_PORT_BIND_TIMEOUT);
-        } catch (err) {
+        } catch (_err) {
           throw new Error(
             `Failed to detect a server running on port ${devPort}.\nDetails: https://err.sh/vercel/vercel/now-static-build-failed-to-detect-a-server`
           );
@@ -705,13 +772,11 @@ export const build: BuildV2 = async ({
         const found =
           typeof buildCommand === 'string'
             ? await execCommand(buildCommand, {
-                ...spawnOpts,
-
                 // Yarn v2 PnP mode may be activated, so force
                 // "node-modules" linker style
                 env: {
                   YARN_NODE_LINKER: 'node-modules',
-                  ...spawnOpts.env,
+                  ...cliEnv,
                 },
 
                 cwd: entrypointDir,
@@ -719,7 +784,7 @@ export const build: BuildV2 = async ({
             : await runPackageJsonScript(
                 entrypointDir,
                 ['vercel-build', 'now-build', 'build'],
-                spawnOpts,
+                { env: cliEnv },
                 config.projectSettings?.createdAt
               );
 
@@ -789,7 +854,7 @@ export const build: BuildV2 = async ({
       } else {
         // No need to verify the dist dir if there are other output files.
         if (!extraOutputs.functions) {
-          validateDistDir(distPath);
+          validateDistDir(distPath, workPath);
         }
 
         if (framework && !extraOutputs.routes) {
@@ -826,15 +891,8 @@ export const build: BuildV2 = async ({
 
   if (!config.zeroConfig && entrypoint.endsWith('.sh')) {
     debug(`Running build script "${entrypoint}"`);
-    const nodeVersion = await getNodeVersion(
-      entrypointDir,
-      undefined,
-      config,
-      meta
-    );
-    const spawnOpts = getSpawnOptions(meta, nodeVersion);
-    await runShellScript(path.join(workPath, entrypoint), [], spawnOpts);
-    validateDistDir(distPath);
+    await runShellScript(path.join(workPath, entrypoint));
+    validateDistDir(distPath, workPath);
 
     const output = await glob('**', distPath, mountpoint);
 
@@ -901,3 +959,5 @@ export const prepareCache: PrepareCache = async ({
 
   return cacheFiles;
 };
+
+export const diagnostics = createDiagnostics('node');

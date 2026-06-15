@@ -38,7 +38,10 @@ import escapeStringRegexp from 'escape-string-regexp';
 import { htmlContentType } from '.';
 import textTable from 'text-table';
 import { getNextjsEdgeFunctionSource } from './edge-function-source/get-edge-function-source';
-import type { LambdaOptionsWithFiles } from '@vercel/build-utils/dist/lambda';
+import type {
+  LambdaOptions,
+  LambdaOptionsWithFiles,
+} from '@vercel/build-utils/dist/lambda';
 import { stringifySourceMap } from './sourcemapped';
 import type { RawSourceMap } from 'source-map';
 import { prettyBytes } from './pretty-bytes';
@@ -47,7 +50,14 @@ import {
   KIB,
   LAMBDA_RESERVED_UNCOMPRESSED_SIZE,
   DEFAULT_MAX_UNCOMPRESSED_LAMBDA_SIZE,
+  DEFAULT_MAX_UNCOMPRESSED_LAMBDA_SIZE_BUN,
+  INTERNAL_PAGES,
 } from './constants';
+import {
+  getContentTypeFromFile,
+  getSourceFileRefOfStaticMetadata,
+} from './metadata';
+import { isDynamicRoute } from './is-dynamic-route';
 
 type stringMap = { [key: string]: string };
 
@@ -56,24 +66,23 @@ export const require_ = createRequire(__filename);
 export const RSC_CONTENT_TYPE = 'x-component';
 export const RSC_PREFETCH_SUFFIX = '.prefetch.rsc';
 
-export const MAX_UNCOMPRESSED_LAMBDA_SIZE = !isNaN(
-  Number(process.env.MAX_UNCOMPRESSED_LAMBDA_SIZE)
-)
-  ? Number(process.env.MAX_UNCOMPRESSED_LAMBDA_SIZE)
-  : DEFAULT_MAX_UNCOMPRESSED_LAMBDA_SIZE;
+/**
+ * Get the maximum uncompressed lambda size based on the runtime.
+ * Bun runtime has a lower limit than Node.js runtimes.
+ */
+export function getMaxUncompressedLambdaSize(runtime: string): number {
+  if (!isNaN(Number(process.env.MAX_UNCOMPRESSED_LAMBDA_SIZE))) {
+    return Number(process.env.MAX_UNCOMPRESSED_LAMBDA_SIZE);
+  }
+
+  return runtime.startsWith('bun')
+    ? DEFAULT_MAX_UNCOMPRESSED_LAMBDA_SIZE_BUN
+    : DEFAULT_MAX_UNCOMPRESSED_LAMBDA_SIZE;
+}
 
 const skipDefaultLocaleRewrite = Boolean(
   process.env.NEXT_EXPERIMENTAL_DEFER_DEFAULT_LOCALE_REWRITE
 );
-
-// Identify /[param]/ in route string
-// eslint-disable-next-line no-useless-escape
-const TEST_DYNAMIC_ROUTE = /\/\[[^\/]+?\](?=\/|$)/;
-
-function isDynamicRoute(route: string): boolean {
-  route = route.startsWith('/') ? route : `/${route}`;
-  return TEST_DYNAMIC_ROUTE.test(route);
-}
 
 /**
  * Validate if the entrypoint is allowed to be used
@@ -208,7 +217,10 @@ function normalizePage(page: string): string {
   return page;
 }
 
-export type Redirect = Rewrite & {
+export type Redirect = Omit<Rewrite, 'destination'> & {
+  // Redirects can't target a service, so `destination` stays a plain string
+  // (unlike `Rewrite['destination']`, which is `string | ServiceDestination`).
+  destination: string;
   statusCode?: number;
   permanent?: boolean;
 };
@@ -223,6 +235,18 @@ type RoutesManifestRoute = {
   regex: string;
   namedRegex?: string;
   routeKeys?: { [named: string]: string };
+
+  /**
+   * If true, this indicates that the route has fallback root params. This is
+   * used to simplify the route regex for matching.
+   */
+  hasFallbackRootParams?: boolean;
+
+  /**
+   * The prefetch segment data routes for this route. This is used to rewrite
+   * the prefetch segment data routes (or the inverse) to the correct
+   * destination.
+   */
   prefetchSegmentDataRoutes?: {
     source: string;
     destination: string;
@@ -242,6 +266,7 @@ type RoutesManifestOld = {
         fallback: (Rewrite & RoutesManifestRegex)[];
       };
   headers?: (Header & RoutesManifestRegex)[];
+  onMatchHeaders?: (Header & RoutesManifestRegex)[];
   dynamicRoutes: RoutesManifestRoute[];
   staticRoutes: RoutesManifestRoute[];
   version: 1 | 2 | 3;
@@ -288,6 +313,12 @@ type RoutesManifestOld = {
      * When true, the dynamic RSC route is expecting to be a prerendered route.
      */
     dynamicRSCPrerender?: boolean;
+
+    /**
+     * Whether the client param parsing is enabled. This is only relevant for
+     * app pages when PPR is enabled.
+     */
+    clientParamParsing?: boolean;
   };
   rewriteHeaders?: {
     pathHeader: string;
@@ -309,11 +340,27 @@ type RoutesManifestOld = {
       headers: Readonly<Record<string, string>>;
     };
   };
+  /**
+   * Indicates whether the app uses Pages Router, App Router, or both.
+   * May be undefined in older versions of Next.js, in which case we treat everything
+   * as though pages router were being used.
+   */
+  appType?: 'app' | 'pages' | 'hybrid';
+  /**
+   * User-configured deployment ID for skew protection.
+   * This allows users to specify a custom deployment identifier
+   * in their next.config.js that will be used for version skew protection
+   * with pre-built deployments.
+   */
+  deploymentId?: string;
 };
 
 type RoutesManifestV4 = Omit<RoutesManifestOld, 'dynamicRoutes' | 'version'> & {
   version: 4;
-  dynamicRoutes: (RoutesManifestRoute | { page: string; isMiddleware: true })[];
+  dynamicRoutes: (
+    | RoutesManifestRoute
+    | { sourcePage: string | undefined; page: string; isMiddleware: true }
+  )[];
 };
 
 export type RoutesManifest = RoutesManifestV4 | RoutesManifestOld;
@@ -339,7 +386,14 @@ export async function getRoutesManifest(
 
   if (shouldHaveManifest && !hasRoutesManifest) {
     throw new NowBuildError({
-      message: `The file "${pathRoutesManifest}" couldn't be found. This is often caused by a misconfiguration in your project.`,
+      message:
+        `The file "${pathRoutesManifest}" couldn't be found. ` +
+        `This is usually caused by one of the following:\n\n` +
+        `1. The "Output Directory" setting in your project is misconfigured. ` +
+        `Ensure it matches your Next.js "distDir" configuration (defaults to ".next").\n\n` +
+        `2. If using Turborepo, ensure your task outputs include the Next.js build directory. ` +
+        `Add ".next/**" (or your custom distDir) to the "outputs" array in turbo.json for the build task.\n\n` +
+        `3. The build command did not complete successfully. Check the build logs above for errors.`,
       link: 'https://err.sh/vercel/vercel/now-next-routes-manifest',
       code: 'NEXT_NO_ROUTES_MANIFEST',
     });
@@ -364,54 +418,26 @@ export async function getRoutesManifest(
   return routesManifest;
 }
 
-export async function getStaticSegmentRoutes({
-  entryDirectory,
-  routesManifest,
-}: {
-  entryDirectory: string;
-  routesManifest: RoutesManifest;
-}): Promise<RouteWithSrc[]> {
-  // When clientSegmentCache is enabled, static routes may output additional
-  // routes to handle segment requests. This is only relevant when PPR is in
-  // incremental mode, because for normal PPR, all routes are part of the
-  // prerender manifest, which has its own handling for this case.
-  // NOTE: We may be able to remove this code if we decide that incremental PPR
-  // + clientSegmentCache is not a supported configuration.
-  switch (routesManifest.version) {
-    case 3:
-    case 4: {
-      const routes: RouteWithSrc[] = [];
-      for (const {
-        routeKeys,
-        prefetchSegmentDataRoutes,
-      } of routesManifest.staticRoutes) {
-        if (prefetchSegmentDataRoutes && prefetchSegmentDataRoutes.length > 0) {
-          for (const prefetchSegmentDataRoute of prefetchSegmentDataRoutes) {
-            routes.push({
-              src: prefetchSegmentDataRoute.source,
-              dest: getDestinationForSegmentRoute(
-                false,
-                entryDirectory,
-                routeKeys,
-                prefetchSegmentDataRoute
-              ),
-              check: true,
-            });
-          }
-        }
-      }
-      return routes;
-    }
-    default: {
-      // update MIN_ROUTES_MANIFEST_VERSION
-      throw new NowBuildError({
-        message:
-          'This version of `@vercel/next` does not support the version of Next.js you are trying to deploy.\n' +
-          'Please upgrade your `@vercel/next` builder and try again. Contact support if this continues to happen.',
-        code: 'NEXT_VERSION_UPGRADE',
-      });
-    }
+function getDestinationForSegmentRoute(
+  isDev: boolean,
+  entryDirectory: string,
+  routeKeys: Record<string, string> | undefined,
+  prefetchSegmentDataRoute: {
+    destination: string;
+    routeKeys?: Record<string, string>;
   }
+) {
+  return `${
+    !isDev
+      ? path.posix.join(
+          '/',
+          entryDirectory,
+          prefetchSegmentDataRoute.destination
+        )
+      : prefetchSegmentDataRoute.destination
+  }?${Object.entries(prefetchSegmentDataRoute.routeKeys ?? routeKeys ?? {})
+    .map(([key, value]) => `${value}=$${key}`)
+    .join('&')}`;
 }
 
 export async function getDynamicRoutes({
@@ -427,6 +453,8 @@ export async function getDynamicRoutes({
   dynamicMiddlewareRouteMap,
   isAppPPREnabled,
   isAppClientSegmentCacheEnabled,
+  isAppClientParamParsingEnabled,
+  prerenderManifest,
 }: {
   entryPath: string;
   entryDirectory: string;
@@ -440,6 +468,8 @@ export async function getDynamicRoutes({
   dynamicMiddlewareRouteMap?: ReadonlyMap<string, RouteWithSrc>;
   isAppPPREnabled: boolean;
   isAppClientSegmentCacheEnabled: boolean;
+  isAppClientParamParsingEnabled: boolean;
+  prerenderManifest: NextPrerenderedRoutes;
 }): Promise<RouteWithSrc[]> {
   if (routesManifest) {
     switch (routesManifest.version) {
@@ -460,6 +490,18 @@ export async function getDynamicRoutes({
       case 3:
       case 4: {
         const routes: RouteWithSrc[] = [];
+
+        // for static routes check if there is a .prefetch or .rsc
+        // for the corresponding segment request that matches
+        // exactly before continuing to process dynamic routes
+        if (isAppClientSegmentCacheEnabled && !isAppPPREnabled) {
+          routes.push({
+            src: '^/(?<path>.+)(?<rscSuffix>\\.segments/.+\\.segment\\.rsc)(?:/)?$',
+            dest: `/$path${isAppPPREnabled ? '.prefetch.rsc' : '.rsc'}`,
+            check: true,
+            override: true,
+          });
+        }
 
         for (const dynamicRoute of routesManifest.dynamicRoutes) {
           if (!canUsePreviewMode && omittedRoutes?.has(dynamicRoute.page)) {
@@ -485,6 +527,7 @@ export async function getDynamicRoutes({
             regex,
             routeKeys,
             prefetchSegmentDataRoutes,
+            hasFallbackRootParams,
           } = params;
           const route: RouteWithSrc = {
             src: namedRegex || regex,
@@ -499,8 +542,27 @@ export async function getDynamicRoutes({
             }`,
           };
 
+          // Determine if the route is PPR enabled. This is a dynamic route (as
+          // it's listed in the routes manifest as dynamic) so we only need to
+          // check the prerender manifest.
+          const { renderingMode, prefetchDataRoute } =
+            prerenderManifest.fallbackRoutes[page] ??
+            prerenderManifest.blockingFallbackRoutes[page] ??
+            prerenderManifest.omittedRoutes[page] ??
+            {};
+
+          const isRoutePPREnabled =
+            renderingMode === RenderingMode.PARTIALLY_STATIC;
+
           if (!isServerMode) {
             route.check = true;
+          }
+
+          // We must use check: true and override to ensure the
+          // correct route priority with PPR or segment cache
+          if (isAppPPREnabled || isAppClientSegmentCacheEnabled) {
+            route.check = true;
+            route.override = true;
           }
 
           if (isServerMode && canUsePreviewMode && omittedRoutes?.has(page)) {
@@ -526,7 +588,6 @@ export async function getDynamicRoutes({
           ) {
             for (const prefetchSegmentDataRoute of prefetchSegmentDataRoutes) {
               routes.push({
-                ...route,
                 src: prefetchSegmentDataRoute.source,
                 dest: getDestinationForSegmentRoute(
                   isDev === true,
@@ -535,35 +596,50 @@ export async function getDynamicRoutes({
                   prefetchSegmentDataRoute
                 ),
                 check: true,
+                override: true,
               });
             }
           }
 
-          if (isAppPPREnabled) {
-            let dest = route.dest?.replace(/($|\?)/, '.prefetch.rsc$1');
-
-            if (page === '/' || page === '/index') {
-              dest = dest?.replace(/([^/]+\.prefetch\.rsc(\?.*|$))/, '__$1');
-            }
+          // use combined regex for .rsc, .prefetch.rsc, and .segments
+          // if PPR or client segment cache is enabled
+          if (isAppPPREnabled || isAppClientSegmentCacheEnabled) {
+            // If we have fallback root params (implying we've already
+            // emitted a rewrite for the /_tree request), or if the route
+            // has PPR enabled and client param parsing is enabled, then
+            // we don't need to include any other suffixes.
+            const shouldSkipSuffixes =
+              hasFallbackRootParams ||
+              (isRoutePPREnabled &&
+                isAppClientParamParsingEnabled &&
+                !prefetchDataRoute);
 
             routes.push({
               ...route,
               src: route.src.replace(
                 new RegExp(escapeStringRegexp('(?:/)?$')),
-                '(?:\\.prefetch\\.rsc)(?:/)?$'
+                // Now than the upstream issues has been resolved, we can safely
+                // add the suffix back, this resolves a bug related to segment
+                // rewrites not capturing the correct suffix values when
+                // enabled.
+                shouldSkipSuffixes
+                  ? '(?<rscSuffix>\\.rsc|\\.segments/.+\\.segment\\.rsc)(?:/)?$'
+                  : '(?<rscSuffix>\\.rsc|\\.prefetch\\.rsc|\\.segments/.+\\.segment\\.rsc)(?:/)?$'
               ),
-              dest,
+              dest: route.dest?.replace(/($|\?)/, '$rscSuffix$1'),
+              check: true,
+              override: true,
+            });
+          } else {
+            routes.push({
+              ...route,
+              src: route.src.replace(
+                new RegExp(escapeStringRegexp('(?:/)?$')),
+                '(?:\\.rsc)(?:/)?$'
+              ),
+              dest: route.dest?.replace(/($|\?)/, '.rsc$1'),
             });
           }
-
-          routes.push({
-            ...route,
-            src: route.src.replace(
-              new RegExp(escapeStringRegexp('(?:/)?$')),
-              '(?:\\.rsc)(?:/)?$'
-            ),
-            dest: route.dest?.replace(/($|\?)/, '.rsc$1'),
-          });
 
           routes.push(route);
         }
@@ -604,7 +680,7 @@ export async function getDynamicRoutes({
     if (typeof getRouteRegex !== 'function') {
       getRouteRegex = undefined;
     }
-  } catch (_) {} // eslint-disable-line no-empty
+  } catch (_) {}
 
   if (!getRouteRegex || !getSortedRoutes) {
     try {
@@ -616,7 +692,7 @@ export async function getDynamicRoutes({
       if (typeof getRouteRegex !== 'function') {
         getRouteRegex = undefined;
       }
-    } catch (_) {} // eslint-disable-line no-empty
+    } catch (_) {}
   }
 
   if (!getRouteRegex || !getSortedRoutes) {
@@ -648,28 +724,6 @@ export async function getDynamicRoutes({
     }
   });
   return routes;
-}
-
-function getDestinationForSegmentRoute(
-  isDev: boolean,
-  entryDirectory: string,
-  routeKeys: Record<string, string> | undefined,
-  prefetchSegmentDataRoute: {
-    destination: string;
-    routeKeys?: Record<string, string>;
-  }
-) {
-  return `${
-    !isDev
-      ? path.posix.join(
-          '/',
-          entryDirectory,
-          prefetchSegmentDataRoute.destination
-        )
-      : prefetchSegmentDataRoute.destination
-  }?${Object.entries(prefetchSegmentDataRoute.routeKeys ?? routeKeys ?? {})
-    .map(([key, value]) => `${value}=$${key}`)
-    .join('&')}`;
 }
 
 export function localizeDynamicRoutes(
@@ -812,6 +866,7 @@ export function filterStaticPages(
   entryDirectory: string,
   htmlContentType: string,
   prerenderManifest: NextPrerenderedRoutes,
+  nextVersion: string,
   routesManifest?: RoutesManifest
 ) {
   const staticPages: FileMap = {};
@@ -841,7 +896,7 @@ export function filterStaticPages(
     staticPages[staticRoute] = staticPageFiles[page];
     staticPages[staticRoute].contentType = htmlContentType;
 
-    if (isDynamicRoute(pathname)) {
+    if (isDynamicRoute(pathname, nextVersion)) {
       dynamicPages.push(routeName);
       return;
     }
@@ -1057,21 +1112,40 @@ export async function createLambdaFromPseudoLayers({
       version: nextVersion,
     },
     experimentalAllowBundling,
+    shouldDisableAutomaticFetchInstrumentation:
+      process.env.VERCEL_TRACING_DISABLE_AUTOMATIC_FETCH_INSTRUMENTATION ===
+      '1',
   });
 }
+
+// This should be a subset of Next.js's full NextConfigRuntime
+// https://github.com/vercel/next.js/blob/6169e786020b63e101cc09285e1277e278cd34b8/packages/next/src/server/config-shared.ts#L1588
+export type NextConfigRuntime = {
+  pageExtensions: string[];
+  // experimental.cacheComponents has been moved out of experimental
+  // at https://github.com/vercel/next.js/pull/85035
+  cacheComponents?: boolean;
+  experimental?: {
+    cacheComponents?: boolean;
+    clientParamParsingOrigins?: string[];
+    clientSegmentCache?: boolean;
+    ppr?: boolean | 'incremental';
+    serverActions?: Record<string, never>;
+  };
+};
 
 export type NextRequiredServerFilesManifest = {
   appDir?: string;
   relativeAppDir?: string;
   files: string[];
   ignore: string[];
-  config: Record<string, any>;
+  config: NextConfigRuntime;
 };
 
 /**
  * The rendering mode for a route.
  */
-export const enum RenderingMode {
+export enum RenderingMode {
   /**
    * `STATIC` rendering mode will output a fully static HTML page or error if
    * anything dynamic is used.
@@ -1108,6 +1182,7 @@ export type NextPrerenderedRoutes = {
     [route: string]: {
       routeRegex: string;
       dataRoute: string | null;
+      fallback: string | boolean | null;
       fallbackRootParams?: string[];
       dataRouteRegex: string | null;
       prefetchDataRoute?: string | null;
@@ -1250,21 +1325,15 @@ export async function getRequiredServerFilesManifest(
     await fs.readFile(pathRequiredServerFilesManifest, 'utf8')
   );
 
-  const requiredServerFiles = {
-    files: [],
-    ignore: [],
-    config: {},
-    appDir: manifestData.appDir,
-    relativeAppDir: manifestData.relativeAppDir,
-  };
-
   switch (manifestData.version) {
     case 1: {
-      requiredServerFiles.files = manifestData.files;
-      requiredServerFiles.ignore = manifestData.ignore;
-      requiredServerFiles.config = manifestData.config;
-      requiredServerFiles.appDir = manifestData.appDir;
-      break;
+      return {
+        files: manifestData.files,
+        ignore: manifestData.ignore,
+        config: manifestData.config,
+        appDir: manifestData.appDir,
+        relativeAppDir: manifestData.relativeAppDir,
+      };
     }
     default: {
       throw new Error(
@@ -1272,7 +1341,6 @@ export async function getRequiredServerFilesManifest(
       );
     }
   }
-  return requiredServerFiles;
 }
 
 export async function getPrerenderManifest(
@@ -1315,6 +1383,7 @@ export async function getPrerenderManifest(
         dynamicRoutes: {
           [key: string]: {
             fallback?: string;
+            fallbackRootParams?: string[];
             routeRegex: string;
             dataRoute: string;
             dataRouteRegex: string;
@@ -1421,8 +1490,13 @@ export async function getPrerenderManifest(
       });
 
       lazyRoutes.forEach(lazyRoute => {
-        const { routeRegex, fallback, dataRoute, dataRouteRegex } =
-          manifest.dynamicRoutes[lazyRoute];
+        const {
+          routeRegex,
+          fallback,
+          dataRoute,
+          dataRouteRegex,
+          fallbackRootParams,
+        } = manifest.dynamicRoutes[lazyRoute];
 
         if (fallback) {
           ret.fallbackRoutes[lazyRoute] = {
@@ -1437,6 +1511,8 @@ export async function getPrerenderManifest(
           ret.blockingFallbackRoutes[lazyRoute] = {
             routeRegex,
             dataRoute,
+            fallback: null,
+            fallbackRootParams,
             dataRouteRegex,
             renderingMode: RenderingMode.STATIC,
             allowHeader: undefined,
@@ -1581,6 +1657,7 @@ export async function getPrerenderManifest(
             renderingMode,
             allowHeader,
             fallbackRootParams,
+            fallback: null,
           };
         } else {
           ret.omittedRoutes[lazyRoute] = {
@@ -1647,63 +1724,76 @@ async function getSourceFilePathFromPage({
   workPath,
   page,
   pageExtensions,
+  nextVersion,
 }: {
   workPath: string;
   page: string;
   pageExtensions?: ReadonlyArray<string>;
+  nextVersion?: string;
 }) {
   const usesSrcDir = await usesSrcDirectory(workPath);
   const extensionsToTry = pageExtensions || ['js', 'jsx', 'ts', 'tsx'];
 
-  for (const pageType of [
-    // middleware is not nested in pages/app
-    ...(page === 'middleware' ? [''] : ['pages', 'app']),
-  ]) {
-    let fsPath = path.join(workPath, pageType, page);
-    if (usesSrcDir) {
-      fsPath = path.join(workPath, 'src', pageType, page);
-    }
+  // In Next.js 16+, check for proxy.ts first as it's the recommended replacement for middleware.ts
+  const isNextJs16Plus = nextVersion && semver.gte(nextVersion, '16.0.0');
+  const pagesToCheck =
+    page === 'middleware' && isNextJs16Plus
+      ? ['proxy', 'middleware'] // Check proxy.ts first in Next.js 16+
+      : [page];
 
-    if (fs.existsSync(fsPath)) {
-      return path.relative(workPath, fsPath);
-    }
-    const extensionless = fsPath.replace(path.extname(fsPath), '');
-
-    for (const ext of extensionsToTry) {
-      fsPath = `${extensionless}.${ext}`;
-      // for appDir, we need to treat "index.js" as root-level "page.js"
-      if (
-        pageType === 'app' &&
-        extensionless ===
-          path.join(workPath, `${usesSrcDir ? 'src/' : ''}app/index`)
-      ) {
-        fsPath = `${extensionless.replace(/index$/, 'page')}.${ext}`;
+  for (const pageToCheck of pagesToCheck) {
+    for (const pageType of [
+      // middleware/proxy is not nested in pages/app
+      ...(pageToCheck === 'middleware' || pageToCheck === 'proxy'
+        ? ['']
+        : ['pages', 'app']),
+    ]) {
+      let fsPath = path.join(workPath, pageType, pageToCheck);
+      if (usesSrcDir) {
+        fsPath = path.join(workPath, 'src', pageType, pageToCheck);
       }
+
       if (fs.existsSync(fsPath)) {
         return path.relative(workPath, fsPath);
       }
-    }
+      const extensionless = fsPath.replace(path.extname(fsPath), '');
 
-    if (isDirectory(extensionless)) {
-      if (pageType === 'pages') {
-        for (const ext of extensionsToTry) {
-          fsPath = path.join(extensionless, `index.${ext}`);
-          if (fs.existsSync(fsPath)) {
-            return path.relative(workPath, fsPath);
-          }
+      for (const ext of extensionsToTry) {
+        fsPath = `${extensionless}.${ext}`;
+        // for appDir, we need to treat "index.js" as root-level "page.js"
+        if (
+          pageType === 'app' &&
+          extensionless ===
+            path.join(workPath, `${usesSrcDir ? 'src/' : ''}app/index`)
+        ) {
+          fsPath = `${extensionless.replace(/index$/, 'page')}.${ext}`;
         }
-        // appDir
-      } else {
-        for (const ext of extensionsToTry) {
-          // RSC
-          fsPath = path.join(extensionless, `page.${ext}`);
-          if (fs.existsSync(fsPath)) {
-            return path.relative(workPath, fsPath);
+        if (fs.existsSync(fsPath)) {
+          return path.relative(workPath, fsPath);
+        }
+      }
+
+      if (isDirectory(extensionless)) {
+        if (pageType === 'pages') {
+          for (const ext of extensionsToTry) {
+            fsPath = path.join(extensionless, `index.${ext}`);
+            if (fs.existsSync(fsPath)) {
+              return path.relative(workPath, fsPath);
+            }
           }
-          // Route Handlers
-          fsPath = path.join(extensionless, `route.${ext}`);
-          if (fs.existsSync(fsPath)) {
-            return path.relative(workPath, fsPath);
+          // appDir
+        } else {
+          for (const ext of extensionsToTry) {
+            // RSC
+            fsPath = path.join(extensionless, `page.${ext}`);
+            if (fs.existsSync(fsPath)) {
+              return path.relative(workPath, fsPath);
+            }
+            // Route Handlers
+            fsPath = path.join(extensionless, `route.${ext}`);
+            if (fs.existsSync(fsPath)) {
+              return path.relative(workPath, fsPath);
+            }
           }
         }
       }
@@ -1716,12 +1806,28 @@ async function getSourceFilePathFromPage({
   if (page === '/_not-found/page') {
     return '';
   }
+  // if we got here, and didn't find a source global-error file, then it was the one injected
+  // by Next.js for App Router 500 page. There's no need to warn or return a source file in this case, as it won't have
+  // any configuration applied to it.
+  if (page === '/_global-error/page') {
+    return '';
+  }
 
-  console.log(
-    `WARNING: Unable to find source file for page ${page} with extensions: ${extensionsToTry.join(
-      ', '
-    )}, this can cause functions config from \`vercel.json\` to not be applied`
-  );
+  // In Next.js 16+, middleware.ts is replaced by proxy.ts (though middleware.ts still works
+  // for Edge runtime). Skip the warning for middleware in Next.js 16+ since it's expected
+  // that it may not be found.
+  if (page === 'middleware' && isNextJs16Plus) {
+    return '';
+  }
+
+  // Skip warning for internal pages (_app.js, _error.js, _document.js)
+  if (!INTERNAL_PAGES.includes(page)) {
+    console.log(
+      `WARNING: Unable to find source file for page ${page} with extensions: ${extensionsToTry.join(
+        ', '
+      )}, this can cause functions config from \`vercel.json\` to not be applied`
+    );
+  }
   return '';
 }
 
@@ -1772,7 +1878,10 @@ export function addLocaleOrDefault(
 export type LambdaGroup = {
   pages: string[];
   memory?: number;
-  maxDuration?: number;
+  maxDuration?: number | 'max';
+  regions?: string[];
+  functionFailoverRegions?: string[];
+  supportsCancellation?: boolean;
   isAppRouter?: boolean;
   isAppRouteHandler?: boolean;
   isStreaming?: boolean;
@@ -1784,7 +1893,20 @@ export type LambdaGroup = {
   pseudoLayer: PseudoLayer;
   pseudoLayerBytes: number;
   pseudoLayerUncompressedBytes: number;
+  experimentalTriggers?: NodejsLambda['experimentalTriggers'];
 };
+
+function compareRegions(
+  a: string[] | undefined,
+  b: string[] | undefined
+): boolean {
+  if (a === undefined && b === undefined) return true;
+  if (a === undefined || b === undefined) return false;
+  if (a.length !== b.length) return false;
+  const sortedA = [...a].sort();
+  const sortedB = [...b].sort();
+  return sortedA.every((val, idx) => val === sortedB[idx]);
+}
 
 export async function getPageLambdaGroups({
   entryPath,
@@ -1803,6 +1925,7 @@ export async function getPageLambdaGroups({
   inversedAppPathManifest,
   experimentalAllowBundling,
   isRouteHandlers,
+  nodeVersion,
 }: {
   isRouteHandlers?: boolean;
   entryPath: string;
@@ -1826,6 +1949,8 @@ export async function getPageLambdaGroups({
   pageExtensions?: ReadonlyArray<string>;
   inversedAppPathManifest?: Record<string, string>;
   experimentalAllowBundling?: boolean;
+  experimentalTriggers?: Lambda['experimentalTriggers'];
+  nodeVersion: { runtime: string };
 }) {
   const groups: Array<LambdaGroup> = [];
 
@@ -1838,14 +1963,23 @@ export async function getPageLambdaGroups({
     let opts: {
       architecture?: NodejsLambda['architecture'];
       memory?: number;
-      maxDuration?: number;
+      maxDuration?: number | 'max';
+      regions?: string[];
+      functionFailoverRegions?: string[];
+      experimentalTriggers?: NodejsLambda['experimentalTriggers'];
+      supportsCancellation?: boolean;
     } = {};
 
     if (
       functionsConfigManifest &&
       functionsConfigManifest.functions[routeName]
     ) {
-      opts = functionsConfigManifest.functions[routeName];
+      // Exclude `regions` from the manifest. Next.js outputs `preferredRegion`
+      // as `regions` in the manifest, but for Node.js lambdas we only support
+      // regions via vercel.json functions config, not route-level config.
+      const { regions: _regions, ...manifestOpts } =
+        functionsConfigManifest.functions[routeName];
+      opts = manifestOpts;
     }
 
     if (config && config.functions) {
@@ -1867,14 +2001,65 @@ export async function getPageLambdaGroups({
       opts = { ...vercelConfigOpts, ...opts };
     }
 
+    const isGeneratedSteps =
+      routeName.includes('.well-known/workflow/v1/step') ||
+      routeName.includes('api/generated/steps');
+    const isGeneratedWorkflows =
+      routeName.includes('.well-known/workflow/v1/flow') ||
+      routeName.includes('api/generated/workflows');
+
+    if (isGeneratedSteps || isGeneratedWorkflows) {
+      const sourceFile = await getSourceFilePathFromPage({
+        workPath: entryPath,
+        page: normalizeSourceFilePageFromManifest(
+          routeName,
+          page,
+          inversedAppPathManifest
+        ),
+        pageExtensions,
+      });
+      // For App Router, source file is like `step/route.js` so config is at `../config.json`
+      // For Pages Router, source file is like `step.js` so config is at `./config.json`
+      const isAppRouterRoute =
+        sourceFile.endsWith('/route.js') || sourceFile.endsWith('/route.ts');
+      const configRelativePath = isAppRouterRoute
+        ? '../config.json'
+        : './config.json';
+      const config = JSON.parse(
+        await fs
+          .readFile(
+            path.join(entryPath, path.dirname(sourceFile), configRelativePath),
+            'utf8'
+          )
+          .catch(() => '{}')
+      ) as {
+        steps?: LambdaOptions;
+        workflows?: LambdaOptions;
+      };
+
+      if (isGeneratedSteps && config.steps) {
+        Object.assign(opts, config.steps);
+      } else if (isGeneratedWorkflows && config.workflows) {
+        Object.assign(opts, config.workflows);
+      }
+    }
+
     let matchingGroup = experimentalAllowBundling
       ? undefined
       : groups.find(group => {
           const matches =
             group.maxDuration === opts.maxDuration &&
             group.memory === opts.memory &&
+            compareRegions(group.regions, opts.regions) &&
+            compareRegions(
+              group.functionFailoverRegions,
+              opts.functionFailoverRegions
+            ) &&
             group.isPrerenders === isPrerenderRoute &&
-            group.isExperimentalPPR === isExperimentalPPR;
+            group.isExperimentalPPR === isExperimentalPPR &&
+            JSON.stringify(group.experimentalTriggers) ===
+              JSON.stringify(opts.experimentalTriggers) &&
+            group.supportsCancellation === opts.supportsCancellation;
 
           if (matches) {
             let newTracedFilesUncompressedSize =
@@ -1892,9 +2077,12 @@ export async function getPageLambdaGroups({
                 compressedPages[newPage].uncompressedSize;
             }
 
+            const maxLambdaSize = getMaxUncompressedLambdaSize(
+              nodeVersion.runtime
+            );
             const underUncompressedLimit =
               newTracedFilesUncompressedSize <
-              MAX_UNCOMPRESSED_LAMBDA_SIZE - LAMBDA_RESERVED_UNCOMPRESSED_SIZE;
+              maxLambdaSize - LAMBDA_RESERVED_UNCOMPRESSED_SIZE;
 
             return underUncompressedLimit;
           }
@@ -1913,6 +2101,8 @@ export async function getPageLambdaGroups({
         pseudoLayerBytes: initialPseudoLayer.pseudoLayerBytes,
         pseudoLayerUncompressedBytes: initialPseudoLayerUncompressed,
         pseudoLayer: Object.assign({}, initialPseudoLayer.pseudoLayer),
+        experimentalTriggers: opts.experimentalTriggers,
+        supportsCancellation: opts.supportsCancellation,
       };
       groups.push(newGroup);
       matchingGroup = newGroup;
@@ -2069,10 +2259,12 @@ export const detectLambdaLimitExceeding = async (
   lambdaGroups: LambdaGroup[],
   compressedPages: {
     [page: string]: PseudoFile;
-  }
+  },
+  runtime: string
 ) => {
+  const maxLambdaSize = getMaxUncompressedLambdaSize(runtime);
   // show debug info if within 5 MB of exceeding the limit
-  const UNCOMPRESSED_SIZE_LIMIT_CLOSE = MAX_UNCOMPRESSED_LAMBDA_SIZE - 5 * MIB;
+  const UNCOMPRESSED_SIZE_LIMIT_CLOSE = maxLambdaSize - 5 * MIB;
 
   let numExceededLimit = 0;
   let numCloseToLimit = 0;
@@ -2081,8 +2273,7 @@ export const detectLambdaLimitExceeding = async (
   // pre-iterate to see if we are going to exceed the limit
   // or only get close so our first log line can be correct
   const filteredGroups = lambdaGroups.filter(group => {
-    const exceededLimit =
-      group.pseudoLayerUncompressedBytes > MAX_UNCOMPRESSED_LAMBDA_SIZE;
+    const exceededLimit = group.pseudoLayerUncompressedBytes > maxLambdaSize;
 
     const closeToLimit =
       group.pseudoLayerUncompressedBytes > UNCOMPRESSED_SIZE_LIMIT_CLOSE;
@@ -2108,7 +2299,7 @@ export const detectLambdaLimitExceeding = async (
       if (numExceededLimit || numCloseToLimit) {
         console.log(
           `Warning: Max serverless function size of ${prettyBytes(
-            MAX_UNCOMPRESSED_LAMBDA_SIZE
+            maxLambdaSize
           )} uncompressed${numExceededLimit ? '' : ' almost'} reached`
         );
       } else {
@@ -2218,6 +2409,7 @@ type OnPrerenderRouteArgs = {
   isSharedLambdas: boolean;
   isServerMode: boolean;
   canUsePreviewMode: boolean;
+  nextVersion: string;
   lambdas: { [key: string]: Lambda };
   experimentalStreamingLambdaPaths:
     | ReadonlyMap<
@@ -2235,6 +2427,8 @@ type OnPrerenderRouteArgs = {
   isEmptyAllowQueryForPrendered?: boolean;
   isAppPPREnabled: boolean;
   isAppClientSegmentCacheEnabled: boolean;
+  isAppClientParamParsingEnabled: boolean;
+  appPathnameFilesMap: Map<string, FileFsRef>;
 };
 let prerenderGroup = 1;
 
@@ -2248,8 +2442,28 @@ export const onPrerenderRoute =
       isOmitted,
       locale,
     }: {
+      /**
+       * A route is a blocking fallback route if its value in the prerender
+       * manifest is `null`. This means that unless the page has been
+       * prerendered (no dynamic params), we can't serve a fallback page for the
+       * route as it depends on the dynamic params values.
+       */
       isBlocking?: boolean;
+
+      /**
+       * A route is a fallback route if its value in the prerender manifest is
+       * a string (meaning there is a fallback value/page). This occurs when
+       * the page is rendered with dynamic params but it's rendered in such a
+       * way that it's value can be reused for all variants of the dynamic
+       * params.
+       */
       isFallback?: boolean;
+
+      /**
+       * A route is omitted if its value in the prerender manifest is `false`.
+       * This can only be set when the `dynamicParams` is set to `false` for
+       * the dynamic route.
+       */
       isOmitted?: boolean;
       locale?: string;
     }
@@ -2273,6 +2487,9 @@ export const onPrerenderRoute =
       isEmptyAllowQueryForPrendered,
       isAppPPREnabled,
       isAppClientSegmentCacheEnabled,
+      isAppClientParamParsingEnabled,
+      appPathnameFilesMap,
+      nextVersion,
     } = prerenderRouteArgs;
 
     if (isBlocking && isFallback) {
@@ -2287,6 +2504,25 @@ export const onPrerenderRoute =
         code: 'NEXT_ISOMITTED_ISFALLBACK',
         message: 'invariant: isOmitted and isFallback cannot both be true',
       });
+    }
+
+    // `fallbackRoutes` ∪ `blockingFallbackRoutes` ∪ `omittedRoutes` is exactly
+    // the prerender-manifest `dynamicRoutes` section, so these flags let us
+    // surface dynamic-template facts on the resulting `Prerender` outputs
+    // without re-reading the manifest:
+    //   - `isDynamicRoute`: this entry came from a dynamic template rather than
+    //     a concrete prerender.
+    //   - `hasFallback`: the template had a static fallback (`isFallback`),
+    //     `false` for blocking/omitted templates, `undefined` for concrete
+    //     prerenders where the concept doesn't apply.
+    // Named to avoid shadowing the imported `isDynamicRoute` helper used
+    // elsewhere in this function.
+    const routeIsDynamic = Boolean(isFallback || isBlocking || isOmitted);
+    let hasFallback: boolean | undefined;
+    if (isFallback) {
+      hasFallback = true;
+    } else if (isBlocking || isOmitted) {
+      hasFallback = false;
     }
 
     // Get the route file as it'd be mounted in the builder output
@@ -2428,19 +2664,45 @@ export const onPrerenderRoute =
     }
 
     const isOmittedOrNotFound = isOmitted || isNotFound;
-    let htmlFsRef: File | null = null;
+    let htmlFallbackFsRef: File | null = null;
+
+    // Byte size of the prerendered `.html` shell on disk, surfaced on the HTML
+    // `Prerender` below. Computed independently of the PPR/postpone branch so
+    // it covers all app routes (incl. blocking templates whose shell is 0
+    // bytes). A bare `statSync` in a try/catch is one syscall — `existsSync`
+    // would add a redundant `stat` — and naturally yields `undefined` when
+    // there's no `.html` (pages router, route handlers, edge).
+    let htmlSize: number | undefined;
+    if (appDir) {
+      try {
+        htmlSize = fs.statSync(
+          path.join(appDir, `${routeFileNoExt}.html`)
+        ).size;
+      } catch {
+        // No `.html` on disk for this route; leave `htmlSize` undefined.
+      }
+    }
 
     // If enabled, try to get the postponed route information from the file
     // system and use it to assemble the prerender.
     let postponedPrerender: string | undefined;
     let postponedState: string | null = null;
     let didPostpone = false;
+    // Tri-state postpone signal surfaced on the resulting `Prerender` objects:
+    // `true`/`false` only for app-router PPR routes whose `.meta` we actually
+    // inspect below, `undefined` everywhere else (pages router, non-PPR app
+    // routes, blocking routes). Distinct from `didPostpone`, which also
+    // requires the `.html` file to exist and can't distinguish "inspected, no
+    // postpone" from "never inspected".
+    let hasPostponed: boolean | undefined;
     if (
       renderingMode === RenderingMode.PARTIALLY_STATIC &&
       appDir &&
+      // TODO(NAR-402): Investigate omitted routes
       !isBlocking
     ) {
       postponedState = getHTMLPostponedState({ appDir, routeFileNoExt });
+      hasPostponed = Boolean(postponedState);
 
       const htmlPath = path.join(appDir, `${routeFileNoExt}.html`);
       if (fs.existsSync(htmlPath)) {
@@ -2462,17 +2724,10 @@ export const onPrerenderRoute =
         }
       }
 
-      if (!dataRoute?.endsWith('.rsc')) {
-        throw new Error(
-          `Invariant: unexpected output path for ${dataRoute} and PPR`
-        );
-      }
-
-      if (!prefetchDataRoute?.endsWith('.prefetch.rsc')) {
-        throw new Error(
-          `Invariant: unexpected output path for ${prefetchDataRoute} and PPR`
-        );
-      }
+      // NOTE: we don't validate the extension suffix of the data routes because
+      // some routes (like those that have PPR client segment cache, and client
+      // parsing all enabled) may be null because they only contain segment
+      // data.
     }
 
     if (postponedPrerender) {
@@ -2482,7 +2737,10 @@ export const onPrerenderRoute =
       }
 
       // Assemble the prerendered file.
-      htmlFsRef = new FileBlob({ contentType, data: postponedPrerender });
+      htmlFallbackFsRef = new FileBlob({
+        contentType,
+        data: postponedPrerender,
+      });
     } else if (
       appDir &&
       !dataRoute &&
@@ -2497,13 +2755,13 @@ export const onPrerenderRoute =
       // have dynamic segments.
       const fsPath = path.join(appDir, `${routeFileNoExt}.body`);
       if (fs.existsSync(fsPath)) {
-        htmlFsRef = new FileFsRef({
+        htmlFallbackFsRef = new FileFsRef({
           fsPath,
           contentType: contentType || 'text/html;charset=utf-8',
         });
       }
     } else {
-      htmlFsRef =
+      htmlFallbackFsRef =
         isBlocking || (isNotFound && !static404Page)
           ? // Blocking pages do not have an HTML fallback
             null
@@ -2531,33 +2789,48 @@ export const onPrerenderRoute =
               ),
             });
     }
-    const jsonFsRef =
-      // JSON data does not exist for fallback or blocking pages
-      isFallback || isBlocking || (isNotFound && !static404Page) || !dataRoute
-        ? null
-        : new FileFsRef({
-            fsPath: path.join(
-              isAppPathRoute && !isOmittedOrNotFound && appDir
-                ? appDir
-                : pagesDir,
-              `${
-                isOmittedOrNotFound
-                  ? localePrefixed404
-                    ? addLocaleOrDefault('/404.html', routesManifest, locale)
-                    : '/404.html'
-                  : isAppPathRoute
-                    ? // When experimental PPR is enabled, we expect that the data
-                      // that should be served as a part of the prerender should
-                      // be from the prefetch data route. If this isn't enabled
-                      // for ppr, the only way to get the data is from the data
-                      // route.
-                      renderingMode === RenderingMode.PARTIALLY_STATIC
-                      ? prefetchDataRoute
-                      : dataRoute
-                    : routeFileNoExt + '.json'
-              }`
-            ),
-          });
+
+    /**
+     * The file that's associated with the data part of the page prerender. This
+     * could be a JSON file in Pages Router, or an RSC file in App Router.
+     */
+    let dataFallbackFsRef: File | null = null;
+
+    // Data does not exist for fallback or blocking pages
+    if (
+      !isFallback &&
+      !isBlocking &&
+      (!isNotFound || static404Page) &&
+      dataRoute &&
+      // When this is an App route, either isAppClientParamParsingEnabled is disabled
+      // or there's a prefetchDataRoute
+      (!isAppPathRoute || !isAppClientParamParsingEnabled || prefetchDataRoute)
+    ) {
+      const basePath =
+        isAppPathRoute && !isOmittedOrNotFound && appDir ? appDir : pagesDir;
+
+      dataFallbackFsRef = new FileFsRef({
+        fsPath: path.join(
+          basePath,
+          `${
+            isOmittedOrNotFound
+              ? localePrefixed404
+                ? addLocaleOrDefault('/404.html', routesManifest, locale)
+                : '/404.html'
+              : isAppPathRoute
+                ? // When experimental PPR is enabled, we expect that the data
+                  // that should be served as a part of the prerender should
+                  // be from the prefetch data route. If this isn't enabled
+                  // for ppr, the only way to get the data is from the data
+                  // route.
+                  renderingMode === RenderingMode.PARTIALLY_STATIC
+                  ? prefetchDataRoute
+                  : dataRoute
+                : routeFileNoExt + '.json'
+          }`
+        ),
+      });
+    }
 
     if (isOmittedOrNotFound) {
       initialStatus = 404;
@@ -2580,12 +2853,18 @@ export const onPrerenderRoute =
       let normalized = path.posix.join(entryDirectory, route);
 
       if (nonDynamicSsg || isFallback || isOmitted) {
+        // the prerender-manifest can be inconsistent with
+        // locale being provided to dataRoute so normalize here
+        const pathToReplace = route.endsWith(routeFileNoExt + '.json')
+          ? origRouteFileNoExt
+          : routeFileNoExt;
+
         normalized = normalized.replace(
           new RegExp(`${escapeStringRegexp(origRouteFileNoExt)}.json$`),
           // ensure we escape "$" correctly while replacing as "$" is a special
           // character, we need to do double escaping as first is for the initial
           // replace on the routeFile and then the second on the outputPath
-          `${routeFileNoExt.replace(/\$/g, '$$$$')}.json`
+          `${pathToReplace.replace(/\$/g, '$$$$')}.json`
         );
       }
 
@@ -2606,7 +2885,10 @@ export const onPrerenderRoute =
       }
 
       outputPathPrefetchData = normalizeDataRoute(prefetchDataRoute);
-    } else if (renderingMode === RenderingMode.PARTIALLY_STATIC) {
+    } else if (
+      renderingMode === RenderingMode.PARTIALLY_STATIC &&
+      !isAppClientParamParsingEnabled
+    ) {
       throw new Error('Invariant: expected to find prefetch data route PPR');
     }
 
@@ -2646,7 +2928,7 @@ export const onPrerenderRoute =
     }
 
     if (!isAppPathRoute && !isNotFound && initialRevalidate === false) {
-      if (htmlFsRef == null || jsonFsRef == null) {
+      if (htmlFallbackFsRef == null || dataFallbackFsRef == null) {
         throw new NowBuildError({
           code: 'NEXT_HTMLFSREF_JSONFSREF',
           message: `invariant: htmlFsRef != null && jsonFsRef != null ${routeFileNoExt}`,
@@ -2659,11 +2941,11 @@ export const onPrerenderRoute =
         !canUsePreviewMode ||
         (routeKey === '/404' && !lambdas[outputPathPage])
       ) {
-        htmlFsRef.contentType = htmlContentType;
-        prerenders[outputPathPage] = htmlFsRef;
+        htmlFallbackFsRef.contentType = htmlContentType;
+        prerenders[outputPathPage] = htmlFallbackFsRef;
 
         if (outputPathPrefetchData) {
-          prerenders[outputPathPrefetchData] = jsonFsRef;
+          prerenders[outputPathPrefetchData] = dataFallbackFsRef;
         }
 
         // If experimental ppr is not enabled for this route, then add the data
@@ -2672,7 +2954,7 @@ export const onPrerenderRoute =
           outputPathData &&
           renderingMode !== RenderingMode.PARTIALLY_STATIC
         ) {
-          prerenders[outputPathData] = jsonFsRef;
+          prerenders[outputPathData] = dataFallbackFsRef;
         }
       }
     }
@@ -2702,7 +2984,7 @@ export const onPrerenderRoute =
         (r): r is RoutesManifestRoute =>
           r.page === pageKey && !('isMiddleware' in r)
       ) as RoutesManifestRoute | undefined;
-      const isDynamic = isDynamicRoute(routeKey);
+      const isDynamic = isDynamicRoute(routeKey, nextVersion);
       const routeKeys = route?.routeKeys;
 
       // by default allowQuery should be undefined and only set when
@@ -2723,7 +3005,7 @@ export const onPrerenderRoute =
           allowQuery = Object.values(routeKeys);
         }
       } else {
-        const isDynamic = isDynamicRoute(pageKey);
+        const isDynamic = isDynamicRoute(pageKey, nextVersion);
 
         if (routeKeys) {
           // if we have routeKeys in the routes-manifest we use those
@@ -2808,50 +3090,92 @@ export const onPrerenderRoute =
       let htmlAllowQuery = allowQuery;
       if (
         renderingMode === RenderingMode.PARTIALLY_STATIC &&
+        // TODO(NAR-402): Investigate omitted routes
         (isFallback || isBlocking)
       ) {
-        const { fallbackRootParams } = isFallback
+        const { fallbackRootParams, fallback } = isFallback
           ? prerenderManifest.fallbackRoutes[routeKey]
           : prerenderManifest.blockingFallbackRoutes[routeKey];
 
-        if (fallbackRootParams && fallbackRootParams.length > 0) {
+        if (
+          // We only want to vary on the shell contents if there is a fallback
+          // present and able to be served.
+          fallback &&
+          typeof fallback === 'string' &&
+          fallbackRootParams &&
+          fallbackRootParams.length > 0
+        ) {
           htmlAllowQuery = fallbackRootParams;
-        } else if (postponedPrerender) {
+        }
+        // We additionally vary based on if there's a postponed prerender
+        // because if there isn't, then that means that we generated an
+        // empty shell, and producing an empty RSC shell would be a waste.
+        // If there is a postponed prerender, then the RSC shell would be
+        // non-empty, and it would be valuable to also generate an empty
+        // RSC shell.
+        else if (postponedPrerender) {
           htmlAllowQuery = [];
         }
       }
 
-      prerenders[outputPathPage] = new Prerender({
-        expiration: initialRevalidate,
-        staleExpiration: initialExpire,
-        lambda,
-        allowQuery: htmlAllowQuery,
-        fallback: htmlFsRef,
-        group: prerenderGroup,
-        bypassToken: prerenderManifest.bypassToken,
-        experimentalBypassFor,
-        initialStatus,
-        initialHeaders,
-        sourcePath,
-        experimentalStreamingLambdaPath,
-        chain,
-        allowHeader,
+      const partialFallback =
+        isAppPathRoute &&
+        renderingMode === RenderingMode.PARTIALLY_STATIC &&
+        isFallback &&
+        Boolean(postponedState);
 
-        ...(isNotFound
-          ? {
-              initialStatus: 404,
-            }
-          : {}),
+      // If this is a static metadata file that should output FileRef instead of Prerender
+      const staticMetadataFile = getSourceFileRefOfStaticMetadata(
+        routeKey,
+        appPathnameFilesMap
+      );
+      if (staticMetadataFile) {
+        const metadataFsRef = new FileFsRef({
+          fsPath: staticMetadataFile.fsPath,
+        });
+        const contentType = getContentTypeFromFile(staticMetadataFile);
+        if (contentType) {
+          metadataFsRef.contentType = contentType;
+        }
+        prerenders[outputPathPage] = metadataFsRef;
+      } else {
+        prerenders[outputPathPage] = new Prerender({
+          expiration: initialRevalidate,
+          staleExpiration: initialExpire,
+          lambda,
+          allowQuery: htmlAllowQuery,
+          fallback: htmlFallbackFsRef,
+          group: prerenderGroup,
+          bypassToken: prerenderManifest.bypassToken,
+          experimentalBypassFor,
+          initialStatus,
+          initialHeaders,
+          sourcePath,
+          experimentalStreamingLambdaPath,
+          chain,
+          allowHeader,
+          partialFallback: partialFallback || undefined,
+          hasPostponed,
+          hasFallback,
+          htmlSize,
+          isDynamicRoute: routeIsDynamic,
 
-        ...(rscEnabled
-          ? {
-              initialHeaders: {
-                ...initialHeaders,
-                vary: rscVaryHeader,
-              },
-            }
-          : {}),
-      });
+          ...(isNotFound
+            ? {
+                initialStatus: 404,
+              }
+            : {}),
+
+          ...(rscEnabled
+            ? {
+                initialHeaders: {
+                  ...initialHeaders,
+                  vary: rscVaryHeader,
+                },
+              }
+            : {}),
+        });
+      }
 
       const normalizePathData = (pathData: string) => {
         if (
@@ -2879,11 +3203,15 @@ export const onPrerenderRoute =
           staleExpiration: initialExpire,
           lambda,
           allowQuery,
-          fallback: jsonFsRef,
+          fallback: dataFallbackFsRef,
           group: prerenderGroup,
           bypassToken: prerenderManifest.bypassToken,
           experimentalBypassFor,
           allowHeader,
+          partialFallback: undefined,
+          hasPostponed,
+          hasFallback,
+          isDynamicRoute: routeIsDynamic,
 
           ...(isNotFound
             ? {
@@ -2934,43 +3262,80 @@ export const onPrerenderRoute =
         else if (
           outputPathData &&
           routesManifest?.rsc?.dynamicRSCPrerender &&
-          routesManifest?.ppr?.chain?.headers &&
-          postponedState
+          routesManifest?.ppr?.chain?.headers
         ) {
-          const contentType = `application/x-nextjs-pre-render; state-length=${postponedState.length}; origin=${JSON.stringify(
-            rscContentTypeHeader
-          )}`;
+          const shouldSkipDynamicRsc =
+            Boolean(prefetchDataRoute) && !postponedState;
+          if (shouldSkipDynamicRsc) {
+            // Ensure the data route is still registered using the static
+            // prerender (with fallback) so the .rsc build output is uploaded.
+            prerenders[normalizePathData(outputPathData)] = prerender;
+          } else {
+            let contentType = rscContentTypeHeader;
+            if (postponedState) {
+              contentType = `application/x-nextjs-pre-render; state-length=${postponedState.length}; origin=${JSON.stringify(
+                rscContentTypeHeader
+              )}`;
+            }
 
-          prerenders[normalizePathData(outputPathData)] = new Prerender({
-            expiration: initialRevalidate,
-            staleExpiration: initialExpire,
-            lambda,
-            allowQuery,
-            fallback: isFallback
-              ? null
-              : new FileBlob({
-                  data: postponedState,
-                  contentType,
-                }),
-            group: prerenderGroup,
-            bypassToken: prerenderManifest.bypassToken,
-            experimentalBypassFor,
-            allowHeader,
-            chain: {
-              outputPath: normalizePathData(outputPathData),
-              headers: routesManifest.ppr.chain.headers,
-            },
-            ...(isNotFound ? { initialStatus: 404 } : {}),
-            initialHeaders: {
-              ...initialHeaders,
-              'content-type': contentType,
-              // Dynamic RSC requests cannot be cached, so we explicity set it
-              // here to ensure that the response is not cached by the browser.
-              'cache-control':
-                'private, no-store, no-cache, max-age=0, must-revalidate',
-              vary: rscVaryHeader,
-            },
-          });
+            // If client param parsing is enabled, we follow the same logic as the
+            // HTML allowQuery as it's already going to vary based on if there's a
+            // static shell generated or if there's fallback root params. If there
+            // are fallback root params, and we can serve a fallback, then we
+            // should follow the same logic for the dynamic RSC routes.
+            //
+            // If client param parsing is not enabled, we have to use the
+            // allowQuery because the RSC payloads will contain dynamic segment
+            // values.
+            const rdcRSCAllowQuery = isAppClientParamParsingEnabled
+              ? htmlAllowQuery
+              : allowQuery;
+
+            // Use the fallback value for the RSC route if the route doesn't
+            // vary based on the route parameters and there's an actual postponed
+            // state to fallback to.
+            let fallback: FileBlob | null = null;
+            if (
+              rdcRSCAllowQuery &&
+              rdcRSCAllowQuery.length === 0 &&
+              postponedState
+            ) {
+              fallback = new FileBlob({
+                data: postponedState,
+                contentType,
+              });
+            }
+
+            prerenders[normalizePathData(outputPathData)] = new Prerender({
+              expiration: initialRevalidate,
+              staleExpiration: initialExpire,
+              lambda,
+              allowQuery: rdcRSCAllowQuery,
+              fallback,
+              group: prerenderGroup,
+              bypassToken: prerenderManifest.bypassToken,
+              experimentalBypassFor,
+              allowHeader,
+              partialFallback: undefined,
+              hasPostponed,
+              hasFallback,
+              isDynamicRoute: routeIsDynamic,
+              chain: {
+                outputPath: normalizePathData(outputPathData),
+                headers: routesManifest.ppr.chain.headers,
+              },
+              ...(isNotFound ? { initialStatus: 404 } : {}),
+              initialHeaders: {
+                ...initialHeaders,
+                'content-type': contentType,
+                // Dynamic RSC requests cannot be cached, so we explicity set it
+                // here to ensure that the response is not cached by the browser.
+                'cache-control':
+                  'private, no-store, no-cache, max-age=0, must-revalidate',
+                vary: rscVaryHeader,
+              },
+            });
+          }
         }
       }
 
@@ -3003,6 +3368,50 @@ export const onPrerenderRoute =
               appDir,
               routeFileNoExt + prefetchSegmentDirSuffix
             );
+
+            // If client param parsing is enabled, we follow the same logic as
+            // the HTML allowQuery as it's already going to vary based on if
+            // there's a static shell generated or if there's fallback root
+            // params. If there are fallback root params, and we can serve a
+            // fallback, then we should follow the same logic for the segment
+            // prerenders.
+            //
+            // If client param parsing is not enabled, we have to use the
+            // allowQuery because the segment payloads will contain dynamic
+            // segment values.
+            const segmentAllowQuery = isAppClientParamParsingEnabled
+              ? htmlAllowQuery
+              : allowQuery;
+
+            // No initial headers here means that the fallback is being served
+            // and it should infer the initial headers from the base metadata
+            // file which will be the ones which include the cache tags for
+            // the fallback render. Failing to do this will result in
+            // producing build output entries without any cache tags which are
+            // then therefore unexpirable.
+            let segmentInitialHeaders = initialHeaders;
+            if (
+              (isBlocking || isFallback) &&
+              'headers' in meta &&
+              typeof meta.headers === 'object' &&
+              meta.headers !== null
+            ) {
+              const metaHeaders = meta.headers as Record<string, string>;
+              const hasMissingMetaHeader =
+                !segmentInitialHeaders ||
+                Object.keys(metaHeaders).some(
+                  key => segmentInitialHeaders?.[key] == null
+                );
+              if (hasMissingMetaHeader) {
+                // Merge to fill any missing meta headers without overriding
+                // segment-specific values.
+                segmentInitialHeaders = {
+                  ...metaHeaders,
+                  ...segmentInitialHeaders,
+                };
+              }
+            }
+
             for (const segmentPath of meta.segmentPaths) {
               const outputSegmentPath =
                 path.join(
@@ -3010,10 +3419,16 @@ export const onPrerenderRoute =
                   segmentPath
                 ) + prefetchSegmentSuffix;
 
+              // Only use the fallback value when the allowQuery is defined and
+              // either: (1) it is empty, meaning segments do not vary by params,
+              // or (2) client param parsing is enabled, meaning the segment
+              // payloads are safe to reuse across params.
               let fallback: FileFsRef | null = null;
-
-              // Only add the fallback if this is not a fallback route.
-              if (!isFallback) {
+              const shouldAttachSegmentFallback =
+                segmentAllowQuery &&
+                (segmentAllowQuery.length === 0 ||
+                  isAppClientParamParsingEnabled);
+              if (shouldAttachSegmentFallback) {
                 const fsPath = path.join(
                   segmentsDir,
                   segmentPath + prefetchSegmentSuffix
@@ -3026,12 +3441,16 @@ export const onPrerenderRoute =
                 expiration: initialRevalidate,
                 staleExpiration: initialExpire,
                 lambda,
-                allowQuery,
+                allowQuery: segmentAllowQuery,
                 fallback,
 
                 // Use the same prerender group as the JSON/data prerender.
                 group: prerenderGroup,
                 allowHeader,
+                partialFallback: undefined,
+                hasPostponed,
+                hasFallback,
+                isDynamicRoute: routeIsDynamic,
 
                 // These routes are always only static, so they should not
                 // permit any bypass unless it's for preview
@@ -3039,7 +3458,7 @@ export const onPrerenderRoute =
                 experimentalBypassFor: undefined,
 
                 initialHeaders: {
-                  ...initialHeaders,
+                  ...segmentInitialHeaders,
                   vary: rscVaryHeader,
                   'content-type': rscContentTypeHeader,
                   [rscDidPostponeHeader]: '2',
@@ -3173,18 +3592,18 @@ export async function getStaticFiles(
   const publicDirectoryFiles: Record<string, FileFsRef> = {};
 
   for (const file of Object.keys(nextStaticFiles)) {
-    staticFiles[path.posix.join(entryDirectory, `_next/static/${file}`)] =
-      nextStaticFiles[file];
+    const outputPath = path.posix.join(entryDirectory, `_next/static/${file}`);
+    staticFiles[outputPath] = nextStaticFiles[file];
   }
 
   for (const file of Object.keys(staticFolderFiles)) {
-    staticDirectoryFiles[path.posix.join(entryDirectory, 'static', file)] =
-      staticFolderFiles[file];
+    const outputPath = path.posix.join(entryDirectory, 'static', file);
+    staticDirectoryFiles[outputPath] = staticFolderFiles[file];
   }
 
   for (const file of Object.keys(publicFolderFiles)) {
-    publicDirectoryFiles[path.posix.join(entryDirectory, file)] =
-      publicFolderFiles[file];
+    const outputPath = path.posix.join(entryDirectory, file);
+    publicDirectoryFiles[outputPath] = publicFolderFiles[file];
   }
 
   console.timeEnd(collectLabel);
@@ -3290,7 +3709,7 @@ export {
   normalizePackageJson,
   getNextConfig,
   getImagesConfig,
-  stringMap,
+  type stringMap,
   normalizePage,
   isDynamicRoute,
   getSourceFilePathFromPage,
@@ -3301,7 +3720,8 @@ export type FunctionsConfigManifestV1 = {
   functions: Record<
     string,
     {
-      maxDuration?: number | undefined;
+      maxDuration?: number | 'max' | undefined;
+      regions?: string[];
       runtime?: 'nodejs';
       matchers?: Array<{
         regexp: string;
@@ -3494,8 +3914,12 @@ export async function getNodeMiddleware({
     return null;
   }
   const routes: RouteWithSrc[] = [];
+  // Pass page: '/' to skip basePath addition in getRouteMatchers(), since
+  // functions-config-manifest matchers already have basePath baked in by
+  // Next.js build. This matches the behavior for edge middleware where
+  // page is '/' (root middleware) and basePath is not added.
   const routeMatchers = getRouteMatchers(
-    { matchers: middlewareFunctionConfig.matchers },
+    { matchers: middlewareFunctionConfig.matchers, page: '/' },
     routesManifest
   );
 
@@ -3529,6 +3953,7 @@ export async function getNodeMiddleware({
     workPath: entryPath,
     page: normalizeSourceFilePageFromManifest('/middleware', 'middleware', {}),
     pageExtensions,
+    nextVersion,
   });
 
   const vercelConfigOpts = await getLambdaOptionsFromFunction({
@@ -3576,6 +4001,8 @@ export async function getNodeMiddleware({
     ).filter((entry): entry is [string, FileFsRef] => !!entry)
   );
 
+  const absoluteOutputDirectory = path.posix.join(entryPath, outputDirectory);
+
   const launcherData = (
     await fs.readFile(path.join(__dirname, 'middleware-launcher.js'), 'utf8')
   )
@@ -3583,13 +4010,17 @@ export async function getNodeMiddleware({
       /(?:var|const) conf = __NEXT_CONFIG__/,
       `const conf = ${JSON.stringify({
         ...requiredServerFilesManifest.config,
-        distDir: path.relative(
-          projectDir,
-          path.join(entryPath, outputDirectory)
-        ),
+        distDir: path.relative(projectDir, absoluteOutputDirectory),
       })}`
     )
-    .replace('__NEXT_MIDDLEWARE_PATH__', `./.next/server/middleware.js`);
+    .replace(
+      '__NEXT_MIDDLEWARE_PATH__',
+      './' +
+        path.posix.join(
+          path.posix.relative(projectDir, absoluteOutputDirectory),
+          `server/middleware.js`
+        )
+    );
 
   const lambda = new NodejsLambda({
     ...vercelConfigOpts,
@@ -3613,6 +4044,9 @@ export async function getNodeMiddleware({
       [path.join(path.relative(baseDir, projectDir), '___next_launcher.cjs')]:
         new FileBlob({ data: launcherData }),
     },
+    shouldDisableAutomaticFetchInstrumentation:
+      process.env.VERCEL_TRACING_DISABLE_AUTOMATIC_FETCH_INSTRUMENTATION ===
+      '1',
   });
 
   return {
@@ -3852,7 +4286,10 @@ export async function getMiddlewareBundle({
           route.override = true;
         }
 
-        if (routesManifest.version > 3 && isDynamicRoute(worker.page)) {
+        if (
+          routesManifest.version > 3 &&
+          isDynamicRoute(worker.page, nextVersion)
+        ) {
           source.dynamicRouteMap.set(worker.page, route);
         } else {
           source.staticRoutes.push(route);
@@ -4247,4 +4684,74 @@ function getHTMLPostponedState({
   }
 
   return meta.postponed;
+}
+
+export async function getServerActionMetaRoutes(
+  distDir: string
+): Promise<Route[]> {
+  const manifestPath = path.join(
+    distDir,
+    'server',
+    'server-reference-manifest.json'
+  );
+
+  try {
+    const manifestContent = await fs.readFile(manifestPath, 'utf8');
+
+    type ActionItem = {
+      filename?: string;
+      exportedName?: string;
+    };
+    const manifest = JSON.parse(manifestContent) as {
+      node?: Record<string, ActionItem>;
+      edge?: Record<string, ActionItem>;
+    };
+
+    const routes: Route[] = [];
+
+    // Process both node and edge entries
+    for (const runtimeType of ['node', 'edge'] as const) {
+      const runtime = manifest[runtimeType];
+      if (!runtime) continue;
+
+      for (const [id, entry] of Object.entries(runtime)) {
+        // Skip entries without filename or exportedName
+        if (!entry.filename || !entry.exportedName) continue;
+
+        let exportedName = entry.exportedName;
+
+        if (exportedName === '$$RSC_SERVER_ACTION_0') {
+          exportedName = 'anonymous_fn';
+        }
+
+        const route: Route = {
+          src: '/(.*)',
+          has: [
+            {
+              type: 'header',
+              key: 'next-action',
+              value: id,
+            },
+          ],
+          transforms: [
+            {
+              type: 'request.headers',
+              op: 'append',
+              target: {
+                key: 'x-server-action-name',
+              },
+              args: `${entry.filename}#${exportedName}`,
+            },
+          ],
+        };
+
+        routes.push(route);
+      }
+    }
+
+    return routes;
+  } catch (_error) {
+    // If manifest doesn't exist or can't be read, return empty routes
+    return [];
+  }
 }

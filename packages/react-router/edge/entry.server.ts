@@ -13,6 +13,10 @@ export type RenderOptions = {
     keyof RenderToPipeableStreamOptions]?: RenderToReadableStreamOptions[K];
 };
 
+const vercelDeploymentId = process.env.VERCEL_DEPLOYMENT_ID;
+const vercelSkewProtectionEnabled =
+  process.env.VERCEL_SKEW_PROTECTION_ENABLED === '1';
+
 export async function handleRequest(
   request: Request,
   responseStatusCode: number,
@@ -42,7 +46,15 @@ export async function handleRequest(
   }
 
   responseHeaders.set('Content-Type', 'text/html');
-  return new Response(body, {
+
+  if (vercelSkewProtectionEnabled && vercelDeploymentId) {
+    responseHeaders.append(
+      'Set-Cookie',
+      `__vdpl=${vercelDeploymentId}; HttpOnly`
+    );
+  }
+
+  return new Response(body as any, {
     headers: responseHeaders,
     status: responseStatusCode,
   });

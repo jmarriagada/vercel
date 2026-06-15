@@ -1,5 +1,5531 @@
 # vercel
 
+## 54.14.0
+
+### Minor Changes
+
+- 210748e: [cli] Add `vercel ai-gateway rules` add/list/edit/remove commands
+
+### Patch Changes
+
+- Updated dependencies [d712d41]
+- Updated dependencies [dbb31fc]
+- Updated dependencies [f7f0003]
+  - @vercel/python@6.45.0
+
+## 54.13.0
+
+### Minor Changes
+
+- 128ad88: Add `--category` / `-c` filter to `vercel integration discover` and a new `vercel integration categories` subcommand. The filter scopes marketplace integrations to a single category (e.g. `storage`, `ai`, `monitoring`) — filtering happens server-side. The new `categories` subcommand lists the valid slugs (`Slug | Title` table or `--json` for scripts/agents).
+
+### Patch Changes
+
+- Updated dependencies [c453e66]
+  - @vercel/backends@0.8.14
+  - @vercel/static-build@2.10.3
+  - @vercel/express@0.1.105
+
+## 54.12.2
+
+### Patch Changes
+
+- Updated dependencies [4421ad9]
+  - @vercel/backends@0.8.13
+  - @vercel/static-build@2.10.3
+  - @vercel/express@0.1.104
+
+## 54.12.1
+
+### Patch Changes
+
+- 800286e: `vercel connect create --data` now accepts `@<path>` to read the JSON from a file and `@-` to read it from stdin, so non-managed connector credentials (e.g. client secrets) no longer have to be passed inline where they leak into shell history and process listings. Inline `--data` still works but now warns when it looks like it contains a secret.
+- 800286e: Strip ANSI escape sequences from team-controlled connector names, UIDs, and project names in all `vercel connect` command output (`attach`, `detach`, `remove`, `revoke-tokens`, and the `list` table's type/projects cells), not just the `list` UID/name cells. Prevents terminal escape injection from maliciously-named connectors visible across a team.
+- 1e64d1f: Added `vc api --spec-url <url>` for loading endpoints from a custom OpenAPI spec instead of the default public Vercel spec. Custom specs are fetched fresh, can use the current CLI token to pass Vercel deployment protection via the SSO handshake, and replace the public spec entirely for listing, interactive selection, and tag/operation resolution.
+- Updated dependencies [52f005f]
+- Updated dependencies [2d2aad9]
+- Updated dependencies [01e18e8]
+  - @vercel/backends@0.8.12
+  - @vercel/build-utils@13.30.0
+  - @vercel/next@4.19.0
+  - @vercel/elysia@0.1.93
+  - @vercel/express@0.1.103
+  - @vercel/fastify@0.1.96
+  - @vercel/go@3.9.0
+  - @vercel/h3@0.1.102
+  - @vercel/hono@0.2.96
+  - @vercel/hydrogen@1.4.0
+  - @vercel/koa@0.1.76
+  - @vercel/nestjs@0.2.97
+  - @vercel/node@5.8.17
+  - @vercel/python@6.44.1
+  - @vercel/redwood@2.5.0
+  - @vercel/remix-builder@5.9.1
+  - @vercel/ruby@2.4.0
+  - @vercel/rust@1.3.0
+  - @vercel/static-build@2.10.3
+
+## 54.12.0
+
+### Minor Changes
+
+- 5757bca: [services] add support to `vc dev` for `experimentalServicesV2`.
+
+### Patch Changes
+
+- 663307f: Fix CLI self-upgrade failing with `EUNSUPPORTEDPROTOCOL` inside pnpm/yarn workspaces
+- 32a730e: Elevate maximum maxDuration to 1800s
+- Updated dependencies [4637f0a]
+- Updated dependencies [32a730e]
+- Updated dependencies [c5d53d7]
+- Updated dependencies [a5034c1]
+- Updated dependencies [0c4ea01]
+  - @vercel/python@6.44.1
+  - @vercel/build-utils@13.29.1
+  - @vercel/remix-builder@5.9.1
+  - @vercel/go@3.9.0
+  - @vercel/node@5.8.16
+  - @vercel/static-build@2.10.2
+  - @vercel/backends@0.8.11
+  - @vercel/elysia@0.1.92
+  - @vercel/express@0.1.102
+  - @vercel/fastify@0.1.95
+  - @vercel/h3@0.1.101
+  - @vercel/hono@0.2.95
+  - @vercel/hydrogen@1.4.0
+  - @vercel/koa@0.1.75
+  - @vercel/nestjs@0.2.96
+  - @vercel/next@4.18.0
+  - @vercel/redwood@2.5.0
+  - @vercel/ruby@2.4.0
+  - @vercel/rust@1.3.0
+
+## 54.11.1
+
+### Patch Changes
+
+- 8d8e871: Evaluate the `maxDuration` upper bound at validation time so `VERCEL_CLI_SKIP_MAX_DURATION_LIMIT` works regardless of import order.
+
+  The gate was read when `@vercel/build-utils`' `functionsSchema` was constructed and when the CLI compiled its `vercel.json` validator — both at module load. Any process that imports these modules before setting the env var baked in the default 900-second maximum and ignored the flag, failing with `Invalid vercel.json - functions[...].maxDuration should be <= 900`.
+
+  `@vercel/build-utils` now exposes `getFunctionsSchema()`, which reads the limit at call time (the existing `functionsSchema` const is kept but deprecated). The CLI builds and compiles its config validator lazily, caching one validator per resolved limit, so setting the variable after import takes effect. Default behavior is unchanged — the 900s maximum, the lower bound, and the integer check are all still enforced when the variable is unset.
+
+- Updated dependencies [8d8e871]
+  - @vercel/build-utils@13.29.0
+  - @vercel/backends@0.8.10
+  - @vercel/elysia@0.1.91
+  - @vercel/express@0.1.101
+  - @vercel/fastify@0.1.94
+  - @vercel/go@3.8.0
+  - @vercel/h3@0.1.100
+  - @vercel/hono@0.2.94
+  - @vercel/hydrogen@1.4.0
+  - @vercel/koa@0.1.74
+  - @vercel/nestjs@0.2.95
+  - @vercel/next@4.18.0
+  - @vercel/node@5.8.15
+  - @vercel/python@6.44.0
+  - @vercel/redwood@2.5.0
+  - @vercel/remix-builder@5.9.0
+  - @vercel/ruby@2.4.0
+  - @vercel/rust@1.3.0
+  - @vercel/static-build@2.10.1
+
+## 54.11.0
+
+### Minor Changes
+
+- fc7b557: Ensure project manifest includes framework for non-service builds.
+
+### Patch Changes
+
+- bc8dc95: Fix the darwin-arm64 native CLI binary crashing with SIGSEGV on most commands. The custom Node
+  runtime was stripped with bare `strip`, which removes the exported `napi_*` symbols that native
+  addons (`@napi-rs/keyring`) bind against at dlopen time. The runtime is now stripped with
+  `strip -SXx`, which keeps exported symbols. Also makes the `@vercel/vc-native` bin shim launch
+  the platform binary directly when the postinstall script did not run (pnpm blocks dependency
+  build scripts by default), instead of always failing.
+- bc8dc95: Fix `vercel upgrade` crashing with `ENOENT: no such file or directory, realpath '…/.pkg-staging/pkg.js'`
+  in the native binary. The command tried to `realpath` `process.argv[1]`, which points into the binary's
+  virtual filesystem snapshot. Native installs now detect the package manager (npm, pnpm, or yarn) from
+  the binary's real install location and suggest the matching global upgrade command.
+
+## 54.10.3
+
+### Patch Changes
+
+- 4f82914: Bump the embedded `sandbox` CLI to 3.1.2 (`@vercel/sandbox` 2.1.1) to fix `vc sandbox` commands crashing with a segmentation fault.
+  - @vercel/node@5.8.14
+
+## 54.10.2
+
+### Patch Changes
+
+- 0f7844c: Fix the native CLI binary crashing on auth commands (`login`, `whoami`, `logout`, and any
+  command that reads config) with `ERR_MODULE_NOT_FOUND: '@vercel/cli-auth'`. The package is now
+  staged into the binary. The binary release is also hardened with a real command smoke test and a
+  build-time check that every statically-imported dependency is bundled, so a binary missing a
+  required package can no longer be released.
+- Updated dependencies [78e5d4f]
+  - @vercel/static-build@2.10.0
+  - @vercel/hydrogen@1.4.0
+  - @vercel/redwood@2.5.0
+  - @vercel/remix-builder@5.9.0
+  - @vercel/next@4.18.0
+
+## 54.10.1
+
+### Patch Changes
+
+- Updated dependencies [4e849dd]
+  - @vercel/build-utils@13.28.0
+  - @vercel/next@4.17.6
+  - @vercel/backends@0.8.9
+  - @vercel/elysia@0.1.90
+  - @vercel/express@0.1.100
+  - @vercel/fastify@0.1.93
+  - @vercel/go@3.8.0
+  - @vercel/h3@0.1.99
+  - @vercel/hono@0.2.93
+  - @vercel/hydrogen@1.3.8
+  - @vercel/koa@0.1.73
+  - @vercel/nestjs@0.2.94
+  - @vercel/node@5.8.14
+  - @vercel/python@6.44.0
+  - @vercel/redwood@2.4.15
+  - @vercel/remix-builder@5.8.6
+  - @vercel/ruby@2.4.0
+  - @vercel/rust@1.3.0
+  - @vercel/static-build@2.9.39
+
+## 54.10.0
+
+### Minor Changes
+
+- 0774460: Bump @vercel/prepare-flags-definitions
+
+### Patch Changes
+
+- f6a6e55: Only offer the Claude Code plugin in projects that have actually been used with Claude Code. Previously the prompt could appear in any directory as long as a `~/.claude` directory existed on disk. The CLI now checks whether the current project (walking up from the working directory) appears in Claude Code's per-project history before offering the plugin.
+- a4f7dc9: CLI help and command-schema cleanups from the docs audit:
+
+  - `blob`: remove orphan `addStoreSubcommand`, `removeStoreSubcommand`, and `getStoreSubcommand` exports that duplicated the wired `create-store` / `delete-store` / `get-store` specs. Handlers and telemetry now import the actual wired subcommand definitions.
+  - `dns list`: the `<domain>` argument is now declared `required: false` to match the runtime, which already supports listing every domain's records when no argument is given.
+  - `routes delete`: declare the `<name-or-id>` argument as `multiple: true` so the help synopsis and schema match the variadic behavior already supported by the handler and shown in the existing examples.
+  - `init`: fix the "Initialize example project into specified directory" help example, which was missing the `init` literal (`vercel <example> <dir>` → `vercel init <example> <dir>`).
+  - `promote status` and `rollback status`: declare `--timeout` on the `status` subcommand options so `--help` matches the examples (`promote status --timeout 30s`, `rollback status --timeout 30s`). The flag is also kept on the parent command, where parsing actually happens.
+
+- 33efa25: Added non-managed Connex connector creation with `--data` and optional `--connector-type`.
+- 3a2d61e: Add `vercel domains search <query>` for client-side Domain Discovery with fast bulk availability and registrar pricing, renewal pricing, `--available` and exact TLD filters, ordering, candidate windows of up to 200 domains, and JSON output.
+- c5eeb30: Gate the client-side 900-second `maxDuration` upper bound behind the `VERCEL_CLI_SKIP_MAX_DURATION_LIMIT` environment variable. The limit is now owned by a single helper in `@vercel/build-utils` instead of being hardcoded in multiple validators. When the variable is set to `1`, the client-side maximum is skipped and validation defers to the server. Default behavior is unchanged — the maximum, the lower bound, and the integer check are all still enforced when the variable is unset.
+- 9f9eed3: Nest Build Output API files for `experimentalServicesV2` under `.vercel/output/services/<name>`.
+- fb30b76: Strip ANSI escape sequences from connector UID and name cells in `connect list` table output.
+- Updated dependencies [c5eeb30]
+- Updated dependencies [09c39af]
+  - @vercel/build-utils@13.27.2
+  - @vercel/static-build@2.9.38
+  - @vercel/backends@0.8.8
+  - @vercel/elysia@0.1.89
+  - @vercel/express@0.1.99
+  - @vercel/fastify@0.1.92
+  - @vercel/go@3.8.0
+  - @vercel/h3@0.1.98
+  - @vercel/hono@0.2.92
+  - @vercel/hydrogen@1.3.8
+  - @vercel/koa@0.1.72
+  - @vercel/nestjs@0.2.93
+  - @vercel/next@4.17.5
+  - @vercel/node@5.8.13
+  - @vercel/python@6.44.0
+  - @vercel/redwood@2.4.15
+  - @vercel/remix-builder@5.8.6
+  - @vercel/ruby@2.4.0
+  - @vercel/rust@1.3.0
+
+## 54.9.1
+
+### Patch Changes
+
+- f5ab607: [evals] Shrink eval result uploads and fix run discovery
+
+  The eval ingest transform (`transform-agent-eval-to-canonical.js`) now excludes raw transcripts (`transcript-raw.jsonl`) from the `--upload-artifacts all` path, roughly halving each ingest payload. The parsed `transcript.json` is still uploaded and still read for `resolvedModels` metadata.
+
+  It also normalizes provider-prefixed model paths before upload. Models that resolve to `provider/model` (e.g. `openai/gpt-5.5-pro`) write results one directory deeper, pushing the timestamp past the `experiment/model/timestamp` shape the ingest endpoint discovers runs from, which previously failed with `Could not discover any experiment/model/timestamp runs`. The model is now collapsed to a single segment (`openai-gpt-5.5-pro`) so discovery succeeds.
+
+- 2b31813: Fix `vc build --standalone` failing to zip Lambdas when run from a monorepo
+  subdirectory. When dependencies are hoisted to the monorepo root (e.g. pnpm's
+  `node_modules/.pnpm/...`), the recorded function file paths could escape the
+  function root (`../../node_modules/...`), which later caused zipping to fail
+  with `invalid relative path: ../../node_modules/...`. These paths are now
+  re-anchored inside the function so the standalone output is self-contained.
+- 252c6eb: [cli] Show `claim` in `vercel integration resource --help`
+
+  The `claim` subcommand was missing from `resourceSubcommand.subcommands`, so `vercel integration resource --help` only listed `connect`, `disconnect`, `remove`, and `create-threshold`. The legacy `vercel integration-resource --help` and the dispatcher's runtime resolution both already included `claim` — this was purely a help/discoverability gap on the canonical nested path. Adds `claimSubcommand` to the subcommand list and updates the parent description accordingly.
+
+- 0a170fd: [services] wire `experimentalServicesV2` into `fs-detectors`.
+- Updated dependencies [aeb5bfa]
+- Updated dependencies [0a170fd]
+  - @vercel/backends@0.8.7
+  - @vercel/build-utils@13.27.1
+  - @vercel/static-build@2.9.37
+  - @vercel/elysia@0.1.88
+  - @vercel/express@0.1.98
+  - @vercel/fastify@0.1.91
+  - @vercel/go@3.8.0
+  - @vercel/h3@0.1.97
+  - @vercel/hono@0.2.91
+  - @vercel/hydrogen@1.3.8
+  - @vercel/koa@0.1.71
+  - @vercel/nestjs@0.2.92
+  - @vercel/next@4.17.5
+  - @vercel/node@5.8.12
+  - @vercel/python@6.44.0
+  - @vercel/redwood@2.4.15
+  - @vercel/remix-builder@5.8.6
+  - @vercel/ruby@2.4.0
+  - @vercel/rust@1.3.0
+
+## 54.9.0
+
+### Minor Changes
+
+- fb4fb2d: Add support for claiming sandbox marketplace resources (Stripe, Shopify) from the CLI. `integration list` shows a new `Claim` column, `integration-resource claim <name>` opens the provider claim URL in the browser and polls until completion, and `integration add` offers to claim sandbox resources after provisioning with new `--claim` / `--no-claim` flags.
+
+### Patch Changes
+
+- 338cc35: Add isPackageInstalled util for detecting dependencies during build.
+  Fix Vercel Flags dependency detection for emitting datafiles during builds with OIDC tokens.
+- Updated dependencies [338cc35]
+  - @vercel/build-utils@13.27.0
+  - @vercel/backends@0.8.6
+  - @vercel/elysia@0.1.87
+  - @vercel/express@0.1.97
+  - @vercel/fastify@0.1.90
+  - @vercel/go@3.8.0
+  - @vercel/h3@0.1.96
+  - @vercel/hono@0.2.90
+  - @vercel/hydrogen@1.3.8
+  - @vercel/koa@0.1.70
+  - @vercel/nestjs@0.2.91
+  - @vercel/next@4.17.5
+  - @vercel/node@5.8.11
+  - @vercel/python@6.44.0
+  - @vercel/redwood@2.4.15
+  - @vercel/remix-builder@5.8.6
+  - @vercel/ruby@2.4.0
+  - @vercel/rust@1.3.0
+  - @vercel/static-build@2.9.36
+
+## 54.8.0
+
+### Minor Changes
+
+- fddeb55: Add configurable credentials storage handling across the CLI auth stack. Storage of credentials can be configured by the new `credStorage` key in global `config.json` or the new `VERCEL_TOKEN_STORAGE` environment variable. The environment variable takes precedence over the configuration key. Accepted values are `file` (store credentials in `auth.json`), `keyring` (store credentials in system keyring, e.g macOS Keychain or Secrets Service on Linux), and `auto` (try storing in keyring if available, fall back to `file` if keyring is not available).
+
+  `@vercel/oidc` supports keyring-stored authentication credentials by delegating the OIDC minting to the CLI executable via `@vercel/cli-exec`.
+
+### Patch Changes
+
+- a869874: [connect] Rename user-facing "client" references to "connector"
+
+  Updates the `vercel connect` CLI commands to use the official "connector" terminology in all user-facing surfaces: help text argument names (remove/attach/detach), usage strings in error messages, and the `--format=json` output key (`clients` → `connectors`) for `vercel connect list`.
+
+- 200aa3b: [connect] Forward `--scopes` and `--installation-id` into the authorize/install recovery URL
+
+  When `vercel connect token` hits an action-required error (`user_authorization_required` or `client_installation_required`), the CLI builds an authorize/install URL for the user to complete consent in the browser. Previously this URL carried only `teamId` and `request_code`, dropping the `--scopes` and `--installation-id` the user supplied. As a result the consent flow fell back to provider defaults (e.g. Slack's `users.profile:read`), and the post-authorization token retry mismatched the requested scopes. The CLI now forwards `scopes` (comma-joined) and `installationId` as query params, which the authorize and install endpoints already accept.
+
+- 3019788: [services] Remove the `services` field from `vercel.json` and the `VERCEL_USE_SERVICES` gate.
+- fe893ec: [services] Add `experimentalServicesV2` field to `vercel.json` implementing the new schema for services.
+- d22d812: [cli] Nest `integration-resource` under `integration resource` and add `integration resource connect`
+
+  The marketplace resource subcommands (`disconnect`, `remove`, `create-threshold`) are now discoverable under `vercel integration resource <sub>`. The standalone `vercel integration-resource` and `vc ir` forms still work as hidden aliases — no scripts or tests break.
+
+  Adds a new `vercel integration resource connect <resource> [project]` command (the inverse of `disconnect`). Accepts `--environment` (repeatable, defaults to all three), `--prefix` for env var namespacing, `--yes`, and `--format=json`. Defaults to the project linked in the current directory when `<project>` is omitted.
+
+  Tightens `disconnect` to error (exit 1) when the specified project is not connected to the resource, instead of exiting 0 with a "not found" message.
+
+  Both commands emit a structured `outputAgentError` payload with `reason: confirmation_required` and a `next: [{command}]` retry hint when run in non-interactive / agent mode without `--yes`. When `connect` fails because an env var with the same name already exists on the target project, the error names the conflicting variable and suggests `--prefix` or `vercel env rm` as remediation.
+
+- Updated dependencies [3019788]
+- Updated dependencies [fe893ec]
+- Updated dependencies [fddeb55]
+  - @vercel/build-utils@13.26.6
+  - @vercel/cli-auth@0.3.0
+  - @vercel/cli-config@0.2.0
+  - @vercel/backends@0.8.5
+  - @vercel/elysia@0.1.86
+  - @vercel/express@0.1.96
+  - @vercel/fastify@0.1.89
+  - @vercel/go@3.8.0
+  - @vercel/h3@0.1.95
+  - @vercel/hono@0.2.89
+  - @vercel/hydrogen@1.3.8
+  - @vercel/koa@0.1.69
+  - @vercel/nestjs@0.2.90
+  - @vercel/next@4.17.5
+  - @vercel/node@5.8.10
+  - @vercel/python@6.44.0
+  - @vercel/redwood@2.4.15
+  - @vercel/remix-builder@5.8.6
+  - @vercel/ruby@2.4.0
+  - @vercel/rust@1.3.0
+  - @vercel/static-build@2.9.35
+
+## 54.7.1
+
+### Patch Changes
+
+- 1180675: Revert "[flags] fix dep detection for build embedding (#16242)"
+- Updated dependencies [1180675]
+  - @vercel/build-utils@13.26.5
+  - @vercel/backends@0.8.4
+  - @vercel/elysia@0.1.85
+  - @vercel/express@0.1.95
+  - @vercel/fastify@0.1.88
+  - @vercel/go@3.8.0
+  - @vercel/h3@0.1.94
+  - @vercel/hono@0.2.88
+  - @vercel/hydrogen@1.3.8
+  - @vercel/koa@0.1.68
+  - @vercel/nestjs@0.2.89
+  - @vercel/next@4.17.5
+  - @vercel/node@5.8.9
+  - @vercel/python@6.44.0
+  - @vercel/redwood@2.4.15
+  - @vercel/remix-builder@5.8.5
+  - @vercel/ruby@2.4.0
+  - @vercel/rust@1.3.0
+  - @vercel/static-build@2.9.34
+
+## 54.7.0
+
+### Minor Changes
+
+- 0b4e1ef: Add `vercel connect revoke-tokens` subcommand to revoke tokens issued from a connector.
+
+### Patch Changes
+
+- ba6e7c6: Internal: fix `_deploy` eval grader passing `--token ""` in the Docker sandbox where `VERCEL_TOKEN` isn't in process env. Only pass `--token` when set; CLI falls back to `auth.json` otherwise.
+- 92988c2: Handle sensitive Environment Variable pull challenges in the CLI.
+- 3986bb0: Stop retrying intentionally aborted requests so the CLI exits promptly after a deployment is ready.
+- 64f5484: Allow SAML re-authentication to use device-code flow in non-TTY sessions.
+- 97fdbbe: [flags] fix dep detection for build embedding
+- Updated dependencies [2d918b8]
+  - @vercel/remix-builder@5.8.5
+
+## 54.6.1
+
+### Patch Changes
+
+- 1444502: Support discovering `experimentalServices` from Build Output API config during `vercel build`.
+- 7ba4713: Reorder `vercel env add` to ask whether a value is sensitive before collecting the value and selecting environments. Sensitive adds hide Development; teams with the sensitive env policy still prompt, and non-sensitive adds are limited to Development with clearer messaging.
+- Updated dependencies [ab0e5aa]
+- Updated dependencies [4f782b1]
+  - @vercel/backends@0.8.3
+  - @vercel/express@0.1.94
+  - @vercel/hono@0.2.87
+  - @vercel/next@4.17.5
+  - @vercel/node@5.8.8
+  - @vercel/redwood@2.4.15
+  - @vercel/remix-builder@5.8.4
+  - @vercel/python@6.44.0
+  - @vercel/static-build@2.9.33
+  - @vercel/elysia@0.1.84
+  - @vercel/fastify@0.1.87
+  - @vercel/h3@0.1.93
+  - @vercel/koa@0.1.67
+  - @vercel/nestjs@0.2.88
+
+## 54.6.0
+
+### Minor Changes
+
+- af3e0bd: adding version node + cli version to top of every command
+
+### Patch Changes
+
+- 6495585: [services] drop top-level `env` support for the new `service-ref` shape for services.
+- Updated dependencies [6495585]
+  - @vercel/build-utils@13.26.4
+  - @vercel/backends@0.8.2
+  - @vercel/elysia@0.1.83
+  - @vercel/express@0.1.93
+  - @vercel/fastify@0.1.86
+  - @vercel/go@3.8.0
+  - @vercel/h3@0.1.92
+  - @vercel/hono@0.2.86
+  - @vercel/hydrogen@1.3.8
+  - @vercel/koa@0.1.66
+  - @vercel/nestjs@0.2.87
+  - @vercel/next@4.17.4
+  - @vercel/node@5.8.7
+  - @vercel/python@6.43.3
+  - @vercel/redwood@2.4.14
+  - @vercel/remix-builder@5.8.3
+  - @vercel/ruby@2.4.0
+  - @vercel/rust@1.3.0
+  - @vercel/static-build@2.9.33
+
+## 54.5.1
+
+### Patch Changes
+
+- 57ea4ba: Reduce duplicate user and team lookups during CLI scope resolution.
+- b66bd3e: Fix prebuilt deployments failing with "invalid relative path" when using the `--standalone` flag in pnpm monorepos by skipping external node_modules symlinks and copying traced files at their logical paths instead.
+- 9ad632d: Handle CLI update flows safely for native binary installs.
+- Updated dependencies [b66bd3e]
+- Updated dependencies [0e04bc5]
+- Updated dependencies [eecd10d]
+  - @vercel/build-utils@13.26.3
+  - @vercel/python@6.43.3
+  - @vercel/node@5.8.6
+  - @vercel/backends@0.8.1
+  - @vercel/elysia@0.1.82
+  - @vercel/express@0.1.92
+  - @vercel/fastify@0.1.85
+  - @vercel/go@3.8.0
+  - @vercel/h3@0.1.91
+  - @vercel/hono@0.2.85
+  - @vercel/hydrogen@1.3.8
+  - @vercel/koa@0.1.65
+  - @vercel/nestjs@0.2.86
+  - @vercel/next@4.17.4
+  - @vercel/redwood@2.4.14
+  - @vercel/remix-builder@5.8.3
+  - @vercel/ruby@2.4.0
+  - @vercel/rust@1.3.0
+  - @vercel/static-build@2.9.32
+
+## 54.5.0
+
+### Minor Changes
+
+- 6860c32: Add project manifest to rust builder.
+- 2c17a12: Added `--open` and `--view` flags to `vercel traces get`. `--open` opens the trace in the Vercel Dashboard instead of printing the markdown summary. `--view <timeline|tree|gantt>` selects the dashboard view and is only valid with `--open`.
+
+### Patch Changes
+
+- 620bcfa: Add `--type`, `--service`, and `--search` filter flags to `vercel connect list`.
+- ff2a980: Add a `vercel domains check` subcommand for registrar availability and extend
+  `vercel domains price` to support bulk price lookups for multiple domains.
+- Updated dependencies [1318682]
+- Updated dependencies [6860c32]
+- Updated dependencies [e917989]
+- Updated dependencies [baac149]
+- Updated dependencies [ecf5033]
+- Updated dependencies [73dbbe6]
+- Updated dependencies [647c1e8]
+- Updated dependencies [b1f766a]
+  - @vercel/python@6.43.2
+  - @vercel/rust@1.3.0
+  - @vercel/backends@0.8.0
+  - @vercel/go@3.8.0
+  - @vercel/node@5.8.5
+  - @vercel/ruby@2.4.0
+  - @vercel/build-utils@13.26.2
+  - @vercel/elysia@0.1.81
+  - @vercel/express@0.1.91
+  - @vercel/fastify@0.1.84
+  - @vercel/h3@0.1.90
+  - @vercel/hono@0.2.84
+  - @vercel/koa@0.1.64
+  - @vercel/nestjs@0.2.85
+  - @vercel/hydrogen@1.3.7
+  - @vercel/next@4.17.4
+  - @vercel/redwood@2.4.13
+  - @vercel/remix-builder@5.8.2
+  - @vercel/static-build@2.9.31
+
+## 54.4.1
+
+### Patch Changes
+
+- 8fed091: Suppress metrics query status output when using `--format=json`.
+- Updated dependencies [c8bce3b]
+  - @vercel/next@4.17.4
+
+## 54.4.0
+
+### Minor Changes
+
+- 9d9532d: Wire builder entrypoint detection into service setup.
+
+### Patch Changes
+
+- 972cc84: Support workflow-triggered job services in queue infrastructure
+
+  Add `isWorkflowTriggeredService()` and `isQueueBackedService()` helpers so workflow services
+  are recognized by the queue broker, dev server, and build pipeline. Update Python runtime to
+  bootstrap workflow services as queue-backed workers.
+
+- Updated dependencies [fa25cb7]
+- Updated dependencies [972cc84]
+  - @vercel/build-utils@13.26.1
+  - @vercel/python@6.43.1
+  - @vercel/static-build@2.9.30
+  - @vercel/backends@0.7.2
+  - @vercel/elysia@0.1.80
+  - @vercel/express@0.1.90
+  - @vercel/fastify@0.1.83
+  - @vercel/go@3.7.1
+  - @vercel/h3@0.1.89
+  - @vercel/hono@0.2.83
+  - @vercel/hydrogen@1.3.7
+  - @vercel/koa@0.1.63
+  - @vercel/nestjs@0.2.84
+  - @vercel/next@4.17.3
+  - @vercel/node@5.8.4
+  - @vercel/redwood@2.4.13
+  - @vercel/remix-builder@5.8.2
+  - @vercel/ruby@2.3.2
+  - @vercel/rust@1.2.0
+
+## 54.3.0
+
+### Minor Changes
+
+- 8fabeba: `vercel curl --trace` now sends the `_vercel_session` cookie alongside the trace cookie, scopes the session API call via query parameters, sends `hostname` instead of `deploymentId`, and parses the request id from the `x-vercel-id` response header.
+- f2c60d6: [vercel-flags] check flags pkgs for build embedding
+- 8ac2af6: Add `--project <NAME_OR_ID>` flag to `build`, `deploy`, `pull`, and `dev` for non-interactive CI/CD and agent-driven use.
+
+  When `--project` is provided, the CLI will:
+
+  - Disambiguate monorepo `.vercel/repo.json` linked projects without prompting (matches by name **or** ID)
+  - Resolve the project via the API when no local link is present
+  - Fail fast with a clean "Project ... was not found" error if the value cannot be resolved (never silently creates a new project)
+  - In non-interactive contexts (CI, agents) the same failure also emits a structured JSON payload with a `next` array of suggested follow-up commands.
+
+  This is particularly important for agents (which run non-interactively by default): they can now target a specific project in monorepos and unlinked directories without relying on interactive setup prompts or the project picker.
+
+  The flag is also accepted on `vercel deploy init` (excluded on `vercel deploy continue` because `--id` already identifies the deployment).
+
+  The new API-based resolution is opt-in via the explicit `--project` flag, so commands like `vercel deploy` in an unlinked directory keep their existing behavior of falling back to interactive setup.
+
+- a2e79a8: Added `vercel traces get <request-id>` to fetch and render a trace summary for a request. Resolves project/team from the linked project, with `--scope` and `--project` flag fallbacks.
+
+### Patch Changes
+
+- b0d4dba: Add OIDC auth support to `vercel blob` commands and upgrade `@vercel/blob` to `2.4.0`. When `VERCEL_OIDC_TOKEN` and `BLOB_STORE_ID` are set in the environment (or `.env.local`), or when `--oidc-token` and `--store-id` are passed together, the CLI uses them as the credential source. The `--rw-token` flag remains exclusive — when provided, it always wins and never falls back to OIDC. The OIDC token is now forwarded to the SDK via the native `oidcToken` option (added in `@vercel/blob` 2.4.0) rather than by mutating `process.env`.
+- c6fa2d1: Revert non-interactive Marketplace terms acceptance for `integration accept-terms`.
+
+  This change requires human interactive confirmation for terms acceptance and removes `--yes` from `integration accept-terms` guidance.
+
+- a5b231a: Update `vercel env pull` to add `.env*` to `.gitignore` for default `.env.local` pulls.
+- Updated dependencies [e6dc048]
+- Updated dependencies [2cd64ea]
+- Updated dependencies [23eee91]
+- Updated dependencies [79d9508]
+  - @vercel/go@3.7.1
+  - @vercel/python@6.43.0
+  - @vercel/static-build@2.9.29
+  - @vercel/next@4.17.3
+
+## 54.2.0
+
+### Minor Changes
+
+- 39850ef: Add `vercel connect update <id>` subcommand to change connector branding. Accepts `--icon` (PNG or JPEG path, uploaded to Vercel and sent as SHA-1), `--background-color`, and `--accent-color` (both `#RRGGBB`). Gated behind the existing `FF_CONNEX_ENABLED` flag.
+- 63a66d4: Add `--icon`, `--background-color`, and `--accent-color` flags to `vercel connect create`. The icon is uploaded to Vercel before the connector is created. When the API requires a browser registration step, branding is appended to the dashboard URL so the create form can prefill itself; the CLI also applies a follow-up PATCH after the browser flow as a safety net for the dashboard rollout. Gated behind the existing `FF_CONNEX_ENABLED` flag.
+- 137e5d1: Allow builder V2 to expose startDevServer.
+- b1aa926: [vc dev] handle process errors in dev server
+
+### Patch Changes
+
+- a3a1a5a: Added CLI eval support for comparable agent/model experiment runs and restored transcript artifact uploads via chunked result ingestion.
+- 18e9fd6: fix(cli): point `vc connect open` and registration error URLs at the renamed `/connect` dashboard route
+- 4118600: Fix standalone CLI binary latest-version worker startup.
+- 80e8e06: Track Vercel plugin active-session markers in CLI telemetry.
+- bb61428: Include framework slug in output/config.json
+- f45e466: Add opt-in automatic CLI updates via `vercel upgrade --enable-auto` and prompt users to enable them after a successful manual upgrade.
+- a3a1a5a: Add offline-friendly local modes for CLI eval discovery and dashboard fixture generation, and expand Vercel CLI eval coverage for project, list, inspect, logs, and pull commands.
+- a3a1a5a: Relaxed the CLI env/add eval grader to accept equivalent JSON format syntax and shell-variable env names when outputs prove the variable was added.
+- a3a1a5a: Simplified the implicit curl eval grader to only require that the agent ran `vercel curl` or `vc curl`.
+- 8fb4dc8: Add `vercel flags split` to configure weighted Vercel Flags splits from the CLI.
+
+  Configure a split interactively by letting the CLI prompt for the environment, bucketing attribute, weights, fallback variant, and revision message.
+  `vercel flags split welcome-message`
+
+  Configure a boolean flag split in production with 95/5 traffic.
+  `vercel flags split redesigned-checkout --environment production --by user.userId --weight off=95 --weight on=5`
+
+  Configure a string flag split with an explicit fallback variant.
+  `vercel flags split welcome-message -e production --by user.userId --default-variant control --weight control=90 --weight treatment=10`
+
+  Exclude a variant from receiving traffic by setting its weight to 0.
+  `vercel flags split checkout-copy -e preview --by user.userId --default-variant control --weight control=50 --weight treatment=50 --weight legacy=0`
+
+- Updated dependencies [bb61428]
+- Updated dependencies [137e5d1]
+- Updated dependencies [f45e466]
+- Updated dependencies [744e96c]
+- Updated dependencies [7923d34]
+  - @vercel/build-utils@13.26.0
+  - @vercel/next@4.17.2
+  - @vercel/cli-config@0.1.2
+  - @vercel/remix-builder@5.8.2
+  - @vercel/static-build@2.9.28
+  - @vercel/backends@0.7.1
+  - @vercel/elysia@0.1.79
+  - @vercel/express@0.1.89
+  - @vercel/fastify@0.1.82
+  - @vercel/go@3.7.0
+  - @vercel/h3@0.1.88
+  - @vercel/hono@0.2.82
+  - @vercel/hydrogen@1.3.7
+  - @vercel/koa@0.1.62
+  - @vercel/nestjs@0.2.83
+  - @vercel/node@5.8.3
+  - @vercel/python@6.42.0
+  - @vercel/redwood@2.4.13
+  - @vercel/ruby@2.3.2
+  - @vercel/rust@1.2.0
+
+## 54.1.0
+
+### Minor Changes
+
+- 9aead7a: Add `vercel connect detach` to detach a Vercel project from a connector via `DELETE /v1/connect/connectors/:id/projects/:projectId`. Mirrors `vercel connect attach` and matches the project-scope "Disconnect" button in the dashboard.
+
+  Add `--triggers`, `--trigger-branch`, and `--trigger-path` flags to `vercel connect attach`. When `--triggers` is set, the project is also registered as a trigger destination on the connector via `PATCH /v1/connect/connectors/:id/trigger-destinations` so verified webhooks get forwarded to it. Requires the connector to support triggers; warns if the connector was created without `triggers.enabled`.
+
+  Both features gated behind the existing `FF_CONNEX_ENABLED` flag.
+
+- b1db109: Enable `vercel connect` by default and mark it as beta in `--help`. The command was previously gated behind the internal `FF_CONNEX_ENABLED` env var; it is now available out of the box and surfaces in `vercel --help` as `connect [cmd] Manage connectors [beta]`. The subcommand description also reads `Manage connectors (Beta)`.
+
+  Fix `vercel connect open` to link to the renamed `/~/connect/` dashboard route directly instead of relying on the legacy `/~/connex/` → `/~/connect/` 308 redirect.
+
+- e8deaa1: Rename `vercel connex` command to `vercel connect`. The command remains gated behind the existing `FF_CONNEX_ENABLED` flag.
+- cc30efd: Refresh the `vc` setup-and-link flow and post-deploy output for clarity and visual consistency.
+
+  **Prompt copy**
+
+  - `Want to modify these settings?` → `Customize settings?`.
+  - `Which scope should contain your project?` → `Which team?`. Matches dashboard + docs vocabulary.
+  - `What's your project's name?` → `Name?`. The directory-derived default still renders inline via the inquirer default.
+  - `Loading scopes…` spinner → `Loading teams…`.
+
+  **Flow changes**
+
+  - Removed the `Set up and deploy "/path"?` confirmation prompt. Intent is implied by running `vc`; the path is surfaced as a status line (`  Set up "/path"`) and Ctrl-C remains the escape hatch.
+  - The `In which directory is your code located?` prompt now fires when (a) the current directory is a workspace (monorepo with multiple packages), (b) the user explicitly chose "Choose a different root directory" via the inferred-services picker, **or (c) framework detection at the root finds nothing — covers nested-monolith layouts like `repo/app/package.json` where the app lives in a subdir.** Single-app projects with a framework detected at the root still default the root to `.` and skip the prompt.
+
+  **Output format**
+
+  - `Auto-detected Project Settings for X` line replaced with a single bold `Detected X (Build Command: …, Output Directory: …)` line. Title Case labels match the checkbox panel below. Only `Detected` is bold; framework name and parens render plain/dim.
+  - Introduced a new aligned-label format for status output via the `printAlignedLabel` helper (12-char bold label column, value column at terminal column 14). Applied to `Linked` / `Inspect` / `Production` / `Preview` / `Aliased` / `Added` rows.
+  - `vc redeploy` output now uses the same aligned-label format as `vc deploy` — `Inspect` / `Production` / `Preview` / `Aliased` rows are consistent across both commands. No more emoji-prefix / aligned-label mixing in the same session.
+  - `vc link --repo` info messages (`No Projects are linked…`, `Found N Project(s) linked…`, `Detected N new Project(s)…`, `Created new Project: …`) dropped the gray `> ` prefix and now use the 2-space indent that matches the rest of the link/setup flow.
+  - Path-in-prompt for `vc link --repo` confirm message uses `chalk.dim` instead of `chalk.cyan` — paths are not URLs, so dim is the correct treatment per the color rules (cyan reserved for URLs).
+  - Introduced a "gutter" semantic system: column 0 is reserved for semantic glyphs. `▲` marks Production deploys (`▲ Production  URL`) and breaks out of the indent — bookending the session with the `▲` brand mark at the top. Preview deploys stay in-column without the triangle.
+  - Added a terminal `✓ Ready in Xs` line at deploy completion (green ✓ at column 0, bold `Ready`, dim duration). Skipped when `--no-wait` is set and the deployment hasn't reached READY yet.
+  - Dropped the emoji prefixes (`🔗`, `🔍`, `⏳`) on Linked / Inspect / Production rows (across both `vc deploy` and `vc redeploy`).
+  - Dropped the `Building: ` prefix from the build-logs spinner. Each streamed log line is shown verbatim instead of `Building: <line>`.
+  - Dropped the `(created .vercel and added it to .gitignore)` parenthetical from `Linked` — `git status` surfaces it on demand.
+  - Dropped the `[Xs]` timing suffix from URL lines. URLs are results, not operations — timing belongs on the build / ready signal.
+
+  **Defensive fix**
+
+  - `services-setup.ts` now uses an optional chain on `detectServicesResult.resolved?.source`. This was crashing the setup flow before any prompts could fire when no services were detected (common for empty or simple fixtures).
+
+  **New helper**
+
+  - `packages/cli/src/util/output/print-aligned-label.ts` exports `printAlignedLabel(label, value, options?: { gutter?: string })` and the `ALIGNED_LABEL_WIDTH` constant (12). Used by every aligned-row print site.
+
+- 4fc110b: [services] add preDeployCommand for experimentalServices
+
+### Patch Changes
+
+- 5f4e55b: Skip redundant deploy project and final deployment fetches in the CLI success path.
+- fbffcb3: Reduce the CLI startup bundle by lazy-loading error reporting and extension execution paths.
+  Use a Brotli-compressed small-ICU Node runtime for the macOS arm64 release binary.
+- fbffcb3: Add yao-pkg binary build configuration and native npm package publishing for the CLI.
+- Updated dependencies [0a691bf]
+- Updated dependencies [fb0cb8d]
+- Updated dependencies [4fc110b]
+  - @vercel/backends@0.7.0
+  - @vercel/build-utils@13.25.0
+  - @vercel/python@6.42.0
+  - @vercel/go@3.7.0
+  - @vercel/static-build@2.9.27
+  - @vercel/node@5.8.2
+  - @vercel/elysia@0.1.78
+  - @vercel/express@0.1.88
+  - @vercel/fastify@0.1.81
+  - @vercel/h3@0.1.87
+  - @vercel/hono@0.2.81
+  - @vercel/hydrogen@1.3.7
+  - @vercel/koa@0.1.61
+  - @vercel/nestjs@0.2.82
+  - @vercel/next@4.17.1
+  - @vercel/redwood@2.4.13
+  - @vercel/remix-builder@5.8.1
+  - @vercel/ruby@2.3.2
+  - @vercel/rust@1.2.0
+
+## 54.0.0
+
+### Major Changes
+
+- db207b1: Require `--follow` for `vercel logs` to stream deployment logs. Passing a deployment argument or `--deployment` now uses historical deployment log filtering by default.
+
+### Minor Changes
+
+- d874af6: Add support for env vars injection that reference other services in `services` with an explicit `env` configuration.
+
+### Patch Changes
+
+- b3b5ed8: Preserve the source deployment or alias ID/URL when assigning aliases from the CLI.
+- 8324ac7: Rename "Connex client" to "Connex connector" in user-visible `vc connex` strings (help text, spinners, error/success messages) to match the dashboard rename. Flag names, command names, positional argument names, types, file paths, and API endpoints are unchanged.
+- b6b162c: Fix project token creation when project is not in the default team
+- Updated dependencies [bf42168]
+- Updated dependencies [94a214c]
+- Updated dependencies [d874af6]
+- Updated dependencies [9615277]
+  - @vercel/python@6.41.0
+  - @vercel/build-utils@13.24.0
+  - @vercel/backends@0.6.0
+  - @vercel/elysia@0.1.77
+  - @vercel/express@0.1.87
+  - @vercel/fastify@0.1.80
+  - @vercel/go@3.6.0
+  - @vercel/h3@0.1.86
+  - @vercel/hono@0.2.80
+  - @vercel/hydrogen@1.3.7
+  - @vercel/koa@0.1.60
+  - @vercel/nestjs@0.2.81
+  - @vercel/next@4.17.1
+  - @vercel/node@5.8.1
+  - @vercel/redwood@2.4.13
+  - @vercel/remix-builder@5.8.1
+  - @vercel/ruby@2.3.2
+  - @vercel/rust@1.2.0
+  - @vercel/static-build@2.9.26
+
+## 53.4.0
+
+### Minor Changes
+
+- 88fb6c1: Add `vercel connex attach <client>` to attach a Vercel project to a Connex client for one or more environments. Defaults to the current linked project + all environments (`production`, `preview`, `development`). Pass `-e/--environment` (repeatable, comma-separated) to restrict, `-p/--project <name_or_id>` to target a different project, and `--yes` / `--format=json` for non-interactive use. When the project is already attached with the same environments, the command exits early as a no-op; when the environments differ, the prompt shows a current-vs-new diff before replacing.
+- 66a2105: `vercel dev` now exposes `VERCEL_PROJECT_ID` and `VERCEL_ORG_ID` from the linked `.vercel/project.json` to the dev process, mirroring how the platform sets them in prod and preview. Existing values in `process.env` or `.env` files take precedence and are not overridden.
+
+### Patch Changes
+
+- b4bb157: Fix `vercel dev` double-appending `rootDirectory` when run from inside a project subdirectory whose name already matches the project's `rootDirectory` setting (e.g. `monorepo/project1` → `monorepo/project1/project1`).
+- 858c1dc: [cli] reliably kill experimentalServices child processes on `vercel dev` exit
+- 05fae25: Support full URLs and bare hosts in `vc curl` while resolving project auth from the target URL.
+- 657a3b1: Improve function size log message to show warning when limit is reached or almost reached, and always display function size with dependencies breakdown. Requires `VERCEL_ANALYZE_BUILD_OUTPUT=1`.
+- 979d70a: [services] `services` schema support
+- Updated dependencies [22f77b9]
+- Updated dependencies [f93148b]
+- Updated dependencies [979d70a]
+  - @vercel/build-utils@13.23.0
+  - @vercel/backends@0.5.0
+  - @vercel/python@6.40.0
+  - @vercel/node@5.8.0
+  - @vercel/static-build@2.9.25
+  - @vercel/elysia@0.1.76
+  - @vercel/express@0.1.86
+  - @vercel/fastify@0.1.79
+  - @vercel/go@3.6.0
+  - @vercel/h3@0.1.85
+  - @vercel/hono@0.2.79
+  - @vercel/hydrogen@1.3.7
+  - @vercel/koa@0.1.59
+  - @vercel/nestjs@0.2.80
+  - @vercel/next@4.17.1
+  - @vercel/redwood@2.4.13
+  - @vercel/remix-builder@5.8.1
+  - @vercel/ruby@2.3.2
+  - @vercel/rust@1.2.0
+
+## 53.3.2
+
+### Patch Changes
+
+- Updated dependencies [f0d7d32]
+  - @vercel/build-utils@13.22.1
+  - @vercel/node@5.7.17
+  - @vercel/backends@0.4.1
+  - @vercel/elysia@0.1.75
+  - @vercel/express@0.1.85
+  - @vercel/fastify@0.1.78
+  - @vercel/go@3.6.0
+  - @vercel/h3@0.1.84
+  - @vercel/hono@0.2.78
+  - @vercel/hydrogen@1.3.7
+  - @vercel/koa@0.1.58
+  - @vercel/nestjs@0.2.79
+  - @vercel/next@4.17.1
+  - @vercel/python@6.39.0
+  - @vercel/redwood@2.4.13
+  - @vercel/remix-builder@5.8.1
+  - @vercel/ruby@2.3.2
+  - @vercel/rust@1.2.0
+  - @vercel/static-build@2.9.24
+
+## 53.3.1
+
+### Patch Changes
+
+- Updated dependencies [82edff0]
+  - @vercel/cli-config@0.1.1
+
+## 53.3.0
+
+### Minor Changes
+
+- dbfcc04: `vercel connex list` now defaults to clients linked to the current project. When no project is linked, it falls back to listing every Connex client in the team (same as `--all-projects`). Use `--all-projects` to force the team-wide view; the table includes a `Projects` column with the linked project names per client (with a `+ more` suffix when truncated).
+- 3b368bd: Add `--format=json` support to `vercel project token`, direct token output to stdout instead of stderr.
+- 34f595a: Extract CLI global config and auth config helpers into new `@vercel/cli-config`, use `@effect/schema` for config validation.
+- b4ada64: Implement scheduled jobs for JS/TS.
+
+### Patch Changes
+
+- 1dae59c: Allow `vc logs <deployment-url>` to resolve the project from the deployment instead of requiring a linked local project, and include the current scope in related lookup errors.
+- 7e64cc2: Show a clearer error instead of querying logs for deployments that never reached Ready.
+- 2dac1cb: Use Git repository and root directory matches before folder-name matches when linking projects.
+- Updated dependencies [e53dd86]
+- Updated dependencies [ae20217]
+- Updated dependencies [34f595a]
+- Updated dependencies [b4ada64]
+- Updated dependencies [94c29b8]
+  - @vercel/build-utils@13.22.0
+  - @vercel/backends@0.4.0
+  - @vercel/python@6.39.0
+  - @vercel/cli-config@0.1.0
+  - @vercel/node@5.7.16
+  - @vercel/elysia@0.1.74
+  - @vercel/express@0.1.84
+  - @vercel/fastify@0.1.77
+  - @vercel/go@3.6.0
+  - @vercel/h3@0.1.83
+  - @vercel/hono@0.2.77
+  - @vercel/hydrogen@1.3.7
+  - @vercel/koa@0.1.57
+  - @vercel/nestjs@0.2.78
+  - @vercel/next@4.17.1
+  - @vercel/redwood@2.4.13
+  - @vercel/remix-builder@5.8.1
+  - @vercel/ruby@2.3.2
+  - @vercel/rust@1.2.0
+  - @vercel/static-build@2.9.23
+
+## 53.2.0
+
+### Minor Changes
+
+- 3898acb: Add `vercel firewall` command for managing project firewall configuration. Supports custom rules (add, edit, delete, enable, disable, reorder), IP blocking, system bypass rules, attack challenge mode, and system mitigations.
+
+### Patch Changes
+
+- 0cf132c: `vercel connex create` now accepts a `--triggers` flag. When passed, the request body includes `triggers: { enabled: true }` so the server wires webhook triggers into the created client. Without the flag, `triggers: { enabled: false }` is sent.
+- 1d766af: Let `--yes` enable the browser recovery flow for `vercel connex token` even in non-TTY contexts (e.g., coding agents), so a single command can open the browser, poll, and return the token without round-tripping through the agent's chat.
+- dd27e25: Added `vercel deploy continue --error` to mark manual deployments as failed with an optional error message.
+- 2f2b3f1: Added `--filter`/`-f <NAME>` flag to `vercel project ls` for filtering projects by name (substring match).
+- b2c2541: Avoid resolving the configured default team before unscoped `vercel link --yes --project` cross-team search, so team-scoped tokens can still link projects they can access.
+- 5f3cf99: Skip SAML-protected ("limited") teams during `vercel link`'s cross-team auto-detect so it no longer forces device-code re-authentication for scopes the user did not explicitly choose. The project is still linked from any accessible team where it's found, and limited scopes remain available through the standard scope picker (`selectOrg`) or `--scope <slug>`.
+  - @vercel/python@6.38.0
+
+## 53.1.1
+
+### Patch Changes
+
+- 4a5be0b: Fixed `vc env update` failing when updating sensitive environment variables.
+- 2ffd7bc: Tighten the `SdkKey` type so plaintext `keyValue`, `tokenValue`, and `connectionString` can no longer appear on list responses. `flags sdk-keys ls --json` already omitted these via an explicit allowlist; the type split makes the guarantee static. Create-time output from `flags sdk-keys add` is unaffected.
+- e6cb5bc: Hide `--token` from help output for commands that don't support it (`login`, `switch`).
+- 8a5aa6a: Ensure synthetic SPA fallbacks are merged after builder-produced routes.
+- bab5a60: Handle stale Claude Code Vercel plugin registry entries during plugin migration.
+- Updated dependencies [34e7b09]
+- Updated dependencies [8e29c9c]
+- Updated dependencies [2da36f3]
+- Updated dependencies [fa5f57a]
+- Updated dependencies [97f87f7]
+  - @vercel/next@4.17.1
+  - @vercel/python@6.38.0
+  - @vercel/remix-builder@5.8.1
+  - @vercel/static-build@2.9.22
+
+## 53.1.0
+
+### Minor Changes
+
+- 5cf1179: Use services orchestrator for single web services in local dev.
+
+### Patch Changes
+
+- 3aa821e: Allow adding Development Environment Variables on teams that enforce sensitive Environment Variables.
+
+## 53.0.1
+
+### Patch Changes
+
+- Updated dependencies [f7b5377]
+  - @vercel/node@5.7.15
+  - @vercel/elysia@0.1.73
+  - @vercel/express@0.1.83
+  - @vercel/fastify@0.1.76
+  - @vercel/h3@0.1.82
+  - @vercel/hono@0.2.76
+  - @vercel/koa@0.1.56
+  - @vercel/nestjs@0.2.77
+
+## 53.0.0
+
+### Major Changes
+
+- 56880dd: `vercel edge-config tokens <id-or-slug> --format json` no longer includes plaintext `token` values. Each row now contains `id`, `label`, `partialToken`, and `createdAt`.
+
+  If your scripts read the `token` field to identify or remove a token, switch to `id` instead. For example, `vercel edge-config tokens <id-or-slug> --remove <id> --yes`.
+
+  Plaintext tokens are still printed once at creation via `--add <label>`.
+
+### Minor Changes
+
+- 4ae5eca: Adds `vercel connex open <clientIdOrUid>` — opens a Connex client's detail page in the Vercel dashboard. Gated behind `FF_CONNEX_ENABLED`.
+
+  - Accepts either an `scl_` client ID or a UID (e.g. `slack/my-bot`); resolves UIDs to the canonical `scl_` ID via `GET /v1/connex/clients/:id` before building the dashboard URL (the dashboard route is a single `[clientId]` segment).
+  - Honors `--format=json` (emits `{ "url": "..." }`) and `stdout.isTTY` (non-TTY writes the URL to stdout so it can be piped).
+  - Mirrors `vercel integration open`: presence-checks the client first so a bad id/uid fails fast with a CLI error instead of a 404 in the browser.
+
+- d071a00: Add `vercel connex remove` command to delete a Connex client by id or uid. Refuses when projects are connected unless `--disconnect-all` is passed (mirrors `vercel integration-resource remove`); supports `--yes` and `--format=json`.
+- f0c17c0: Add masked token value column to `vercel edge-config tokens` table output.
+- bc302e4: `vercel flags sdk-keys ls` now surfaces the server-masked `partialKeyValue` preview (e.g. `vf_server_abc********`) in a new column of the default table output, between `Label` and `Created`. The `--json` output also includes `partialKeyValue` on each row.
+- c56f851: Upgrade to TypeScript 5.9
+
+### Patch Changes
+
+- 93a0a1a: Persist the team selection in `vercel connex` commands so users are not re-prompted on every invocation. Personal-scope selections are rejected since connex clients are team-owned.
+- 9cd5297: Scope `vercel edge-config` subcommands to the locally linked project's team by default, matching `vercel env`, `vercel crons`, etc. Falls back to the globally configured team when no project is linked.
+- 46a2646: Limit `vc link --scope` project lookup to the requested scope.
+- dc02702: Track resolved deploy target environment in CLI telemetry.
+- Updated dependencies [25e84c6]
+- Updated dependencies [c56f851]
+  - @vercel/python@6.37.0
+  - @vercel/build-utils@13.21.0
+  - @vercel/backends@0.3.0
+  - @vercel/remix-builder@5.8.0
+  - @vercel/next@4.17.0
+  - @vercel/rust@1.2.0
+  - @vercel/go@3.6.0
+  - @vercel/static-build@2.9.22
+  - @vercel/redwood@2.4.13
+  - @vercel/elysia@0.1.72
+  - @vercel/express@0.1.82
+  - @vercel/fastify@0.1.75
+  - @vercel/h3@0.1.81
+  - @vercel/hono@0.2.75
+  - @vercel/hydrogen@1.3.7
+  - @vercel/koa@0.1.55
+  - @vercel/nestjs@0.2.76
+  - @vercel/node@5.7.14
+  - @vercel/ruby@2.3.2
+
+## 52.2.1
+
+### Patch Changes
+
+- bf07448: Revert "auth: Make it possible to store CLI credentials in OS keychain (#16083)"
+- a00740e: `vc whoami` now shows both the logged-in user and the active team, and surfaces when the active team is set by a local project link rather than the globally-selected team.
+- Updated dependencies [894e7d4]
+  - @vercel/python@6.36.1
+  - @vercel/node@5.7.13
+
+## 52.2.0
+
+### Minor Changes
+
+- 24686d0: Add configurable auth token storage with keyring-backed persistence and file fallback support.
+
+### Patch Changes
+
+- Updated dependencies [24686d0]
+- Updated dependencies [d36ee35]
+- Updated dependencies [56c9f89]
+  - @vercel/cli-auth@0.1.0
+  - @vercel/node@5.7.13
+
+## 52.1.0
+
+### Minor Changes
+
+- ae90f00: `vercel edge-config tokens --remove <ID_OR_TOKEN>` now accepts either a token id (as shown in the `id` column of `vercel edge-config tokens <id-or-slug>`) or a plaintext token string. The CLI transparently consults the store's own token list to classify each value and sends `{ ids }`, `{ tokens }`, or both to `DELETE /v1/edge-config/:id/tokens` accordingly.
+
+  - Backward compatible: existing scripts passing plaintext tokens keep working.
+  - Forward compatible: once plaintext is no longer listed server-side, users can revoke by id with no CLI changes.
+  - No new flag: everything stays on `--remove`, which is repeatable.
+
+  ```bash
+  vercel edge-config tokens my-store --remove <token-id> --yes
+  vercel edge-config tokens my-store --remove <plaintext-token> --yes
+  vercel edge-config tokens my-store --remove <id-1> --remove <plaintext-2> --yes
+  ```
+
+### Patch Changes
+
+- 8d6cfde: Improve CLI unit test portability and argument fixture handling by replacing a POSIX-only `mkdir -p` call with Node's cross-platform `mkdirSync(..., { recursive: true })`, and by passing a token fixture as `--token=<value>` so values beginning with `-` are parsed correctly in non-interactive token tests.
+- 0252860: Prevent non-interactive `next.command` suggestions from echoing auth tokens across CLI flows, not just `tokens add`. The CLI now strips `--token` / `-t` flags (including inline `=value` forms) before building suggested rerun commands, so automation output cannot leak credentials copied from invocation args; `VERCEL_TOKEN` from environment variables was not affected.
+- Fail fast on SAML / missing-scope re-authentication when the device-code flow cannot succeed, so commands no longer hang waiting for a browser approval that will never come. `reauthenticate` now bails with an actionable error message when the token was supplied via `--token`, when it was supplied via the `VERCEL_TOKEN` environment variable, or when stdin is non-interactive (e.g. CI). In all three cases the user is told which token source needs a token authorized for the requested scope, instead of silently kicking off `performDeviceCodeFlow`.
+  - @vercel/static-build@2.9.21
+
+## 52.0.0
+
+### Major Changes
+
+- fix!: exclude configuration files from static deployments ([#16056](https://github.com/vercel/vercel/pull/16056))
+
+### Minor Changes
+
+- Add `vercel connex token` command to fetch tokens for Connex clients, with auto-authorize / auto-install recovery on actionable 422 errors. ([#16072](https://github.com/vercel/vercel/pull/16072))
+
+### Patch Changes
+
+- Add `vercel env run` example to the `env` command help output ([#16072](https://github.com/vercel/vercel/pull/16072))
+
+- `vercel env update` now applies the same Development guards as `vercel env add`: ([#16072](https://github.com/vercel/vercel/pull/16072))
+
+  - Errors with a docs-linked message when the selected record targets Development and the team has the Sensitive Environment Variables Policy enabled. No PATCH is attempted.
+  - Errors when `--sensitive` is used on a record that targets Development (regardless of policy). Sensitive is not allowed on Development.
+
+  Other `env update` behavior is unchanged.
+
+- Normalize single-line stdin env values by removing a trailing newline before ([#16072](https://github.com/vercel/vercel/pull/16072))
+  saving them.
+- Updated dependencies [[`2aa78415831fe89d1b21dd89704706bd1ad5e78d`](https://github.com/vercel/vercel/commit/2aa78415831fe89d1b21dd89704706bd1ad5e78d), [`2aa78415831fe89d1b21dd89704706bd1ad5e78d`](https://github.com/vercel/vercel/commit/2aa78415831fe89d1b21dd89704706bd1ad5e78d), [`2aa78415831fe89d1b21dd89704706bd1ad5e78d`](https://github.com/vercel/vercel/commit/2aa78415831fe89d1b21dd89704706bd1ad5e78d)]:
+  - @vercel/build-utils@13.20.0
+  - @vercel/python@6.36.0
+  - @vercel/backends@0.2.0
+  - @vercel/elysia@0.1.71
+  - @vercel/express@0.1.81
+  - @vercel/fastify@0.1.74
+  - @vercel/go@3.5.0
+  - @vercel/h3@0.1.80
+  - @vercel/hono@0.2.74
+  - @vercel/hydrogen@1.3.6
+  - @vercel/koa@0.1.54
+  - @vercel/nestjs@0.2.75
+  - @vercel/next@4.16.8
+  - @vercel/node@5.7.13
+  - @vercel/redwood@2.4.12
+  - @vercel/remix-builder@5.7.2
+  - @vercel/ruby@2.3.2
+  - @vercel/rust@1.1.1
+  - @vercel/static-build@2.9.21
+
+## 51.8.0
+
+### Minor Changes
+
+- `vercel env add` now defaults Environment Variables to **sensitive** on Production and Preview. Sensitive values are encrypted at rest and cannot be retrieved later via the dashboard or CLI; they are still resolved for builds, deployments, `vercel env pull`, and runtime. ([#16041](https://github.com/vercel/vercel/pull/16041))
+
+  Behavior per target:
+
+  - **Production** or **Preview**: defaults to `sensitive`. Pass `--no-sensitive` to opt back in to the previous `encrypted` behavior (value remains readable later).
+  - **Development**: always stored as `encrypted` (sensitive is not supported by the Vercel API for Development). Passing `--sensitive` alongside a Development target now errors up-front instead of silently falling back.
+  - **Mixed selection** (e.g., interactive checkbox picks `production + preview + development`): errors and asks you to run `vercel env add` separately for Development, because Development cannot share a record type with Production/Preview.
+
+  Flag summary:
+
+  - `--sensitive`: unchanged in meaning (request a sensitive variable); now errors when combined with Development.
+  - `--no-sensitive`: new; opt out of the new default for Production/Preview.
+  - `--sensitive --no-sensitive` together: errors.
+
+  On teams that enable the "Enforce Sensitive Environment Variables" policy in team settings, the CLI now reads the policy from the team object and notes in the output that the policy is active; the server already promotes Production/Preview variables to sensitive silently, and the CLI's own logs are now honest about it. Passing `--no-sensitive` on a policy-on team for Production/Preview now emits a warning — the flag is a no-op because the server promotes the variable regardless — and the CLI sends `type: 'sensitive'` so its own `--debug` output matches what gets stored.
+
+### Patch Changes
+
+- Updated dependencies [[`c1866cf1add2107f91cae8292e38e4854bfe0aca`](https://github.com/vercel/vercel/commit/c1866cf1add2107f91cae8292e38e4854bfe0aca)]:
+  - @vercel/build-utils@13.19.1
+  - @vercel/backends@0.1.2
+  - @vercel/elysia@0.1.70
+  - @vercel/express@0.1.80
+  - @vercel/fastify@0.1.73
+  - @vercel/go@3.5.0
+  - @vercel/h3@0.1.79
+  - @vercel/hono@0.2.73
+  - @vercel/hydrogen@1.3.6
+  - @vercel/koa@0.1.53
+  - @vercel/nestjs@0.2.74
+  - @vercel/next@4.16.8
+  - @vercel/node@5.7.12
+  - @vercel/python@6.35.0
+  - @vercel/redwood@2.4.12
+  - @vercel/remix-builder@5.7.2
+  - @vercel/ruby@2.3.2
+  - @vercel/rust@1.1.1
+  - @vercel/static-build@2.9.20
+
+## 51.7.0
+
+### Minor Changes
+
+- [detect-services] If a vercel.toml exists, update the vercel.toml ([#15895](https://github.com/vercel/vercel/pull/15895))
+
+- Use correct filename in messages when config file is not vercel.json ([#15893](https://github.com/vercel/vercel/pull/15893))
+
+- [services] move Python workers to v2beta triggers with private routing ([#15920](https://github.com/vercel/vercel/pull/15920))
+
+### Patch Changes
+
+- Include `action` and `resource` fields from API 403 responses in non-interactive agent error payloads. ([#15940](https://github.com/vercel/vercel/pull/15940))
+
+- Use POST for `vercel connex create` with a browser registration fallback. ([#16026](https://github.com/vercel/vercel/pull/16026))
+
+- Add table formatting for OpenAPI CLI responses. ([#16011](https://github.com/vercel/vercel/pull/16011))
+
+  Renders API JSON responses as CLI tables and cards with relative timestamp formatting, null/undefined display as `--`, human-readable column headers, and configurable display columns via `VercelCliTableDisplay`.
+
+- Updated dependencies [[`93be6d188176cdd4451a6c62155f3ccd7dfa89e1`](https://github.com/vercel/vercel/commit/93be6d188176cdd4451a6c62155f3ccd7dfa89e1), [`0793b7d31e4ff21dd12ff727f2906be2fd63fe3e`](https://github.com/vercel/vercel/commit/0793b7d31e4ff21dd12ff727f2906be2fd63fe3e)]:
+  - @vercel/build-utils@13.19.0
+  - @vercel/python@6.35.0
+  - @vercel/backends@0.1.1
+  - @vercel/elysia@0.1.69
+  - @vercel/express@0.1.79
+  - @vercel/fastify@0.1.72
+  - @vercel/go@3.5.0
+  - @vercel/h3@0.1.78
+  - @vercel/hono@0.2.72
+  - @vercel/hydrogen@1.3.6
+  - @vercel/koa@0.1.52
+  - @vercel/nestjs@0.2.73
+  - @vercel/next@4.16.8
+  - @vercel/node@5.7.11
+  - @vercel/redwood@2.4.12
+  - @vercel/remix-builder@5.7.2
+  - @vercel/ruby@2.3.2
+  - @vercel/rust@1.1.1
+  - @vercel/static-build@2.9.19
+
+## 51.6.1
+
+### Patch Changes
+
+- Updated dependencies [[`055f6239a4fe763b9f3b33cfbb5baa2e0e214767`](https://github.com/vercel/vercel/commit/055f6239a4fe763b9f3b33cfbb5baa2e0e214767)]:
+  - @vercel/build-utils@13.18.0
+  - @vercel/backends@0.1.0
+  - @vercel/python@6.34.0
+  - @vercel/elysia@0.1.68
+  - @vercel/express@0.1.78
+  - @vercel/fastify@0.1.71
+  - @vercel/go@3.5.0
+  - @vercel/h3@0.1.77
+  - @vercel/hono@0.2.71
+  - @vercel/hydrogen@1.3.6
+  - @vercel/koa@0.1.51
+  - @vercel/nestjs@0.2.72
+  - @vercel/next@4.16.8
+  - @vercel/node@5.7.10
+  - @vercel/redwood@2.4.12
+  - @vercel/remix-builder@5.7.2
+  - @vercel/ruby@2.3.2
+  - @vercel/rust@1.1.1
+  - @vercel/static-build@2.9.18
+
+## 51.6.0
+
+### Minor Changes
+
+- Add `vercel connex list` command ([#16018](https://github.com/vercel/vercel/pull/16018))
+
+### Patch Changes
+
+- Add OpenAPI-driven subcommand fallback behind `VERCEL_AUTO_API=1`. ([#15989](https://github.com/vercel/vercel/pull/15989))
+
+  When the env var is set, unrecognized CLI tokens are matched against OpenAPI tags and operation IDs from `openapi.vercel.sh`. This enables `vercel <tag> <operationId>` (e.g. `vercel user getAuthUser`) at the top level, and per-command fallthrough (e.g. `vercel projects getProject`) when a token doesn't match a native subcommand.
+
+  When `x-vercel-cli.displayColumns` is present in the OpenAPI response schema, results render as a card (single object) or table (array) instead of raw JSON.
+
+- [experimental-services] add new job service type support ([#15944](https://github.com/vercel/vercel/pull/15944))
+
+- Add naming and formatting utilities for OpenAPI CLI integration. ([#16010](https://github.com/vercel/vercel/pull/16010))
+
+  Introduces `foldNamingStyle` for case-insensitive matching across camelCase/kebab-case/snake_case, `humanReadableColumnLabel` for converting schema property paths to readable headers, and `inferCliSubcommandAliases` for auto-generating CLI aliases from HTTP methods.
+
+- Updated dependencies [[`44d519b8660185754d8280517adbe0ab7268f540`](https://github.com/vercel/vercel/commit/44d519b8660185754d8280517adbe0ab7268f540), [`2a6344e205910dafc05cb74a80f98165d95322d7`](https://github.com/vercel/vercel/commit/2a6344e205910dafc05cb74a80f98165d95322d7)]:
+  - @vercel/detect-agent@1.2.3
+  - @vercel/build-utils@13.17.2
+  - @vercel/python@6.33.3
+  - @vercel/backends@0.0.64
+  - @vercel/elysia@0.1.67
+  - @vercel/express@0.1.77
+  - @vercel/fastify@0.1.70
+  - @vercel/go@3.5.0
+  - @vercel/h3@0.1.76
+  - @vercel/hono@0.2.70
+  - @vercel/hydrogen@1.3.6
+  - @vercel/koa@0.1.50
+  - @vercel/nestjs@0.2.71
+  - @vercel/next@4.16.8
+  - @vercel/node@5.7.9
+  - @vercel/redwood@2.4.12
+  - @vercel/remix-builder@5.7.2
+  - @vercel/ruby@2.3.2
+  - @vercel/rust@1.1.1
+  - @vercel/static-build@2.9.17
+
+## 51.5.1
+
+### Patch Changes
+
+- Improve Claude Code Vercel plugin install and update prompts across CLI commands. ([#15921](https://github.com/vercel/vercel/pull/15921))
+
+- Updated dependencies [[`5219572d21a2ba4b49cc1c27d244c1ff5d76c591`](https://github.com/vercel/vercel/commit/5219572d21a2ba4b49cc1c27d244c1ff5d76c591), [`2babfa22946d80a92f1307a8d860a9039d695b09`](https://github.com/vercel/vercel/commit/2babfa22946d80a92f1307a8d860a9039d695b09), [`2babfa22946d80a92f1307a8d860a9039d695b09`](https://github.com/vercel/vercel/commit/2babfa22946d80a92f1307a8d860a9039d695b09), [`adbe6f0a0152136aa26aa1277458f4578f62beeb`](https://github.com/vercel/vercel/commit/adbe6f0a0152136aa26aa1277458f4578f62beeb)]:
+  - @vercel/build-utils@13.17.1
+  - @vercel/backends@0.0.63
+  - @vercel/python@6.33.2
+  - @vercel/elysia@0.1.66
+  - @vercel/express@0.1.76
+  - @vercel/fastify@0.1.69
+  - @vercel/go@3.5.0
+  - @vercel/h3@0.1.75
+  - @vercel/hono@0.2.69
+  - @vercel/hydrogen@1.3.6
+  - @vercel/koa@0.1.49
+  - @vercel/nestjs@0.2.70
+  - @vercel/next@4.16.8
+  - @vercel/node@5.7.8
+  - @vercel/redwood@2.4.12
+  - @vercel/remix-builder@5.7.2
+  - @vercel/ruby@2.3.2
+  - @vercel/rust@1.1.1
+  - @vercel/static-build@2.9.16
+
+## 51.5.0
+
+### Minor Changes
+
+- Add `vercel connex create` command ([#15988](https://github.com/vercel/vercel/pull/15988))
+
+- Add `vercel deploy-hooks` command to create, list, and remove deploy hooks. ([#15935](https://github.com/vercel/vercel/pull/15935))
+
+### Patch Changes
+
+- Enable functions beta hint when flag is true ([#15965](https://github.com/vercel/vercel/pull/15965))
+
+- Improve the `vercel metrics` CLI by making it generally available, simplifying metric selection, and cleaning up schema output. ([#15904](https://github.com/vercel/vercel/pull/15904))
+
+- Updated dependencies [[`bb834e53bca374d44f86bda3892e77ded226a26a`](https://github.com/vercel/vercel/commit/bb834e53bca374d44f86bda3892e77ded226a26a), [`bab75d7ff6b7a188167bbd7583a8b36d9d250d5a`](https://github.com/vercel/vercel/commit/bab75d7ff6b7a188167bbd7583a8b36d9d250d5a), [`2243233194c6e38d75ed2a1ca040acaaf3b2e686`](https://github.com/vercel/vercel/commit/2243233194c6e38d75ed2a1ca040acaaf3b2e686), [`232b45fd82adf4a8d538a853bfc1df7a5d16f4c9`](https://github.com/vercel/vercel/commit/232b45fd82adf4a8d538a853bfc1df7a5d16f4c9)]:
+  - @vercel/python@6.33.1
+  - @vercel/rust@1.1.1
+
+## 51.4.0
+
+### Minor Changes
+
+- Support dynamically specifying crons from a python service ([#15930](https://github.com/vercel/vercel/pull/15930))
+
+### Patch Changes
+
+- Add `vercel flags rollout` for progressive rollouts. ([#15963](https://github.com/vercel/vercel/pull/15963))
+
+  Examples:
+
+  ```bash
+  vercel flags rollout redesigned-checkout \
+    --environment production \
+    --by user.userId \
+    --stage 5,6h \
+    --stage 10,6h \
+    --stage 25,12h \
+    --stage 50,1d
+  ```
+
+  ```bash
+  vercel flags rollout redesigned-checkout \
+    --environment production \
+    --by user.userId \
+    --stage 5,30m \
+    --stage 25,2h \
+    --stage 50,8h \
+    --start now
+  ```
+
+  ```bash
+  vercel flags rollout welcome-message \
+    --environment production \
+    --by user.userId \
+    --from-variant control \
+    --to-variant treatment \
+    --default-variant control \
+    --stage 10,2h \
+    --stage 50,12h \
+    --start 2026-04-16T09:00:00Z
+  ```
+
+  ```bash
+  vercel flags rollout redesigned-checkout \
+    --environment production \
+    --stage 10,6h \
+    --stage 50,1d \
+    --message "Adjust production rollout schedule"
+  ```
+
+- Updated dependencies [[`16aca7dadcea2f877ffae79afa72c14a95f682e3`](https://github.com/vercel/vercel/commit/16aca7dadcea2f877ffae79afa72c14a95f682e3), [`1a7423debdd453e4c3a6297119fc8f7b4efc14c3`](https://github.com/vercel/vercel/commit/1a7423debdd453e4c3a6297119fc8f7b4efc14c3), [`2fd561868cd4b0960ba790deed54ca77263212ec`](https://github.com/vercel/vercel/commit/2fd561868cd4b0960ba790deed54ca77263212ec), [`44897297d569742e93725d71ca481803c9b0b9cc`](https://github.com/vercel/vercel/commit/44897297d569742e93725d71ca481803c9b0b9cc)]:
+  - @vercel/node@5.7.7
+  - @vercel/python@6.33.0
+  - @vercel/next@4.16.8
+  - @vercel/build-utils@13.17.0
+  - @vercel/elysia@0.1.65
+  - @vercel/express@0.1.75
+  - @vercel/fastify@0.1.68
+  - @vercel/h3@0.1.74
+  - @vercel/hono@0.2.68
+  - @vercel/koa@0.1.48
+  - @vercel/nestjs@0.2.69
+  - @vercel/static-build@2.9.15
+  - @vercel/backends@0.0.62
+  - @vercel/go@3.5.0
+  - @vercel/hydrogen@1.3.6
+  - @vercel/redwood@2.4.12
+  - @vercel/remix-builder@5.7.2
+  - @vercel/ruby@2.3.2
+  - @vercel/rust@1.1.0
+
+## 51.3.0
+
+### Minor Changes
+
+- Add `vercel alerts inspect` to fetch a single alert group by id with linked project, explicit `--project`, or `--all` scope. ([#15850](https://github.com/vercel/vercel/pull/15850))
+
+- Add root to experimentalServices to set a service's working directory. ([#15929](https://github.com/vercel/vercel/pull/15929))
+
+- Add a new flag to vercel deploy to let users deploy to hive ([#15892](https://github.com/vercel/vercel/pull/15892))
+
+### Patch Changes
+
+- Return 3xx responses directly in `client.fetch()` when `redirect: 'manual'` is passed, instead of entering the error/retry path. ([#15953](https://github.com/vercel/vercel/pull/15953))
+
+- Add JSON feature flag support to the CLI so flags can be created, updated, listed, inspected, and set with JSON variant values just like existing boolean, string, and number kinds. ([#15741](https://github.com/vercel/vercel/pull/15741))
+
+  This aligns the CLI with the recent API and dashboard changes for `json` flags, including parsing raw JSON inputs and preserving structured values in output.
+
+- Display case-insensitive feature flag rule comparisons correctly in the CLI. ([#15743](https://github.com/vercel/vercel/pull/15743))
+
+- Updated dependencies [[`86d1f5b3cbd520af2632d4a3d6a1f24557448c0e`](https://github.com/vercel/vercel/commit/86d1f5b3cbd520af2632d4a3d6a1f24557448c0e), [`1056be976b6ba9b42cc1e2ffe895d255ab6c9850`](https://github.com/vercel/vercel/commit/1056be976b6ba9b42cc1e2ffe895d255ab6c9850), [`c27eedaa1b0e3f6e3770b578f62e5463d82f06e0`](https://github.com/vercel/vercel/commit/c27eedaa1b0e3f6e3770b578f62e5463d82f06e0)]:
+  - @vercel/build-utils@13.16.0
+  - @vercel/python@6.32.0
+  - @vercel/backends@0.0.61
+  - @vercel/elysia@0.1.64
+  - @vercel/express@0.1.74
+  - @vercel/fastify@0.1.67
+  - @vercel/go@3.5.0
+  - @vercel/h3@0.1.73
+  - @vercel/hono@0.2.67
+  - @vercel/hydrogen@1.3.6
+  - @vercel/koa@0.1.47
+  - @vercel/nestjs@0.2.68
+  - @vercel/next@4.16.7
+  - @vercel/node@5.7.6
+  - @vercel/redwood@2.4.12
+  - @vercel/remix-builder@5.7.2
+  - @vercel/ruby@2.3.2
+  - @vercel/rust@1.1.0
+  - @vercel/static-build@2.9.14
+
+## 51.2.1
+
+### Patch Changes
+
+- Add `ai-gateway api-keys create` command for creating AI Gateway API keys with optional quota limits ([#15744](https://github.com/vercel/vercel/pull/15744))
+
+- Improve `vercel blob list-stores` with `--json` and `--no-projects`, exclude non-blob stores when the API returns a `type` field, and show a richer table for non-TTY output while keeping linked-project filtering, `--all`, and interactive store selection on TTY. ([#14653](https://github.com/vercel/vercel/pull/14653))
+
+- Add a `project rename` command to rename projects from the CLI. ([#15918](https://github.com/vercel/vercel/pull/15918))
+
+- Updated dependencies [[`8b77cdcd71ba645df4eed52cdccde9a2cbb913f8`](https://github.com/vercel/vercel/commit/8b77cdcd71ba645df4eed52cdccde9a2cbb913f8), [`2d7d14db1c6448f716d1ccc30844b43f47e8e6ee`](https://github.com/vercel/vercel/commit/2d7d14db1c6448f716d1ccc30844b43f47e8e6ee), [`d731f1b69030ddcaa0b7f4f1854f79ea92671b1e`](https://github.com/vercel/vercel/commit/d731f1b69030ddcaa0b7f4f1854f79ea92671b1e), [`4e62f6c2204dd148643f86f140f0ae7995778017`](https://github.com/vercel/vercel/commit/4e62f6c2204dd148643f86f140f0ae7995778017), [`45c8d4f54cc831695375794964a29145860fa45b`](https://github.com/vercel/vercel/commit/45c8d4f54cc831695375794964a29145860fa45b), [`42a70e1e6318615bd420933f9cc978bed3a43936`](https://github.com/vercel/vercel/commit/42a70e1e6318615bd420933f9cc978bed3a43936)]:
+  - @vercel/backends@0.0.60
+  - @vercel/python@6.31.0
+  - @vercel/next@4.16.7
+  - @vercel/build-utils@13.15.0
+  - @vercel/elysia@0.1.63
+  - @vercel/express@0.1.73
+  - @vercel/fastify@0.1.66
+  - @vercel/go@3.5.0
+  - @vercel/h3@0.1.72
+  - @vercel/hono@0.2.66
+  - @vercel/hydrogen@1.3.6
+  - @vercel/koa@0.1.46
+  - @vercel/nestjs@0.2.67
+  - @vercel/node@5.7.5
+  - @vercel/redwood@2.4.12
+  - @vercel/remix-builder@5.7.2
+  - @vercel/ruby@2.3.2
+  - @vercel/rust@1.1.0
+  - @vercel/static-build@2.9.13
+
+## 51.2.0
+
+### Minor Changes
+
+- Add `vercel domains price` to show registrar purchase, renewal, and transfer pricing for a domain. ([#15851](https://github.com/vercel/vercel/pull/15851))
+
+### Patch Changes
+
+- Updated dependencies [[`63a7bd6b8ce887f98bb6ee8c09e7196e7105e90d`](https://github.com/vercel/vercel/commit/63a7bd6b8ce887f98bb6ee8c09e7196e7105e90d), [`71e5dcc49d6b1eb3955ca7e18a52e76d18e8e8dc`](https://github.com/vercel/vercel/commit/71e5dcc49d6b1eb3955ca7e18a52e76d18e8e8dc)]:
+  - @vercel/go@3.5.0
+  - @vercel/python@6.30.1
+
+## 51.1.0
+
+### Minor Changes
+
+- feat(cli): CI-friendly flags for blob store commands ([#15925](https://github.com/vercel/vercel/pull/15925))
+
+  - `blob list-stores --all`: list all team stores regardless of project connection. Hints about `--all` when no stores are connected to the current project.
+  - `blob delete-store --yes`: skip confirmation prompt for CI/scripts.
+  - `blob create-store --yes`: auto-connect to linked project with all environments, skip prompts.
+  - `blob create-store --environment`: specify which environments to connect (repeatable, e.g. `--environment production --environment preview`).
+
+## 51.0.0
+
+### Major Changes
+
+- feat(cli): blob command improvements and breaking changes ([#15375](https://github.com/vercel/vercel/pull/15375))
+
+  **Breaking Changes:**
+
+  - `--access` flag is now required for `put`, `copy`, `get`, and `create-store` (no longer defaults to `public`)
+  - `--force` flag removed from `blob put` (use `--allow-overwrite` instead)
+  - `blob store add|remove|get` subcommands removed (use `blob create-store`, `blob delete-store`, `blob get-store`)
+
+  **New Features:**
+
+  - `blob list-stores` (`ls-stores`): browse blob stores interactively or pipe as a table
+  - `blob empty-store`: delete all blobs in a store with confirmation
+  - `blob get-store` and `blob list-stores` now show a dashboard link
+  - `blob create-store` interactive prompt now shows Private first with doc links
+  - `blob delete-store` now shows connected projects in confirmation and auto-pulls `.env.local` after deletion
+
+### Patch Changes
+
+- Updated dependencies [[`6712eb87653784b99327f81ed3dbff44e30038c5`](https://github.com/vercel/vercel/commit/6712eb87653784b99327f81ed3dbff44e30038c5)]:
+  - @vercel/python@6.30.0
+
+## 50.44.0
+
+### Minor Changes
+
+- Add `vercel oauth-apps` to list installation requests, dismiss requests, install apps by OAuth client id, and remove installations. ([#15846](https://github.com/vercel/vercel/pull/15846))
+
+- Add `vercel teams sso` to show SAML/SSO configuration for the current team. ([#15847](https://github.com/vercel/vercel/pull/15847))
+
+### Patch Changes
+
+- Fetch check run logs inline and use `checkRunLog` deep-link for failed deployment checks. ([#15906](https://github.com/vercel/vercel/pull/15906))
+
+- Add `mount` support for experimental services across config validation and service resolution. ([#15882](https://github.com/vercel/vercel/pull/15882))
+
+- Updated dependencies [[`9b3ea340f23c1faad6d56c2a54d75bb2e77b0162`](https://github.com/vercel/vercel/commit/9b3ea340f23c1faad6d56c2a54d75bb2e77b0162), [`4362505f1f5bf9b8fa0738dec2ad3189edc933b2`](https://github.com/vercel/vercel/commit/4362505f1f5bf9b8fa0738dec2ad3189edc933b2)]:
+  - @vercel/build-utils@13.14.2
+  - @vercel/next@4.16.6
+  - @vercel/backends@0.0.59
+  - @vercel/elysia@0.1.62
+  - @vercel/express@0.1.72
+  - @vercel/fastify@0.1.65
+  - @vercel/go@3.4.7
+  - @vercel/h3@0.1.71
+  - @vercel/hono@0.2.65
+  - @vercel/hydrogen@1.3.6
+  - @vercel/koa@0.1.45
+  - @vercel/nestjs@0.2.66
+  - @vercel/node@5.7.4
+  - @vercel/python@6.29.0
+  - @vercel/redwood@2.4.12
+  - @vercel/remix-builder@5.7.2
+  - @vercel/ruby@2.3.2
+  - @vercel/rust@1.1.0
+  - @vercel/static-build@2.9.12
+
+## 50.43.0
+
+### Minor Changes
+
+- Add Deployment Checks support to `deploy --prod`. Shows "Running Checks..." spinner when checks are pending, detects check failures before alias promotion, and displays failed check run details with links to logs. ([#15884](https://github.com/vercel/vercel/pull/15884))
+
+- Extend marketplace integration CLI parity: add `vercel integration installations` to list team installations (with optional `--integration` filter and JSON output), align `vercel integration update` argument parsing with other subcommands (parse only tokens after `update`, so the integration slug is the first positional), and ship related help/telemetry updates. ([#15849](https://github.com/vercel/vercel/pull/15849))
+
+- Add `vercel project protection` actions for automation protection bypass via PATCH `/v1/projects/.../protection-bypass` (`--protection-bypass`). ([#15862](https://github.com/vercel/vercel/pull/15862))
+
+- Add `vercel project protection` actions for customer support code visibility (`--customer-support-code-visibility`). ([#15860](https://github.com/vercel/vercel/pull/15860))
+
+- Add `vercel project protection` actions for Git fork protection (`--git-fork-protection`). ([#15861](https://github.com/vercel/vercel/pull/15861))
+
+- [services] migrate python workers to Queues V3 API ([#15885](https://github.com/vercel/vercel/pull/15885))
+
+- [cli] Add `vercel flags override` subcommand to encrypt and decrypt flag override tokens for the `vercel-flag-overrides` cookie ([#15875](https://github.com/vercel/vercel/pull/15875))
+
+### Patch Changes
+
+- Persist CLI telemetry across invocations with bounded-time sessions, stable installation device IDs, and per-invocation identifiers. ([#15872](https://github.com/vercel/vercel/pull/15872))
+
+- Update the `vercel metrics` CLI to use the V2 observability metrics API with `--metric`-based schema inspection and querying. ([#15876](https://github.com/vercel/vercel/pull/15876))
+
+- Improve `vercel integration add` command to support fallback to the discover API and first-party integrations. ([#15788](https://github.com/vercel/vercel/pull/15788))
+
+- refactor(cli): remove FF_AUTO_PROVISION_INSTALL feature flag and dead code from `integration add` ([#15871](https://github.com/vercel/vercel/pull/15871))
+
+- Updated dependencies [[`5e02289f927050a6c1025cc0edb7eda607fd5e73`](https://github.com/vercel/vercel/commit/5e02289f927050a6c1025cc0edb7eda607fd5e73), [`2e15ee828f14de4a849a462429ca03feab161174`](https://github.com/vercel/vercel/commit/2e15ee828f14de4a849a462429ca03feab161174), [`a31c84d1bda56a60da6d7bc6d611b0b18ba3bf57`](https://github.com/vercel/vercel/commit/a31c84d1bda56a60da6d7bc6d611b0b18ba3bf57)]:
+  - @vercel/detect-agent@1.2.2
+  - @vercel/build-utils@13.14.1
+  - @vercel/backends@0.0.58
+  - @vercel/elysia@0.1.61
+  - @vercel/express@0.1.71
+  - @vercel/fastify@0.1.64
+  - @vercel/go@3.4.7
+  - @vercel/h3@0.1.70
+  - @vercel/hono@0.2.64
+  - @vercel/hydrogen@1.3.6
+  - @vercel/koa@0.1.44
+  - @vercel/nestjs@0.2.65
+  - @vercel/next@4.16.5
+  - @vercel/node@5.7.3
+  - @vercel/python@6.29.0
+  - @vercel/redwood@2.4.12
+  - @vercel/remix-builder@5.7.2
+  - @vercel/ruby@2.3.2
+  - @vercel/rust@1.1.0
+  - @vercel/static-build@2.9.11
+
+## 50.42.0
+
+### Minor Changes
+
+- Add `vercel project protection` actions for password deployment protection (`--password`). ([#15858](https://github.com/vercel/vercel/pull/15858))
+
+- Add `vercel project protection` actions for skew protection via `skewProtectionMaxAge` (`--skew`). ([#15859](https://github.com/vercel/vercel/pull/15859))
+
+- Add `vercel project protection` actions for SSO deployment protection (`--sso`). ([#15857](https://github.com/vercel/vercel/pull/15857))
+
+- Support configuration via vercel.toml ([#15750](https://github.com/vercel/vercel/pull/15750))
+
+- Add support for running Sandbox commands through `vercel sandbox`. ([#15839](https://github.com/vercel/vercel/pull/15839))
+
+### Patch Changes
+
+- Fixed `VERCEL_TOKEN` environment variable not being checked before the login prompt, causing the CLI to always ask for credentials even when the env var was set. ([#15877](https://github.com/vercel/vercel/pull/15877))
+
+- Improve `vc logs` ergonomics by showing `vc logs --help` when invalid flags are provided, exiting successfully for explicit `--help`, and preserving the full nested `logs[]` array in JSON output so all request log messages remain available. ([#15855](https://github.com/vercel/vercel/pull/15855))
+
+- Updated dependencies [[`aea2272ac976a2e13591e402b2a41173cf51f740`](https://github.com/vercel/vercel/commit/aea2272ac976a2e13591e402b2a41173cf51f740), [`42b6ff3113eb7ba5302b8469f8dd10070ecec6f0`](https://github.com/vercel/vercel/commit/42b6ff3113eb7ba5302b8469f8dd10070ecec6f0)]:
+  - @vercel/backends@0.0.57
+  - @vercel/build-utils@13.14.0
+  - @vercel/rust@1.1.0
+  - @vercel/static-build@2.9.10
+  - @vercel/elysia@0.1.60
+  - @vercel/express@0.1.70
+  - @vercel/fastify@0.1.63
+  - @vercel/go@3.4.7
+  - @vercel/h3@0.1.69
+  - @vercel/hono@0.2.63
+  - @vercel/hydrogen@1.3.6
+  - @vercel/koa@0.1.43
+  - @vercel/nestjs@0.2.64
+  - @vercel/next@4.16.5
+  - @vercel/node@5.7.2
+  - @vercel/python@6.29.0
+  - @vercel/redwood@2.4.12
+  - @vercel/remix-builder@5.7.2
+  - @vercel/ruby@2.3.2
+
+## 50.41.0
+
+### Minor Changes
+
+- Add `vercel edge-config` with `list`, `add`, `get`, `update`, `remove`, `items`, and `tokens` subcommands for Edge Config dashboard API parity. ([#15822](https://github.com/vercel/vercel/pull/15822))
+
+- Add `vercel project checks` to list a project's deployment checks configuration (parity with dashboard), including `--format json` and non-interactive error payloads. ([#15816](https://github.com/vercel/vercel/pull/15816))
+
+### Patch Changes
+
+- Improve `vercel teams request` in non-interactive mode: validation, missing team scope, and API errors emit structured JSON on stdout with stable `reason` values and `next[]` commands that preserve global flags (for example `--cwd` and `--non-interactive`). ([#15815](https://github.com/vercel/vercel/pull/15815))
+
+- Hide `--search` flag from `vc logs --help` output while continuing to accept it, and update the `--query` flag description to indicate advanced querying with filter syntax support. ([#15854](https://github.com/vercel/vercel/pull/15854))
+
+- Updated dependencies [[`a80217a9ed60d7b7f3e98537b0468cc5488078c1`](https://github.com/vercel/vercel/commit/a80217a9ed60d7b7f3e98537b0468cc5488078c1)]:
+  - @vercel/build-utils@13.13.0
+  - @vercel/backends@0.0.56
+  - @vercel/elysia@0.1.59
+  - @vercel/express@0.1.69
+  - @vercel/fastify@0.1.62
+  - @vercel/go@3.4.7
+  - @vercel/h3@0.1.68
+  - @vercel/hono@0.2.62
+  - @vercel/hydrogen@1.3.6
+  - @vercel/koa@0.1.42
+  - @vercel/nestjs@0.2.63
+  - @vercel/next@4.16.5
+  - @vercel/node@5.7.1
+  - @vercel/python@6.29.0
+  - @vercel/redwood@2.4.12
+  - @vercel/remix-builder@5.7.2
+  - @vercel/ruby@2.3.2
+  - @vercel/rust@1.0.6
+  - @vercel/static-build@2.9.9
+
+## 50.40.0
+
+### Minor Changes
+
+- Add `vercel project speed-insights` to enable Speed Insights for a project (parity with dashboard), including `--format json` and non-interactive error payloads. ([#15832](https://github.com/vercel/vercel/pull/15832))
+
+- Add `vercel project web-analytics` to enable Web Analytics for a project (parity with dashboard), including `--format json` and non-interactive error payloads. ([#15831](https://github.com/vercel/vercel/pull/15831))
+
+### Patch Changes
+
+- Improve CLI scope resolution groundwork and fix `vercel switch` current-team detection. ([#15817](https://github.com/vercel/vercel/pull/15817))
+
+- Cache the authenticated `userId` in the CLI auth config to reduce unnecessary `getUser()` requests. ([#15824](https://github.com/vercel/vercel/pull/15824))
+
+- Updated dependencies []:
+  - @vercel/static-build@2.9.8
+
+## 50.39.0
+
+### Minor Changes
+
+- Add `vercel tokens` subcommands (`ls`, `add`, `rm`) for auth token API parity with the dashboard. ([#15812](https://github.com/vercel/vercel/pull/15812))
+
+- Add `vercel project access-summary` subcommand to list member counts by role for a project. ([#15813](https://github.com/vercel/vercel/pull/15813))
+
+- Add `vercel project members` and `vercel project access-groups` commands, and fix `vercel teams members` to fetch all pages from the paginated team members API. ([#15786](https://github.com/vercel/vercel/pull/15786))
+
+### Patch Changes
+
+- Add `--id` flag to `vercel build` and `vercel env pull` to fetch deployment-scoped environment variables ([#15805](https://github.com/vercel/vercel/pull/15805))
+
+- Updated dependencies []:
+  - @vercel/static-build@2.9.8
+
+## 50.38.3
+
+### Patch Changes
+
+- Improve `vercel link` by searching matching project names across teams by default, with clearer linking choices when multiple matches are found. ([#15400](https://github.com/vercel/vercel/pull/15400))
+
+- Updated dependencies [[`a50d9615ea546050b9f37dc7e5b4a81228987eef`](https://github.com/vercel/vercel/commit/a50d9615ea546050b9f37dc7e5b4a81228987eef), [`aa3ad226ef7b4ab98ef97e15f81c91f4f7c527e9`](https://github.com/vercel/vercel/commit/aa3ad226ef7b4ab98ef97e15f81c91f4f7c527e9)]:
+  - @vercel/next@4.16.5
+  - @vercel/node@5.7.0
+  - @vercel/elysia@0.1.58
+  - @vercel/express@0.1.68
+  - @vercel/fastify@0.1.61
+  - @vercel/h3@0.1.67
+  - @vercel/hono@0.2.61
+  - @vercel/koa@0.1.41
+  - @vercel/nestjs@0.2.62
+
+## 50.38.2
+
+### Patch Changes
+
+- Start user fetch earlier ([#15760](https://github.com/vercel/vercel/pull/15760))
+
+- Fix update checker running after `vercel build` on Vercel by reading env vars before CLI internals can unset them ([#15804](https://github.com/vercel/vercel/pull/15804))
+
+- Updated dependencies [[`c98a02d87276f41b1580b78d37f9f671fd9d1f12`](https://github.com/vercel/vercel/commit/c98a02d87276f41b1580b78d37f9f671fd9d1f12)]:
+  - @vercel/build-utils@13.12.2
+  - @vercel/backends@0.0.55
+  - @vercel/elysia@0.1.57
+  - @vercel/express@0.1.67
+  - @vercel/fastify@0.1.60
+  - @vercel/go@3.4.7
+  - @vercel/h3@0.1.66
+  - @vercel/hono@0.2.60
+  - @vercel/hydrogen@1.3.6
+  - @vercel/koa@0.1.40
+  - @vercel/nestjs@0.2.61
+  - @vercel/next@4.16.4
+  - @vercel/node@5.6.24
+  - @vercel/python@6.29.0
+  - @vercel/redwood@2.4.12
+  - @vercel/remix-builder@5.7.2
+  - @vercel/ruby@2.3.2
+  - @vercel/rust@1.0.6
+  - @vercel/static-build@2.9.8
+
+## 50.38.1
+
+### Patch Changes
+
+- Improve `vercel microfrontends create-group` non-interactive behavior by allowing free-tier-safe flows with explicit flags, while still blocking non-interactive execution when the action would impact billing. Add support for repeatable `--project-route=<project>=<route>` to configure non-default project routes without prompts. ([#15785](https://github.com/vercel/vercel/pull/15785))
+
+## 50.38.0
+
+### Minor Changes
+
+- Simplify and streamline python builder logic ([#15696](https://github.com/vercel/vercel/pull/15696))
+
+- [services] Check vercel.ts also in hasExperimentalServicesConfig ([#15736](https://github.com/vercel/vercel/pull/15736))
+
+- Fix django static file serving for manifest storage backends. ([#15709](https://github.com/vercel/vercel/pull/15709))
+
+### Patch Changes
+
+- Add more diagnostic trace spans to CLI build command ([#15759](https://github.com/vercel/vercel/pull/15759))
+
+- Emit Claude Code plugin hint to stderr when running inside Claude Code ([#15728](https://github.com/vercel/vercel/pull/15728))
+
+- Add routing rules reference to the Vercel CLI skill ([#15774](https://github.com/vercel/vercel/pull/15774))
+
+- Include context information during `vc ls` ([#15758](https://github.com/vercel/vercel/pull/15758))
+
+- Suppress warning message about implicit `public/**/*` builders not matching ([#15771](https://github.com/vercel/vercel/pull/15771))
+
+- Remove storybook detect-projects test referencing deleted example ([#15796](https://github.com/vercel/vercel/pull/15796))
+
+- Add `--group-by project` and `--group-by region` flags to `vc usage` for grouping billing charges by project or region ([#15777](https://github.com/vercel/vercel/pull/15777))
+
+- Updated dependencies [[`f912eef614731a75ecdca3bee159cc59abd4c58e`](https://github.com/vercel/vercel/commit/f912eef614731a75ecdca3bee159cc59abd4c58e), [`6c107f8ea8e84462f2b6ea8c9d548ef650cb458a`](https://github.com/vercel/vercel/commit/6c107f8ea8e84462f2b6ea8c9d548ef650cb458a), [`92c858272614b7964705991ba93f171a2b120921`](https://github.com/vercel/vercel/commit/92c858272614b7964705991ba93f171a2b120921), [`e37942b8fff0fec42afdf5989d0c4a80c36e7363`](https://github.com/vercel/vercel/commit/e37942b8fff0fec42afdf5989d0c4a80c36e7363), [`aed1ef68d1866cce0f4cf8486877e111681b2b63`](https://github.com/vercel/vercel/commit/aed1ef68d1866cce0f4cf8486877e111681b2b63), [`2b7c95c3fc06631b88e70ce6f9ddf9db59ae5692`](https://github.com/vercel/vercel/commit/2b7c95c3fc06631b88e70ce6f9ddf9db59ae5692), [`812fbfcbaadd3e7e00cee6a44a9fba442d9b501f`](https://github.com/vercel/vercel/commit/812fbfcbaadd3e7e00cee6a44a9fba442d9b501f), [`0e866b330427c95429881314b20649c2f06b4f36`](https://github.com/vercel/vercel/commit/0e866b330427c95429881314b20649c2f06b4f36), [`6cb5c6e1216d7a0dbaa6f740875a36f1b7166900`](https://github.com/vercel/vercel/commit/6cb5c6e1216d7a0dbaa6f740875a36f1b7166900), [`af261d25a6986785359d151d636c55fabb4c8b47`](https://github.com/vercel/vercel/commit/af261d25a6986785359d151d636c55fabb4c8b47)]:
+  - @vercel/python@6.29.0
+  - @vercel/go@3.4.7
+  - @vercel/next@4.16.4
+  - @vercel/build-utils@13.12.1
+  - @vercel/rust@1.0.6
+  - @vercel/static-build@2.9.7
+  - @vercel/backends@0.0.54
+  - @vercel/elysia@0.1.56
+  - @vercel/express@0.1.66
+  - @vercel/fastify@0.1.59
+  - @vercel/h3@0.1.65
+  - @vercel/hono@0.2.59
+  - @vercel/hydrogen@1.3.6
+  - @vercel/koa@0.1.39
+  - @vercel/nestjs@0.2.60
+  - @vercel/node@5.6.23
+  - @vercel/redwood@2.4.12
+  - @vercel/remix-builder@5.7.2
+  - @vercel/ruby@2.3.2
+
+## 50.37.3
+
+### Patch Changes
+
+- Improve plugin install flow: handle Ctrl+C to cancel install, only install for detected agent harness, add description before plugin prompt, and remove CLAUDE.md/AGENTS.md prompt from link/login flows. ([#15733](https://github.com/vercel/vercel/pull/15733))
+
+## 50.37.2
+
+### Patch Changes
+
+- Fix `vercel flags` environment details output to show weighted split variants as normalized percentages in rule and default summaries. ([#15659](https://github.com/vercel/vercel/pull/15659))
+
+- Updated dependencies [[`3427149c3751192b54bb4fad9d3b50f171a28666`](https://github.com/vercel/vercel/commit/3427149c3751192b54bb4fad9d3b50f171a28666), [`9a7d4c509f56b5efdfc8b9e72e76fa69fc21e545`](https://github.com/vercel/vercel/commit/9a7d4c509f56b5efdfc8b9e72e76fa69fc21e545)]:
+  - @vercel/build-utils@13.12.0
+  - @vercel/backends@0.0.53
+  - @vercel/elysia@0.1.55
+  - @vercel/express@0.1.65
+  - @vercel/fastify@0.1.58
+  - @vercel/go@3.4.6
+  - @vercel/h3@0.1.64
+  - @vercel/hono@0.2.58
+  - @vercel/hydrogen@1.3.6
+  - @vercel/koa@0.1.38
+  - @vercel/nestjs@0.2.59
+  - @vercel/next@4.16.3
+  - @vercel/node@5.6.22
+  - @vercel/python@6.28.0
+  - @vercel/redwood@2.4.12
+  - @vercel/remix-builder@5.7.2
+  - @vercel/ruby@2.3.2
+  - @vercel/rust@1.0.5
+  - @vercel/static-build@2.9.6
+
+## 50.37.1
+
+### Patch Changes
+
+- Improve agent plugin install flow: agents now receive structured JSON prompts for plugin installation instead of auto-approving silently. Preferences are persisted to avoid repeat prompts. On deploy, shows a non-blocking tip if the plugin is not installed. ([#15707](https://github.com/vercel/vercel/pull/15707))
+
+- Auto-install agent tooling on `vercel login`, `vercel link`, and `vercel deploy`. When a supported agent platform (Claude Code, Cursor) is detected or the user has `~/.claude`/`~/.cursor` directories, prompts to install the Vercel plugin. On `vercel link`, also prompts to add Vercel best practices to AGENTS.md/CLAUDE.md. On `vercel deploy`, shows a non-blocking tip if the plugin is not installed. User preferences are persisted to avoid repeat prompts. ([#15692](https://github.com/vercel/vercel/pull/15692))
+
+- Add --archive support to `deploy continue` command. ([#15197](https://github.com/vercel/vercel/pull/15197))
+
+- Updated dependencies [[`a54b8f246ac6b43ac8f1674093402e3fe145fd64`](https://github.com/vercel/vercel/commit/a54b8f246ac6b43ac8f1674093402e3fe145fd64)]:
+  - @vercel/build-utils@13.11.0
+  - @vercel/backends@0.0.52
+  - @vercel/elysia@0.1.54
+  - @vercel/express@0.1.64
+  - @vercel/fastify@0.1.57
+  - @vercel/go@3.4.6
+  - @vercel/h3@0.1.63
+  - @vercel/hono@0.2.57
+  - @vercel/hydrogen@1.3.6
+  - @vercel/koa@0.1.37
+  - @vercel/nestjs@0.2.58
+  - @vercel/next@4.16.3
+  - @vercel/node@5.6.21
+  - @vercel/python@6.28.0
+  - @vercel/redwood@2.4.12
+  - @vercel/remix-builder@5.7.2
+  - @vercel/ruby@2.3.2
+  - @vercel/rust@1.0.5
+  - @vercel/static-build@2.9.5
+
+## 50.37.0
+
+### Minor Changes
+
+- [services] support multiple topics for a single worker service ([#15615](https://github.com/vercel/vercel/pull/15615))
+
+- [services] support for specifying an env prefix for each service ([#15641](https://github.com/vercel/vercel/pull/15641))
+
+### Patch Changes
+
+- Add missing commands to `vercel help` output (activity, agent, alerts, buy, contract, crons, httpstat, mcp, rolling-release, skills, target, telemetry, usage) ([#15700](https://github.com/vercel/vercel/pull/15700))
+
+- fix(cli): support installation-level metadata for `integration add` ([#15444](https://github.com/vercel/vercel/pull/15444))
+
+  Integrations like Sentry have both product-level metadata (e.g. `platform`) and installation-level metadata (e.g. `name`, `region`). The CLI now:
+
+  - Shows installation-level metadata fields in `--help` output
+  - Accepts installation-level metadata keys via `-m` flags
+  - Splits metadata into product and installation buckets, sending `installationMetadata` as a separate API field
+  - Shows actionable hint when required metadata is missing on browser fallback (lists missing fields with example `-m` flags)
+  - Forwards `installationMetadata` to browser fallback URL so installation config isn't lost on redirect
+  - Logs debug warning when product and installation schemas have overlapping key names
+
+- Redirect sources now support domains ([#15670](https://github.com/vercel/vercel/pull/15670))
+
+- Improve buy command error handling: handle new API error codes (invalid_plan, already_on_plan, invalid_status, forbidden, purchase_create_hosted_failed), distinguish 402 payment failures from server errors, and auto-open billing page in TTY mode for payment-related errors. ([#15699](https://github.com/vercel/vercel/pull/15699))
+
+- Namespace diagnostics keys by builder and service workspace, and aggregate per-builder `package-manifest.json` files into a single `project-manifest.json` ([#15399](https://github.com/vercel/vercel/pull/15399))
+
+- Updated dependencies [[`69cd8ea307f507037fe735d7ba09c58fb4193e13`](https://github.com/vercel/vercel/commit/69cd8ea307f507037fe735d7ba09c58fb4193e13), [`e921c3f3f42cd436525c05627109115bcffc9f4c`](https://github.com/vercel/vercel/commit/e921c3f3f42cd436525c05627109115bcffc9f4c), [`bb98cc3b9a303b9e598c14feca5c0f36128bcf7f`](https://github.com/vercel/vercel/commit/bb98cc3b9a303b9e598c14feca5c0f36128bcf7f), [`4839214ae9cbcc95d448429bf93133e58284e03f`](https://github.com/vercel/vercel/commit/4839214ae9cbcc95d448429bf93133e58284e03f), [`ac87d5a5ef5d79b55765e094efc957de987d7ac4`](https://github.com/vercel/vercel/commit/ac87d5a5ef5d79b55765e094efc957de987d7ac4), [`ece813e0a9a75e3ad262817f00050c62f5ad67eb`](https://github.com/vercel/vercel/commit/ece813e0a9a75e3ad262817f00050c62f5ad67eb), [`d7107d025500d6be305895dfd5cd89d87e6eb9f0`](https://github.com/vercel/vercel/commit/d7107d025500d6be305895dfd5cd89d87e6eb9f0), [`25a6a2daa46baba6e8d7dec90eb49213b8150b8c`](https://github.com/vercel/vercel/commit/25a6a2daa46baba6e8d7dec90eb49213b8150b8c), [`f02b9da61d1acac5b426d8757e9bfb4ba4ffedd8`](https://github.com/vercel/vercel/commit/f02b9da61d1acac5b426d8757e9bfb4ba4ffedd8)]:
+  - @vercel/backends@0.0.51
+  - @vercel/express@0.1.63
+  - @vercel/hono@0.2.56
+  - @vercel/next@4.16.3
+  - @vercel/node@5.6.20
+  - @vercel/redwood@2.4.12
+  - @vercel/remix-builder@5.7.2
+  - @vercel/python@6.28.0
+  - @vercel/build-utils@13.10.0
+  - @vercel/elysia@0.1.53
+  - @vercel/fastify@0.1.56
+  - @vercel/h3@0.1.62
+  - @vercel/koa@0.1.36
+  - @vercel/nestjs@0.2.57
+  - @vercel/static-build@2.9.4
+  - @vercel/go@3.4.6
+  - @vercel/hydrogen@1.3.6
+  - @vercel/ruby@2.3.2
+  - @vercel/rust@1.0.5
+
+## 50.36.0
+
+### Minor Changes
+
+- Ensure django static files are copied in build output. ([#15557](https://github.com/vercel/vercel/pull/15557))
+
+- Add a new `vercel microfrontends inspect-group` subcommand to provide structured group/project metadata for automation, including JSON output and improved non-interactive agent behavior when `--group` is missing. ([#15681](https://github.com/vercel/vercel/pull/15681))
+
+### Patch Changes
+
+- Updated dependencies [[`e5564b684ee40dd60f745327ef206bbe58a5191a`](https://github.com/vercel/vercel/commit/e5564b684ee40dd60f745327ef206bbe58a5191a)]:
+  - @vercel/build-utils@13.9.0
+  - @vercel/python@6.27.0
+  - @vercel/backends@0.0.50
+  - @vercel/elysia@0.1.52
+  - @vercel/express@0.1.62
+  - @vercel/fastify@0.1.55
+  - @vercel/go@3.4.6
+  - @vercel/h3@0.1.61
+  - @vercel/hono@0.2.55
+  - @vercel/hydrogen@1.3.6
+  - @vercel/koa@0.1.35
+  - @vercel/nestjs@0.2.56
+  - @vercel/next@4.16.2
+  - @vercel/node@5.6.19
+  - @vercel/redwood@2.4.11
+  - @vercel/remix-builder@5.7.1
+  - @vercel/ruby@2.3.2
+  - @vercel/rust@1.0.5
+  - @vercel/static-build@2.9.3
+
+## 50.35.0
+
+### Minor Changes
+
+- Add CLI commands to create, delete, add to, and remove from microfrontends groups. ([#15464](https://github.com/vercel/vercel/pull/15464))
+
+### Patch Changes
+
+- Adding in non-interactive mode for deploys ([#15548](https://github.com/vercel/vercel/pull/15548))
+
+- Fix metrics output formatting for aggregation-transforming measures (`percent`, `persecond`, `unique`). The displayed unit and stat columns now reflect the effective aggregation rather than the raw measure unit — e.g. `percent` shows `%` instead of `bytes`, `persecond` appends `/s`, and `unique` hides the unit entirely. ([#15655](https://github.com/vercel/vercel/pull/15655))
+
+- Adding in non-interactive for builds ([#15547](https://github.com/vercel/vercel/pull/15547))
+
+- Fix SDK key detection for Vercel Flags to avoid false positives with third-party identifiers. Previously any `vf_` prefix matched, now only `vf_server_` and `vf_client_` prefixes match. ([#15675](https://github.com/vercel/vercel/pull/15675))
+
+- Updated dependencies [[`aa73ff858af822c4286c42299398015942ed1325`](https://github.com/vercel/vercel/commit/aa73ff858af822c4286c42299398015942ed1325), [`b9fe3dd0e9b27b40546dbd3b8951a65889245369`](https://github.com/vercel/vercel/commit/b9fe3dd0e9b27b40546dbd3b8951a65889245369)]:
+  - @vercel/python@6.26.0
+  - @vercel/build-utils@13.8.2
+  - @vercel/next@4.16.2
+  - @vercel/redwood@2.4.11
+  - @vercel/rust@1.0.5
+  - @vercel/static-build@2.9.2
+
+## 50.34.3
+
+### Patch Changes
+
+- Update CertMissing error message and type to be accurate ([#15657](https://github.com/vercel/vercel/pull/15657))
+
+- Updated `vercel metrics` to align with the observability API schema/query contract. The CLI now uses API-fetched schema metadata for validation and output, resolves project scope to canonical project IDs before querying, and documents `--project` as accepting either a project name or ID. ([#15619](https://github.com/vercel/vercel/pull/15619))
+
+- Fix telemetry, add better error handling ([#15648](https://github.com/vercel/vercel/pull/15648))
+
+- Track project_id when possible inside cli ([#15633](https://github.com/vercel/vercel/pull/15633))
+
+- Updated dependencies [[`7ae5de45a681b6b7297f38a4f8fa5a4fd394f2ea`](https://github.com/vercel/vercel/commit/7ae5de45a681b6b7297f38a4f8fa5a4fd394f2ea)]:
+  - @vercel/go@3.4.6
+
+## 50.34.2
+
+### Patch Changes
+
+- Removing non-interactive logic for login ([#15643](https://github.com/vercel/vercel/pull/15643))
+
+## 50.34.1
+
+### Patch Changes
+
+- Updated dependencies [[`bb5277ab85e41810f96d1619949d76ea5603a58f`](https://github.com/vercel/vercel/commit/bb5277ab85e41810f96d1619949d76ea5603a58f)]:
+  - @vercel/backends@0.0.49
+  - @vercel/express@0.1.61
+  - @vercel/hono@0.2.54
+  - @vercel/next@4.16.2
+  - @vercel/node@5.6.18
+  - @vercel/redwood@2.4.11
+  - @vercel/remix-builder@5.7.1
+  - @vercel/python@6.25.0
+  - @vercel/elysia@0.1.51
+  - @vercel/fastify@0.1.54
+  - @vercel/h3@0.1.60
+  - @vercel/koa@0.1.34
+  - @vercel/nestjs@0.2.55
+
+## 50.34.0
+
+### Minor Changes
+
+- Emit Vercel Flags embedded definitions by default ([#15487](https://github.com/vercel/vercel/pull/15487))
+
+  When you deploy to Vercel, the build process fetches your latest flag definitions once at build time using the Vercel CLI and bundles them into the deployment.
+
+  This used to require opt-in by setting `VERCEL_EXPERIMENTAL_EMBED_FLAG_DEFINITIONS=1`, and has now been switched to be enabled by default. You can opt out by setting `VERCEL_FLAGS_DISABLE_DEFINITION_EMBEDDING=1`.
+
+  Definitions are only fetched in case there is at least one environment variable containing a Vercel Flags SDK key.
+
+  [See docs](https://vercel.com/docs/flags/vercel-flags/sdks/core#embedded-definitions)
+
+### Patch Changes
+
+- Adding in non-interactive mode for flags ([#15539](https://github.com/vercel/vercel/pull/15539))
+
+- [services] allow services to share builder source ([#15631](https://github.com/vercel/vercel/pull/15631))
+
+- [internal] use @vercel/prepare-flags-definitions package for shared logic ([#15403](https://github.com/vercel/vercel/pull/15403))
+
+- [python] update celery worker services declaration to support broker_url="vercel://" instead of having to import from vercel.workers.celery ([#15454](https://github.com/vercel/vercel/pull/15454))
+
+- Adding in non-interactive mode for routes ([#15502](https://github.com/vercel/vercel/pull/15502))
+
+- Adding in non-interactive mode for webhooks ([#15542](https://github.com/vercel/vercel/pull/15542))
+
+- [services] prompt to auto-configure `experimentalServices` in `vercel.json` from layout during project link ([#15590](https://github.com/vercel/vercel/pull/15590))
+
+- Updated dependencies [[`761dd2d91fd2d21f5cb99ece4539c257c83ef3bf`](https://github.com/vercel/vercel/commit/761dd2d91fd2d21f5cb99ece4539c257c83ef3bf), [`f352c8ba7d2474a69a0881528290a3e767d3ba36`](https://github.com/vercel/vercel/commit/f352c8ba7d2474a69a0881528290a3e767d3ba36), [`20974b4079be958f5aa0e1b4984222815aef636d`](https://github.com/vercel/vercel/commit/20974b4079be958f5aa0e1b4984222815aef636d), [`8e8110d2eca5832e109f5efb64b192690100927d`](https://github.com/vercel/vercel/commit/8e8110d2eca5832e109f5efb64b192690100927d), [`93083875ffa19f4eca4f40a86e2fab440dc0a584`](https://github.com/vercel/vercel/commit/93083875ffa19f4eca4f40a86e2fab440dc0a584)]:
+  - @vercel/build-utils@13.8.2
+  - @vercel/python@6.25.0
+  - @vercel/backends@0.0.48
+  - @vercel/elysia@0.1.50
+  - @vercel/express@0.1.60
+  - @vercel/fastify@0.1.53
+  - @vercel/go@3.4.5
+  - @vercel/h3@0.1.59
+  - @vercel/hono@0.2.53
+  - @vercel/hydrogen@1.3.6
+  - @vercel/koa@0.1.33
+  - @vercel/nestjs@0.2.54
+  - @vercel/next@4.16.1
+  - @vercel/node@5.6.17
+  - @vercel/redwood@2.4.10
+  - @vercel/remix-builder@5.7.0
+  - @vercel/ruby@2.3.2
+  - @vercel/rust@1.0.5
+  - @vercel/static-build@2.9.2
+
+## 50.33.1
+
+### Patch Changes
+
+- Fixed example in flags disable command with --variant ([#15618](https://github.com/vercel/vercel/pull/15618))
+
+- Updated dependencies [[`485ff9cc64a894d4fff0fb49f891e0e0a21d30ee`](https://github.com/vercel/vercel/commit/485ff9cc64a894d4fff0fb49f891e0e0a21d30ee), [`db17810dd1230baf8257ab4ce8d9b9f95b333abb`](https://github.com/vercel/vercel/commit/db17810dd1230baf8257ab4ce8d9b9f95b333abb)]:
+  - @vercel/backends@0.0.47
+  - @vercel/static-build@2.9.1
+  - @vercel/express@0.1.59
+
+## 50.33.0
+
+### Minor Changes
+
+- [services] add support for background workers to vc dev ([#15434](https://github.com/vercel/vercel/pull/15434))
+
+- Add `stdin_is_tty` telemetry tracking to measure interactive vs non-interactive CLI usage ([#15574](https://github.com/vercel/vercel/pull/15574))
+
+- [services] add support for cron services to vc dev ([#15433](https://github.com/vercel/vercel/pull/15433))
+
+### Patch Changes
+
+- Auto-run login flow when AI agent is detected without credentials, instead of printing an error and exiting. The device code flow prints an auth URL, opens the browser when possible, and polls for completion. ([#15581](https://github.com/vercel/vercel/pull/15581))
+
+- Improved `vercel activity` command output formatting: added scope headers showing the team/project being queried, aligned event detail fields in expanded view, and included scope information in JSON output. ([#15520](https://github.com/vercel/vercel/pull/15520))
+
+- Preserve `--environment` selection when `integration add` falls back to the browser ([#15493](https://github.com/vercel/vercel/pull/15493))
+
+- Show availability error instead of price check error when domain unavailable ([#15563](https://github.com/vercel/vercel/pull/15563))
+
+- Fixed `--project` flag not being respected when a `repo.json` exists. Previously, running `vercel link --yes --project=example` would still prompt for project selection in monorepo setups with `repo.json`. Now the `--project` flag correctly auto-selects the matching project without interactive prompts. ([#14790](https://github.com/vercel/vercel/pull/14790))
+
+- Non-interactive for redirects ([#15450](https://github.com/vercel/vercel/pull/15450))
+
+- Adding in best practices for non-interactive mode ([#15496](https://github.com/vercel/vercel/pull/15496))
+
+- Adding in non-interactive mode for teams ([#15478](https://github.com/vercel/vercel/pull/15478))
+
+- Adding in non-interactive mode for DNS ([#15494](https://github.com/vercel/vercel/pull/15494))
+
+- [cli] Add client-side validation for `--skip-domain` flag to require `--prod` or `--target=production` ([#14650](https://github.com/vercel/vercel/pull/14650))
+
+- Updated dependencies [[`89f9c77b167bcbcd725c7f963d91f30a22127f2a`](https://github.com/vercel/vercel/commit/89f9c77b167bcbcd725c7f963d91f30a22127f2a), [`1d01a1006715435b145ba3db22421d7365bc0397`](https://github.com/vercel/vercel/commit/1d01a1006715435b145ba3db22421d7365bc0397), [`8c84d5915e5aa6e773de313b3ecb5f6685e8c077`](https://github.com/vercel/vercel/commit/8c84d5915e5aa6e773de313b3ecb5f6685e8c077), [`5badb77cae9c1ed8d1fc32a52788b8af2c36c7fa`](https://github.com/vercel/vercel/commit/5badb77cae9c1ed8d1fc32a52788b8af2c36c7fa), [`e9a791d0fa04ef58695535fa508554415137fb58`](https://github.com/vercel/vercel/commit/e9a791d0fa04ef58695535fa508554415137fb58), [`283df58cf4b75bf9cfe13958ad379149ffeb7464`](https://github.com/vercel/vercel/commit/283df58cf4b75bf9cfe13958ad379149ffeb7464)]:
+  - @vercel/python@6.24.0
+  - @vercel/static-build@2.9.1
+  - @vercel/build-utils@13.8.1
+  - @vercel/backends@0.0.46
+  - @vercel/elysia@0.1.49
+  - @vercel/express@0.1.58
+  - @vercel/fastify@0.1.52
+  - @vercel/go@3.4.5
+  - @vercel/h3@0.1.58
+  - @vercel/hono@0.2.52
+  - @vercel/hydrogen@1.3.6
+  - @vercel/koa@0.1.32
+  - @vercel/nestjs@0.2.53
+  - @vercel/next@4.16.1
+  - @vercel/node@5.6.16
+  - @vercel/redwood@2.4.10
+  - @vercel/remix-builder@5.7.0
+  - @vercel/ruby@2.3.2
+  - @vercel/rust@1.0.5
+
+## 50.32.5
+
+### Patch Changes
+
+- Add `user_id` to CLI telemetry events. ([#15504](https://github.com/vercel/vercel/pull/15504))
+
+- Output JSON to stdout when `--json` flag is used with `vercel deploy` and the deployment fails (build error, canceled, or checks failed). ([#15476](https://github.com/vercel/vercel/pull/15476))
+
+- Updated dependencies [[`494ec343e1567e65c2de4e15229f757736412ab7`](https://github.com/vercel/vercel/commit/494ec343e1567e65c2de4e15229f757736412ab7)]:
+  - @vercel/go@3.4.5
+  - @vercel/python@6.23.0
+
+## 50.32.4
+
+### Patch Changes
+
+- Show ISO timestamp instead of relative age in `vercel activity` output ([#15488](https://github.com/vercel/vercel/pull/15488))
+
+- Adding in non-interactive mode for rolling releases ([#15427](https://github.com/vercel/vercel/pull/15427))
+
+## 50.32.3
+
+### Patch Changes
+
+- Adding in noninteractive mode for login ([#15446](https://github.com/vercel/vercel/pull/15446))
+
+- adding in non-interactive mode for mcp ([#15426](https://github.com/vercel/vercel/pull/15426))
+
+- Updated dependencies [[`3af5407a5737ae431310ffd114119752fc5a2355`](https://github.com/vercel/vercel/commit/3af5407a5737ae431310ffd114119752fc5a2355), [`b22731536f46d3f617a79e4faf923431d957a277`](https://github.com/vercel/vercel/commit/b22731536f46d3f617a79e4faf923431d957a277)]:
+  - @vercel/python@6.23.0
+  - @vercel/static-build@2.9.0
+
+## 50.32.2
+
+### Patch Changes
+
+- Updated dependencies [[`3330d15d4f3ca9eaeaf6d3b9484d05780e5b9975`](https://github.com/vercel/vercel/commit/3330d15d4f3ca9eaeaf6d3b9484d05780e5b9975)]:
+  - @vercel/python@6.22.1
+
+## 50.32.1
+
+### Patch Changes
+
+- [experimental-services] build using `experimentalServices` regardless of framework setting ([#15451](https://github.com/vercel/vercel/pull/15451))
+
+- Updated dependencies []:
+  - @vercel/static-build@2.9.0
+
+## 50.32.0
+
+### Minor Changes
+
+- Send `x-ai-agent` header with the agent name on all CLI API requests when running under an AI agent. ([#15458](https://github.com/vercel/vercel/pull/15458))
+
+## 50.31.3
+
+### Patch Changes
+
+- Revert "Env pull local changes preview" ([#15460](https://github.com/vercel/vercel/pull/15460))
+
+- Updated dependencies [[`f453bdf2e22943d8d4e001ef152dd69897d8622f`](https://github.com/vercel/vercel/commit/f453bdf2e22943d8d4e001ef152dd69897d8622f)]:
+  - @vercel/detect-agent@1.2.1
+
+## 50.31.2
+
+### Patch Changes
+
+- Remove `FF_ALERTS` feature flag and make the `vc alerts` command available by default. Remove numbered list output from `vc activity` and `vc alerts` commands and normalize padding between them. ([#15438](https://github.com/vercel/vercel/pull/15438))
+
+- Introduce `vercel flags create` as the canonical command for creating feature flags while keeping `vercel flags add` working as an alias. ([#15437](https://github.com/vercel/vercel/pull/15437))
+
+- Add `vercel flags set` for changing the served variant in an environment, tighten explicit variant selection to ID-or-value-only matching, and improve boolean shortcut guidance for non-boolean flags. ([#15436](https://github.com/vercel/vercel/pull/15436))
+
+- Improve the `vercel flags` workflow with new `flags open` and `flags update` commands, richer string/number variant creation, and more detailed `flags inspect` and creation output that shows the exact variants and environment behavior. Boolean flags now default to development-only on creation, and the `enable`, `disable`, `archive`, and `rm` flows have clearer confirmations, default messages, and non-interactive guidance for scripts and agents. ([#15417](https://github.com/vercel/vercel/pull/15417))
+
+## 50.31.1
+
+### Patch Changes
+
+- [cli] Add missing help snapshot test for `integration remove` subcommand ([#15447](https://github.com/vercel/vercel/pull/15447))
+
+- Improve `vercel env pull` so local-only environment variables are preserved and planned changes are previewed before confirmation. ([#15420](https://github.com/vercel/vercel/pull/15420))
+
+- Add cleanup and new marketplace evals: resource cleanup via afterAll hooks, simplified experiment config, and three new evals (find-postgres-integration, multi-product-install, metadata-discovery) ([#15425](https://github.com/vercel/vercel/pull/15425))
+
+- Updated dependencies [[`5be46133da69676de8ae9fda71948767b945cdfc`](https://github.com/vercel/vercel/commit/5be46133da69676de8ae9fda71948767b945cdfc), [`57258b16ce76eac2b595c1bc249863feaa4587da`](https://github.com/vercel/vercel/commit/57258b16ce76eac2b595c1bc249863feaa4587da)]:
+  - @vercel/detect-agent@1.2.0
+  - @vercel/next@4.16.1
+  - @vercel/static-build@2.9.0
+
+## 50.31.0
+
+### Minor Changes
+
+- Support `maxDuration: 'max'` to allow the backend to resolve the maximum duration based on account plan type ([#15217](https://github.com/vercel/vercel/pull/15217))
+
+### Patch Changes
+
+- Updated dependencies [[`b5542a65e3f1b0e1d1a4b93b89ef7b14d1abfab6`](https://github.com/vercel/vercel/commit/b5542a65e3f1b0e1d1a4b93b89ef7b14d1abfab6), [`8a3558f680d592b4ea47ac7e48c99145d6368941`](https://github.com/vercel/vercel/commit/8a3558f680d592b4ea47ac7e48c99145d6368941)]:
+  - @vercel/build-utils@13.8.0
+  - @vercel/next@4.16.0
+  - @vercel/remix-builder@5.7.0
+  - @vercel/static-build@2.9.0
+  - @vercel/backends@0.0.45
+  - @vercel/elysia@0.1.48
+  - @vercel/express@0.1.57
+  - @vercel/fastify@0.1.51
+  - @vercel/go@3.4.4
+  - @vercel/h3@0.1.57
+  - @vercel/hono@0.2.51
+  - @vercel/hydrogen@1.3.6
+  - @vercel/koa@0.1.31
+  - @vercel/nestjs@0.2.52
+  - @vercel/node@5.6.15
+  - @vercel/python@6.22.0
+  - @vercel/redwood@2.4.10
+  - @vercel/ruby@2.3.2
+  - @vercel/rust@1.0.5
+
+## 50.30.1
+
+### Patch Changes
+
+- Detect Claude Code in `vercel agent init` and write to CLAUDE.md instead of AGENTS.md; update best practices content ([#15423](https://github.com/vercel/vercel/pull/15423))
+
+- Add a new `vc alerts` command behind `FF_ALERTS` to list observability alerts from the vercel-alerts API. ([#15389](https://github.com/vercel/vercel/pull/15389))
+
+- Updated dependencies [[`25843696c2813a62a424516b96e5977897ad2ab1`](https://github.com/vercel/vercel/commit/25843696c2813a62a424516b96e5977897ad2ab1), [`b4b3de24d2999d88944a1c5d16f9d54887ef5929`](https://github.com/vercel/vercel/commit/b4b3de24d2999d88944a1c5d16f9d54887ef5929)]:
+  - @vercel/python@6.22.0
+  - @vercel/go@3.4.4
+  - @vercel/build-utils@13.7.2
+  - @vercel/backends@0.0.44
+  - @vercel/elysia@0.1.47
+  - @vercel/express@0.1.56
+  - @vercel/fastify@0.1.50
+  - @vercel/h3@0.1.56
+  - @vercel/hono@0.2.50
+  - @vercel/hydrogen@1.3.5
+  - @vercel/koa@0.1.30
+  - @vercel/nestjs@0.2.51
+  - @vercel/next@4.15.42
+  - @vercel/node@5.6.14
+  - @vercel/redwood@2.4.9
+  - @vercel/remix-builder@5.6.0
+  - @vercel/ruby@2.3.2
+  - @vercel/rust@1.0.5
+  - @vercel/static-build@2.8.48
+
+## 50.30.0
+
+### Minor Changes
+
+- Add `vercel crons` command with `ls`, `run`, and `add` subcommands for managing cron jobs ([#15408](https://github.com/vercel/vercel/pull/15408))
+
+### Patch Changes
+
+- Add `vercel skills` command with auto-detection and search ([#15357](https://github.com/vercel/vercel/pull/15357))
+
+- [services] adds support for subdomai configuration in experimentalServices ([#15401](https://github.com/vercel/vercel/pull/15401))
+
+- Updated dependencies [[`768300b7bfb247613908984d8d86974434ee5473`](https://github.com/vercel/vercel/commit/768300b7bfb247613908984d8d86974434ee5473)]:
+  - @vercel/build-utils@13.7.1
+  - @vercel/backends@0.0.43
+  - @vercel/elysia@0.1.46
+  - @vercel/express@0.1.55
+  - @vercel/fastify@0.1.49
+  - @vercel/go@3.4.3
+  - @vercel/h3@0.1.55
+  - @vercel/hono@0.2.49
+  - @vercel/hydrogen@1.3.5
+  - @vercel/koa@0.1.29
+  - @vercel/nestjs@0.2.50
+  - @vercel/next@4.15.42
+  - @vercel/node@5.6.13
+  - @vercel/python@6.21.0
+  - @vercel/redwood@2.4.9
+  - @vercel/remix-builder@5.6.0
+  - @vercel/ruby@2.3.2
+  - @vercel/rust@1.0.5
+  - @vercel/static-build@2.8.47
+
+## 50.29.0
+
+### Minor Changes
+
+- Add interactive mode to `webhooks create` and change warning prefix from `WARN!` to `WARNING!` ([#15406](https://github.com/vercel/vercel/pull/15406))
+
+### Patch Changes
+
+- Updated dependencies [[`32e8ba5f593fdeddeb63d241d7806d6c12fffe76`](https://github.com/vercel/vercel/commit/32e8ba5f593fdeddeb63d241d7806d6c12fffe76), [`83e804013528fc54de31082960ae31f58339bd71`](https://github.com/vercel/vercel/commit/83e804013528fc54de31082960ae31f58339bd71), [`0f1fa86770a35d0192d64d36cb46d932e1d2a12a`](https://github.com/vercel/vercel/commit/0f1fa86770a35d0192d64d36cb46d932e1d2a12a), [`813f3d324404237e3806530b465625ea33816370`](https://github.com/vercel/vercel/commit/813f3d324404237e3806530b465625ea33816370), [`0a78892b1e155eb4b587a8b84c4e6814f750697f`](https://github.com/vercel/vercel/commit/0a78892b1e155eb4b587a8b84c4e6814f750697f), [`9a973a704b7350e19d0c3ac8e110ce55eea795b2`](https://github.com/vercel/vercel/commit/9a973a704b7350e19d0c3ac8e110ce55eea795b2), [`c6f5ac6c11fb7f431b5fb634a7fb321b10c829af`](https://github.com/vercel/vercel/commit/c6f5ac6c11fb7f431b5fb634a7fb321b10c829af), [`921314f958c4ec85adb09e020310a5becb7f866c`](https://github.com/vercel/vercel/commit/921314f958c4ec85adb09e020310a5becb7f866c)]:
+  - @vercel/next@4.15.42
+  - @vercel/build-utils@13.7.0
+  - @vercel/python@6.21.0
+  - @vercel/detect-agent@1.1.1
+  - @vercel/static-build@2.8.46
+  - @vercel/backends@0.0.42
+  - @vercel/elysia@0.1.45
+  - @vercel/express@0.1.54
+  - @vercel/fastify@0.1.48
+  - @vercel/go@3.4.3
+  - @vercel/h3@0.1.54
+  - @vercel/hono@0.2.48
+  - @vercel/hydrogen@1.3.5
+  - @vercel/koa@0.1.28
+  - @vercel/nestjs@0.2.49
+  - @vercel/node@5.6.12
+  - @vercel/redwood@2.4.9
+  - @vercel/remix-builder@5.6.0
+  - @vercel/ruby@2.3.2
+  - @vercel/rust@1.0.5
+
+## 50.28.0
+
+### Minor Changes
+
+- Add --json flag to `vc deploy init` for machine-readable output ([#15390](https://github.com/vercel/vercel/pull/15390))
+
+- Add `vercel routes` command for managing project-level routing rules. Supports creating, editing, deleting, enabling/disabling, reordering, and publishing routes with rewrites, redirects, status codes, response headers, and request transforms. Includes AI-powered route generation via `--ai` flag. ([#15349](https://github.com/vercel/vercel/pull/15349))
+
+### Patch Changes
+
+- Enable execution of `vercel flags prepare` without requiring authentication ([#15300](https://github.com/vercel/vercel/pull/15300))
+
+- [services] adds support for python cron worker services ([#15175](https://github.com/vercel/vercel/pull/15175))
+
+- Updated dependencies [[`d1c4d7052033aaf7b3f2044aa24484cb143b9348`](https://github.com/vercel/vercel/commit/d1c4d7052033aaf7b3f2044aa24484cb143b9348)]:
+  - @vercel/python@6.20.2
+  - @vercel/build-utils@13.6.3
+  - @vercel/static-build@2.8.45
+  - @vercel/backends@0.0.41
+  - @vercel/elysia@0.1.44
+  - @vercel/express@0.1.53
+  - @vercel/fastify@0.1.47
+  - @vercel/go@3.4.3
+  - @vercel/h3@0.1.53
+  - @vercel/hono@0.2.47
+  - @vercel/hydrogen@1.3.5
+  - @vercel/koa@0.1.27
+  - @vercel/nestjs@0.2.48
+  - @vercel/next@4.15.41
+  - @vercel/node@5.6.11
+  - @vercel/redwood@2.4.9
+  - @vercel/remix-builder@5.6.0
+  - @vercel/ruby@2.3.2
+  - @vercel/rust@1.0.5
+
+## 50.27.1
+
+### Patch Changes
+
+- Updated dependencies [[`3ab1ffcd41f7359f3955954abb59a9c157df0b07`](https://github.com/vercel/vercel/commit/3ab1ffcd41f7359f3955954abb59a9c157df0b07)]:
+  - @vercel/next@4.15.41
+
+## 50.27.0
+
+### Minor Changes
+
+- Add `vercel agent init` command that generates an AGENTS.md file with Vercel deployment best practices ([#15356](https://github.com/vercel/vercel/pull/15356))
+
+### Patch Changes
+
+- print vercel CLI version on VERCEL=1 ([#15359](https://github.com/vercel/vercel/pull/15359))
+
+- Updated dependencies [[`62700e88d527e3a3be2b317b805f778f3bf97f86`](https://github.com/vercel/vercel/commit/62700e88d527e3a3be2b317b805f778f3bf97f86)]:
+  - @vercel/next@4.15.40
+
+## 50.26.1
+
+### Patch Changes
+
+- Fix `vc deploy --json` to output only valid JSON to stdout when piped ([#15363](https://github.com/vercel/vercel/pull/15363))
+
+- [fs-detectors] skip auto-detection for root-only projects ([#15364](https://github.com/vercel/vercel/pull/15364))
+
+- Add background worker service support for Python (Dramatiq/Celery) and propagate vercel headers context to worker handlers. ([#15361](https://github.com/vercel/vercel/pull/15361))
+
+- Updated dependencies [[`6d7057b5d55915ee0317355d7a6e022bce57d314`](https://github.com/vercel/vercel/commit/6d7057b5d55915ee0317355d7a6e022bce57d314), [`456ebe9189077b7ac3fb599f348f6d04eea654b7`](https://github.com/vercel/vercel/commit/456ebe9189077b7ac3fb599f348f6d04eea654b7)]:
+  - @vercel/next@4.15.39
+  - @vercel/python@6.20.1
+  - @vercel/static-build@2.8.44
+
+## 50.26.0
+
+### Minor Changes
+
+- feat(cli): add `activity` command to list activity events ([#15307](https://github.com/vercel/vercel/pull/15307))
+
+  - New `vercel activity` command to list user/team activity events from the Events API
+  - Supports filtering by event type (`--type`), time range (`--since`/`--until`), and project (`--project`)
+  - `activity types` subcommand to list available event types
+  - Auto-scopes to linked project; `--all` for team-wide events
+  - Pagination via `--limit`/`--next` and JSON output via `--format json`
+
+- Add --json flag to `vc deploy` for machine-readable output ([#15355](https://github.com/vercel/vercel/pull/15355))
+
+### Patch Changes
+
+- evals for auth ([#15310](https://github.com/vercel/vercel/pull/15310))
+
+- Updated dependencies [[`5a29c7d82b8db011197381c14e430cb9a91ed1b1`](https://github.com/vercel/vercel/commit/5a29c7d82b8db011197381c14e430cb9a91ed1b1), [`2bff98408f54b33f9acd849370d676cde0042096`](https://github.com/vercel/vercel/commit/2bff98408f54b33f9acd849370d676cde0042096), [`c596221d9e0828ba96d598232bb59235f7576568`](https://github.com/vercel/vercel/commit/c596221d9e0828ba96d598232bb59235f7576568), [`200cd3840b3ef953941cfffd4969a3fd44178938`](https://github.com/vercel/vercel/commit/200cd3840b3ef953941cfffd4969a3fd44178938)]:
+  - @vercel/next@4.15.38
+  - @vercel/python@6.20.0
+  - @vercel/static-build@2.8.44
+  - @vercel/build-utils@13.6.2
+  - @vercel/redwood@2.4.9
+  - @vercel/rust@1.0.5
+
+## 50.25.6
+
+### Patch Changes
+
+- Updated dependencies [[`9721f4948a72d273f792c54f5393aa50ac279209`](https://github.com/vercel/vercel/commit/9721f4948a72d273f792c54f5393aa50ac279209)]:
+  - @vercel/build-utils@13.6.2
+  - @vercel/next@4.15.37
+  - @vercel/backends@0.0.40
+  - @vercel/elysia@0.1.43
+  - @vercel/express@0.1.52
+  - @vercel/fastify@0.1.46
+  - @vercel/go@3.4.3
+  - @vercel/h3@0.1.52
+  - @vercel/hono@0.2.46
+  - @vercel/hydrogen@1.3.5
+  - @vercel/koa@0.1.26
+  - @vercel/nestjs@0.2.47
+  - @vercel/node@5.6.10
+  - @vercel/python@6.19.0
+  - @vercel/redwood@2.4.9
+  - @vercel/remix-builder@5.6.0
+  - @vercel/ruby@2.3.2
+  - @vercel/rust@1.0.5
+  - @vercel/static-build@2.8.44
+
+## 50.25.5
+
+### Patch Changes
+
+- Add a `--search` option to `vc logs` that passes the raw query through to the request logs API, while preserving existing `--query` behavior. ([#15302](https://github.com/vercel/vercel/pull/15302))
+
+- Updated dependencies []:
+  - @vercel/static-build@2.8.43
+
+## 50.25.4
+
+### Patch Changes
+
+- feat(cli): add optional search query to `vercel integration discover` ([#15320](https://github.com/vercel/vercel/pull/15320))
+
+- [python] setup logging in `vc_init_dev` to route records with level <= `WARNING` to `stdout` and with level >= `ERROR` to `stderr`. ([#15328](https://github.com/vercel/vercel/pull/15328))
+
+- Enable service route-prefix auto stripping for explicitly configured ([#15327](https://github.com/vercel/vercel/pull/15327))
+  multi-service `vercel.json` setups across runtimes, matching generated-prefix
+  behavior during build and dev orchestration.
+
+- [services] fix multiple route-owning builders writing to build output API ([#15323](https://github.com/vercel/vercel/pull/15323))
+
+  Fix `vc build` services route merging when multiple builders return `buildOutputPath`.
+  Instead of reusing a single merged `.vercel/output/config.json` for the first matching build, `vc build` now reads each builder's own `config.json`,
+  scopes those routes to service ownership, and merges routes/overrides per builder. This prevents sibling service routes from being dropped and restores expected app-level 404 behavior.
+
+- Updated dependencies [[`b5483654e4c8a6c1128d2afd0eca2e081ff70403`](https://github.com/vercel/vercel/commit/b5483654e4c8a6c1128d2afd0eca2e081ff70403)]:
+  - @vercel/python@6.19.0
+
+## 50.25.3
+
+### Patch Changes
+
+- feat(cli): skip inline terms for integrations requiring browser install ([#15308](https://github.com/vercel/vercel/pull/15308))
+
+- evals outputs ([#15312](https://github.com/vercel/vercel/pull/15312))
+
+- Updated dependencies [[`61104b4d6f28ac8b84a237a2dfd4c16b9cc1fcac`](https://github.com/vercel/vercel/commit/61104b4d6f28ac8b84a237a2dfd4c16b9cc1fcac)]:
+  - @vercel/python@6.18.1
+
+## 50.25.2
+
+### Patch Changes
+
+- cli(metrics): align schema with query engine and rename incomingRequest to edgeRequest ([#15301](https://github.com/vercel/vercel/pull/15301))
+
+  - Remove `tokens` unit type (now `count`), drop `unique` aggregation, add `p50`
+  - Remove unsupported events: `analyticsEvent`, `analyticsPageview`, `blobStoreState`, `dataCacheState`
+  - Update dimensions, measures, and `filterOnly` flags across all events
+  - Rename `incomingRequest` to `edgeRequest` with query engine aliasing for agent understanding
+
+- Adding in skills matrix for evals ([#15280](https://github.com/vercel/vercel/pull/15280))
+
+- Ellipsize long group values in `metrics` text output to prevent excessively wide tables. Values exceeding 60 characters are truncated by keeping equal start/end portions with `…` in the middle. ([#15279](https://github.com/vercel/vercel/pull/15279))
+
+- fix(cli): stop showing region as required in help since server handles region selection ([#15194](https://github.com/vercel/vercel/pull/15194))
+
+- Remove `--order-by` flag from `metrics query` command; ordering is handled server-side. ([#15281](https://github.com/vercel/vercel/pull/15281))
+
+- fix: dev server OOM issues for large functions ([#15260](https://github.com/vercel/vercel/pull/15260))
+
+- Updated dependencies []:
+  - @vercel/build-utils@13.6.1
+  - @vercel/next@4.15.36
+  - @vercel/redwood@2.4.9
+  - @vercel/rust@1.0.5
+  - @vercel/static-build@2.8.43
+
+## 50.25.1
+
+### Patch Changes
+
+- Add `buy` command for purchasing Vercel products (credits, addons, pro, v0, domains) ([#15038](https://github.com/vercel/vercel/pull/15038))
+
+- Suggest `vercel integration guide` after successful provisioning, use deeplink format for dashboard URL, and mention `integration discover` in `integration guide` help ([#15293](https://github.com/vercel/vercel/pull/15293))
+
+- Support add-on purchasing in `vercel buy` CLI ([#15172](https://github.com/vercel/vercel/pull/15172))
+
+- Add `vercel buy pro` subcommand for purchasing Pro plan ([#15221](https://github.com/vercel/vercel/pull/15221))
+
+- fix(cli): improve agent discoverability of integration-resource commands ([#15275](https://github.com/vercel/vercel/pull/15275))
+
+  - Add `integration-resource` cross-references in `integration --help` and `integration remove --help`
+  - Emit structured JSON with resource names and next commands when `integration remove --format=json --yes` fails because resources still exist
+
+- Updated dependencies [[`3880e1028840aae6883211b79a1a30c7432580f3`](https://github.com/vercel/vercel/commit/3880e1028840aae6883211b79a1a30c7432580f3), [`90238372d2bd0df7b9c0b31331106c242179d526`](https://github.com/vercel/vercel/commit/90238372d2bd0df7b9c0b31331106c242179d526), [`0d4117901cfc24e19e4f81a860d7565f6aecafa6`](https://github.com/vercel/vercel/commit/0d4117901cfc24e19e4f81a860d7565f6aecafa6)]:
+  - @vercel/python@6.18.0
+  - @vercel/next@4.15.36
+  - @vercel/build-utils@13.6.1
+  - @vercel/backends@0.0.39
+  - @vercel/elysia@0.1.42
+  - @vercel/express@0.1.51
+  - @vercel/fastify@0.1.45
+  - @vercel/go@3.4.3
+  - @vercel/h3@0.1.51
+  - @vercel/hono@0.2.45
+  - @vercel/hydrogen@1.3.5
+  - @vercel/koa@0.1.25
+  - @vercel/nestjs@0.2.46
+  - @vercel/node@5.6.9
+  - @vercel/redwood@2.4.9
+  - @vercel/remix-builder@5.6.0
+  - @vercel/ruby@2.3.2
+  - @vercel/rust@1.0.5
+  - @vercel/static-build@2.8.43
+
+## 50.25.0
+
+### Minor Changes
+
+- Launch auto-provision flow as default for `vercel integration add` and `vercel install`. The `FF_AUTO_PROVISION_INSTALL` flag is now a kill-switch (`=0` to revert) instead of opt-in. ([#15265](https://github.com/vercel/vercel/pull/15265))
+
+- [services] make the `experimentalServices` config the primary marker for the services flow ([#15246](https://github.com/vercel/vercel/pull/15246))
+
+- Added command to fetch a development OIDC token ([#14785](https://github.com/vercel/vercel/pull/14785))
+
+### Patch Changes
+
+- Rename fetch to nodeFetch when importing from node-fetch ([#15232](https://github.com/vercel/vercel/pull/15232))
+
+- Add setup/destroy hooks and context handling to the CLI eval runner. ([#15247](https://github.com/vercel/vercel/pull/15247))
+
+- [services] fix dev server hang when FastAPI CLI is used ([#15274](https://github.com/vercel/vercel/pull/15274))
+
+- Fix `--help` flag to return exit code 0 instead of 2 for the `metrics` command, aligning with standard CLI conventions. ([#15259](https://github.com/vercel/vercel/pull/15259))
+
+- Rename fetch to nodeFetch in cases where it is an import from node-fetch ([#15234](https://github.com/vercel/vercel/pull/15234))
+
+- Change `vercel metrics` default query output from CSV to rich text with metadata, summary tables, sparklines, and optional raw values via `--raw-values`. ([#15178](https://github.com/vercel/vercel/pull/15178))
+
+- Removes the legacy SSO redirect flow code. ([#15228](https://github.com/vercel/vercel/pull/15228))
+
+- Updated dependencies [[`ad86425c3e0a1d1738cef8464dd767dd1d9a0e9a`](https://github.com/vercel/vercel/commit/ad86425c3e0a1d1738cef8464dd767dd1d9a0e9a), [`3d872692c601abeec98743d2af3a3ea19587e799`](https://github.com/vercel/vercel/commit/3d872692c601abeec98743d2af3a3ea19587e799), [`d9e3a570a9c6ee47afa3446ec611b6a9e4b4feec`](https://github.com/vercel/vercel/commit/d9e3a570a9c6ee47afa3446ec611b6a9e4b4feec), [`2db57840669ca2fa8dadf492bd38c21bf9e3cfeb`](https://github.com/vercel/vercel/commit/2db57840669ca2fa8dadf492bd38c21bf9e3cfeb), [`0d42acfd22e51e51cb0e4a5aea7c19f3886ed496`](https://github.com/vercel/vercel/commit/0d42acfd22e51e51cb0e4a5aea7c19f3886ed496), [`8404a7315260851495d708f1c7c6e870d7ffa007`](https://github.com/vercel/vercel/commit/8404a7315260851495d708f1c7c6e870d7ffa007), [`fbf649223e6fa8b509295a85784347dcebd4a0b0`](https://github.com/vercel/vercel/commit/fbf649223e6fa8b509295a85784347dcebd4a0b0), [`b3a96cc4f276ce8d16c695eabd499d3a17e73aa8`](https://github.com/vercel/vercel/commit/b3a96cc4f276ce8d16c695eabd499d3a17e73aa8), [`9a6358529f0737415110cf03d626dc9ee8e99126`](https://github.com/vercel/vercel/commit/9a6358529f0737415110cf03d626dc9ee8e99126)]:
+  - @vercel/remix-builder@5.6.0
+  - @vercel/python@6.17.0
+  - @vercel/next@4.15.35
+  - @vercel/node@5.6.8
+  - @vercel/static-build@2.8.42
+  - @vercel/build-utils@13.6.0
+  - @vercel/go@3.4.3
+  - @vercel/backends@0.0.38
+  - @vercel/elysia@0.1.41
+  - @vercel/express@0.1.50
+  - @vercel/fastify@0.1.44
+  - @vercel/h3@0.1.50
+  - @vercel/hono@0.2.44
+  - @vercel/koa@0.1.24
+  - @vercel/nestjs@0.2.45
+  - @vercel/redwood@2.4.9
+  - @vercel/rust@1.0.5
+  - @vercel/hydrogen@1.3.5
+  - @vercel/ruby@2.3.2
+
+## 50.24.0
+
+### Minor Changes
+
+- [dev] skip project setup for `vc dev` if `--local` or `-L` flag is passed. ([#15239](https://github.com/vercel/vercel/pull/15239))
+
+### Patch Changes
+
+- feat(cli): add --format=json support to `integration add` (auto-provision) ([#15250](https://github.com/vercel/vercel/pull/15250))
+
+- Updated dependencies []:
+  - @vercel/build-utils@13.5.0
+  - @vercel/next@4.15.34
+  - @vercel/redwood@2.4.9
+  - @vercel/rust@1.0.5
+  - @vercel/static-build@2.8.41
+
+## 50.23.2
+
+### Patch Changes
+
+- feat(cli): open browser for terms acceptance in non-interactive environments ([#15220](https://github.com/vercel/vercel/pull/15220))
+
+- Updated dependencies [[`bd1d00198ef056743ea0d90d53a37f597b950836`](https://github.com/vercel/vercel/commit/bd1d00198ef056743ea0d90d53a37f597b950836), [`392771190fae24857baf0035b2814a2d8ab84130`](https://github.com/vercel/vercel/commit/392771190fae24857baf0035b2814a2d8ab84130)]:
+  - @vercel/python@6.16.1
+  - @vercel/next@4.15.34
+
+## 50.23.1
+
+### Patch Changes
+
+- feat(cli): add `--installation-id` flag for `integration add` / `install` to handle multiple installations ([#15200](https://github.com/vercel/vercel/pull/15200))
+
+- Updated dependencies [[`e5492c2de9d5381f1feb185c26b37061f26519d5`](https://github.com/vercel/vercel/commit/e5492c2de9d5381f1feb185c26b37061f26519d5)]:
+  - @vercel/next@4.15.33
+
+## 50.23.0
+
+### Minor Changes
+
+- [dev] allow to skip authentication and project linking for `vc dev` by setting `VERCEL_EXPERIMENTAL_DEV_SKIP_LINK` env var. ([#15122](https://github.com/vercel/vercel/pull/15122))
+
+- [services] detect project root to prevent accidental setup of a service as a standalone project. ([#15187](https://github.com/vercel/vercel/pull/15187))
+
+### Patch Changes
+
+- Fix re-authentication for teams with missing scope to use the device code flow instead of the deprecated SSO redirect flow. ([#15074](https://github.com/vercel/vercel/pull/15074))
+
+- Add CLI eval for vc env command ([#15118](https://github.com/vercel/vercel/pull/15118))
+
+- Updated dependencies []:
+  - @vercel/node@5.6.7
+
+## 50.22.3
+
+### Patch Changes
+
+- feat(cli): add `--prefix` flag to `integration add` for env var namespacing ([#15192](https://github.com/vercel/vercel/pull/15192))
+
+- Pass v0 meta to project creation ([#15098](https://github.com/vercel/vercel/pull/15098))
+
+## 50.22.2
+
+### Patch Changes
+
+- fix(cli): add `integration-resource` command to `vc --help` output ([#15191](https://github.com/vercel/vercel/pull/15191))
+
+- feat(cli): add marketplace funnel telemetry to integration add command ([#15065](https://github.com/vercel/vercel/pull/15065))
+
+- fix(cli): send bare array for installation threshold batch endpoint ([#15154](https://github.com/vercel/vercel/pull/15154))
+
+- fix(cli): filter empty strings from trailing commas in array metadata ([#15163](https://github.com/vercel/vercel/pull/15163))
+
+- fix(cli): add non-TTY guards and fix exit codes in marketplace commands ([#15158](https://github.com/vercel/vercel/pull/15158))
+
+- fix(cli): show actionable error when removing integration with existing resources ([#15164](https://github.com/vercel/vercel/pull/15164))
+
+- fix(cli): fix create-threshold help example, decimal parsing, exit code, error message, and balance mapping ([#15154](https://github.com/vercel/vercel/pull/15154))
+
+- Adding in a non-interactive flag for env command ([#14912](https://github.com/vercel/vercel/pull/14912))
+
+- fix(cli): unify teamId scoping for all marketplace integration commands ([#15183](https://github.com/vercel/vercel/pull/15183))
+
+- Updated dependencies [[`7d2603c0bf55d61dbde8a35c62ea12c598b1a7ec`](https://github.com/vercel/vercel/commit/7d2603c0bf55d61dbde8a35c62ea12c598b1a7ec), [`3c4aff4acbfa603705556d145236b8a9ef106331`](https://github.com/vercel/vercel/commit/3c4aff4acbfa603705556d145236b8a9ef106331), [`984d44875f959058f5d13fea27373785b1d66b6f`](https://github.com/vercel/vercel/commit/984d44875f959058f5d13fea27373785b1d66b6f), [`88817b1ca96e2c04c0a965cc226d47a58b5cab6b`](https://github.com/vercel/vercel/commit/88817b1ca96e2c04c0a965cc226d47a58b5cab6b), [`cb79f6f8080fddd3673a8911566085e0265b060b`](https://github.com/vercel/vercel/commit/cb79f6f8080fddd3673a8911566085e0265b060b)]:
+  - @vercel/go@3.4.2
+  - @vercel/next@4.15.32
+  - @vercel/python@6.16.0
+  - @vercel/ruby@2.3.2
+  - @vercel/build-utils@13.5.0
+  - @vercel/static-build@2.8.41
+  - @vercel/backends@0.0.37
+  - @vercel/elysia@0.1.40
+  - @vercel/express@0.1.49
+  - @vercel/fastify@0.1.43
+  - @vercel/h3@0.1.49
+  - @vercel/hono@0.2.43
+  - @vercel/hydrogen@1.3.5
+  - @vercel/koa@0.1.23
+  - @vercel/nestjs@0.2.44
+  - @vercel/node@5.6.7
+  - @vercel/redwood@2.4.9
+  - @vercel/remix-builder@5.5.10
+  - @vercel/rust@1.0.5
+
+## 50.22.1
+
+### Patch Changes
+
+- fix(cli): use --format=json instead of deprecated --json in discover example ([#15159](https://github.com/vercel/vercel/pull/15159))
+
+- fix(cli): make `install --help` show same dynamic help as `integration add --help` ([#15130](https://github.com/vercel/vercel/pull/15130))
+
+- fix(cli): add missing open mock in login/future test ([#15156](https://github.com/vercel/vercel/pull/15156))
+
+- Add `--format=json` support to `integration balance`, `integration remove`, `integration-resource remove`, and `integration-resource disconnect` commands ([#15056](https://github.com/vercel/vercel/pull/15056))
+
+- feat(cli): `integration open` now supports opening resource dashboards and JSON output via `--format=json` ([#15128](https://github.com/vercel/vercel/pull/15128))
+
+- Updated dependencies [[`5825a06900224835c4beb010b01977354cad0dc3`](https://github.com/vercel/vercel/commit/5825a06900224835c4beb010b01977354cad0dc3)]:
+  - @vercel/python@6.15.1
+
+## 50.22.0
+
+### Minor Changes
+
+- feat(cli): add `vercel integration guide` command ([#15108](https://github.com/vercel/vercel/pull/15108))
+
+  Adds a new `vercel integration guide` subcommand that displays getting started guides,
+  code snippets, and resource links for marketplace integrations directly in the terminal.
+
+  Supports single-product and multi-product integrations with interactive product and
+  framework selection. Includes `--framework` flag for non-interactive framework
+  selection (useful for CI/agents). Output is raw markdown written to stdout for easy
+  piping to files or other tools.
+
+### Patch Changes
+
+- fix(cli): fix missing planId in non-subscription plan web fallback ([#15152](https://github.com/vercel/vercel/pull/15152))
+
+- [services] ([#15093](https://github.com/vercel/vercel/pull/15093))
+  - consolidate `workspace` and `entrypoint` from `experimentalServices` `vercel.json` schema
+  - make `framework` config in service optional -- infer framework from service workspace when not explicitly provided
+- Updated dependencies [[`09b3540742ac86b768de9775929fef1ef36db412`](https://github.com/vercel/vercel/commit/09b3540742ac86b768de9775929fef1ef36db412), [`fc56fb91b4dafabe0f68f86efeabbaf98b2642bc`](https://github.com/vercel/vercel/commit/fc56fb91b4dafabe0f68f86efeabbaf98b2642bc)]:
+  - @vercel/build-utils@13.4.3
+  - @vercel/python@6.15.0
+  - @vercel/backends@0.0.36
+  - @vercel/elysia@0.1.39
+  - @vercel/express@0.1.48
+  - @vercel/fastify@0.1.42
+  - @vercel/go@3.4.1
+  - @vercel/h3@0.1.48
+  - @vercel/hono@0.2.42
+  - @vercel/hydrogen@1.3.5
+  - @vercel/koa@0.1.22
+  - @vercel/nestjs@0.2.43
+  - @vercel/next@4.15.31
+  - @vercel/node@5.6.6
+  - @vercel/redwood@2.4.9
+  - @vercel/remix-builder@5.5.10
+  - @vercel/ruby@2.3.1
+  - @vercel/rust@1.0.5
+  - @vercel/static-build@2.8.40
+
+## 50.21.0
+
+### Minor Changes
+
+- Add `--all` flag to `vercel ls` command and improve behavior when not linked to a project ([#15143](https://github.com/vercel/vercel/pull/15143))
+
+  - `vercel ls` no longer requires a linked project. When not linked, it now lists all deployments across all projects in the current scope
+  - Added `--all` flag to explicitly list deployments across all projects, even when linked to a specific project
+  - Added "Project" column to the deployment table output to show which project each deployment belongs to
+  - JSON output (`--format json`) is unchanged and continues to include the `name` field for project name
+
+### Patch Changes
+
+- fix(cli): Handle SIGINT during upgrade prompt without showing a stacktrace ([#15105](https://github.com/vercel/vercel/pull/15105))
+
+- Use formatted tables for `metrics schema` output, matching the convention used by other list commands ([#15138](https://github.com/vercel/vercel/pull/15138))
+
+- Updated dependencies [[`5d1f55af04d0fdba7e7ac86f9eeda44316f54f5b`](https://github.com/vercel/vercel/commit/5d1f55af04d0fdba7e7ac86f9eeda44316f54f5b)]:
+  - @vercel/next@4.15.31
+
+## 50.20.0
+
+### Minor Changes
+
+- Add private Blob storage support: ([#15075](https://github.com/vercel/vercel/pull/15075))
+
+  - Create private stores: `vercel blob create-store my-store --access private`
+  - Upload to private stores: `vercel blob put file.txt --access private`
+  - Download blobs with the new `blob get` command: `vercel blob get file.txt --access private` (works with both public and private stores)
+  - Copy blobs: `vercel blob copy source.txt dest.txt --access private`
+  - Display access type (Public/Private) in `vercel blob store get` output
+
+  The `--access` flag defaults to `public` for backward compatibility.
+
+  Flatten blob store commands: `blob create-store`, `blob delete-store`, `blob get-store`.
+  Rename `--force` to `--allow-overwrite`.
+  Add conditional headers: `--if-match` for put/del/copy, `--if-none-match` for get.
+  Old commands and options are deprecated but still work.
+
+### Patch Changes
+
+- Remove metrics schema entries not supported by the query engine ([#15110](https://github.com/vercel/vercel/pull/15110))
+
+  Removes events (`prReview`, `prReviewModelUsage`, `reviewedPrComplete`), a measure (`coldStartDurationMs` from `functionExecution`), and several dimensions (`originHostname`, `originPath`, `originRoute` from `functionExecution`; `requestHostname` from `aiGatewayRequest`, `blobDataTransfer`, `imageTransformation`, `imageTransformationFailure`; `environment` and `projectId` from `blobDataTransfer` and `blobOperation`) that the observability query engine rejects.
+
+- Patches the experimental embedding of flag definitions. ([#15027](https://github.com/vercel/vercel/pull/15027))
+
+  The changed functionality is only enabled when the `VERCEL_EXPERIMENTAL_EMBED_FLAG_DEFINITIONS` environment variable is set. The existing `@vercel/flags-core` library is already forwards-compatible with the new format.
+
+  Adds a new `vercel flags prepare` command to prepare flag definitions for embedding. It is not necessary to run this command manually, as it is automatically invoked during the build process on Vercel. Only call this if you are building outside of Vercel.
+
+  See [https://vercel.com/docs/flags/vercel-flags/sdks/core#embedded-definitions](https://vercel.com/docs/flags/vercel-flags/sdks/core#embedded-definitions).
+
+- Updated dependencies [[`2cfc724e76a54a1b5e090266c412e7c8e353fc4a`](https://github.com/vercel/vercel/commit/2cfc724e76a54a1b5e090266c412e7c8e353fc4a), [`2cfc724e76a54a1b5e090266c412e7c8e353fc4a`](https://github.com/vercel/vercel/commit/2cfc724e76a54a1b5e090266c412e7c8e353fc4a)]:
+  - @vercel/next@4.15.30
+
+## 50.19.1
+
+### Patch Changes
+
+- Prompt for Marketplace terms inline and install before provisioning in `integration add` ([#15030](https://github.com/vercel/vercel/pull/15030))
+
+## 50.19.0
+
+### Minor Changes
+
+- Add `--environment` repeatable flag to `vercel integration add` ([#15053](https://github.com/vercel/vercel/pull/15053))
+
+  Allows specifying which environments to connect a resource to (e.g., `--environment production --environment preview`). Defaults to all three environments (production, preview, development) when not specified, preserving backward compatibility.
+
+### Patch Changes
+
+- [cli][feature-flagged] Add `metrics` command to query observability metrics for your Vercel project or team ([#15073](https://github.com/vercel/vercel/pull/15073))
+
+- Fix `vercel install` (alias `vercel i`) to forward all flags (`--name`, `--metadata`, `--plan`, `--no-connect`, `--no-env-pull`) to `integration add` and propagate the exit code ([#15049](https://github.com/vercel/vercel/pull/15049))
+
+- Refactor import-builders tests to use public API and mock install; stop exporting resolveBuilders. ([#15085](https://github.com/vercel/vercel/pull/15085))
+
+- adding an eval for non-interactive mode ([#15092](https://github.com/vercel/vercel/pull/15092))
+
+- [services] inject `VERCEL_SERVICE_ROUTE_PREFIX` env vars ([#15096](https://github.com/vercel/vercel/pull/15096))
+
+- Fix headless login browser error ([#15107](https://github.com/vercel/vercel/pull/15107))
+
+- Adding in eval for vc build ([#15112](https://github.com/vercel/vercel/pull/15112))
+
+- Updated dependencies [[`700f047501fe7b896f2af8ff2e6dcea0e014a00e`](https://github.com/vercel/vercel/commit/700f047501fe7b896f2af8ff2e6dcea0e014a00e), [`88353afe588b95709af20ba2b82ba83d8a60f90c`](https://github.com/vercel/vercel/commit/88353afe588b95709af20ba2b82ba83d8a60f90c)]:
+  - @vercel/python@6.14.1
+  - @vercel/build-utils@13.4.2
+  - @vercel/backends@0.0.35
+  - @vercel/elysia@0.1.38
+  - @vercel/express@0.1.47
+  - @vercel/fastify@0.1.41
+  - @vercel/go@3.4.1
+  - @vercel/h3@0.1.47
+  - @vercel/hono@0.2.41
+  - @vercel/hydrogen@1.3.5
+  - @vercel/koa@0.1.21
+  - @vercel/nestjs@0.2.42
+  - @vercel/next@4.15.29
+  - @vercel/node@5.6.5
+  - @vercel/redwood@2.4.9
+  - @vercel/remix-builder@5.5.10
+  - @vercel/ruby@2.3.1
+  - @vercel/rust@1.0.5
+  - @vercel/static-build@2.8.39
+
+## 50.18.2
+
+### Patch Changes
+
+- Fix `integration add` auto-provision to exit 1 when browser fallback is triggered instead of falsely reporting success. Add `.catch()` to all `open()` calls to prevent unhandled promise rejections in headless/CI environments. ([#15048](https://github.com/vercel/vercel/pull/15048))
+
+- fix(cli): validate auto-generated resource names against product-specific rules ([#15052](https://github.com/vercel/vercel/pull/15052))
+
+- Add support for `functions[*].functionFailoverRegions` in `vercel.json` and build output config generation. ([#14969](https://github.com/vercel/vercel/pull/14969))
+
+  This enables per-function failover region configuration instead of only top-level defaults for all functions.
+
+- Creating an evals directory to start adding in ai evals ([#15086](https://github.com/vercel/vercel/pull/15086))
+
+- Updated dependencies [[`55f0afe883f44c25eab02a9334b2b17b6130c140`](https://github.com/vercel/vercel/commit/55f0afe883f44c25eab02a9334b2b17b6130c140), [`e7685ebeba19b30ae6549860aa8fcd07ba49a6d0`](https://github.com/vercel/vercel/commit/e7685ebeba19b30ae6549860aa8fcd07ba49a6d0), [`1a42226920e36b035b0bd19717c5691103f61199`](https://github.com/vercel/vercel/commit/1a42226920e36b035b0bd19717c5691103f61199)]:
+  - @vercel/next@4.15.29
+  - @vercel/build-utils@13.4.1
+  - @vercel/static-build@2.8.38
+  - @vercel/python@6.14.0
+  - @vercel/backends@0.0.34
+  - @vercel/elysia@0.1.37
+  - @vercel/express@0.1.46
+  - @vercel/fastify@0.1.40
+  - @vercel/go@3.4.1
+  - @vercel/h3@0.1.46
+  - @vercel/hono@0.2.40
+  - @vercel/hydrogen@1.3.5
+  - @vercel/koa@0.1.20
+  - @vercel/nestjs@0.2.41
+  - @vercel/node@5.6.4
+  - @vercel/redwood@2.4.9
+  - @vercel/remix-builder@5.5.10
+  - @vercel/ruby@2.3.1
+  - @vercel/rust@1.0.5
+
+## 50.18.1
+
+### Patch Changes
+
+- Add more precise errors and debug messages for auth issues ([#14992](https://github.com/vercel/vercel/pull/14992))
+
+- Add tracing when installing builders ([#15071](https://github.com/vercel/vercel/pull/15071))
+
+- Use namespaced vc.builder span attributes (builder.name, builder.version, builder.dynamicallyInstalled) so they appear correctly in Datadog and don't conflict with reserved `version` tag ([#15078](https://github.com/vercel/vercel/pull/15078))
+
+- non-interactive mode should allow scope argument ([#15077](https://github.com/vercel/vercel/pull/15077))
+
+## 50.18.0
+
+### Minor Changes
+
+- Support easier auth from cursor / claude ([#15050](https://github.com/vercel/vercel/pull/15050))
+
+### Patch Changes
+
+- non-interactive mode for link ([#14884](https://github.com/vercel/vercel/pull/14884))
+
+- Add experimental manual deployment support ([#14857](https://github.com/vercel/vercel/pull/14857))
+
+- Fix `integration remove`, `integration balance`, and `integration open` commands failing to find integrations by explicitly passing `teamId` to the configurations API ([#15054](https://github.com/vercel/vercel/pull/15054))
+
+- Require slash syntax for multi-product integrations in non-TTY mode, keep interactive product selector for TTY ([#15047](https://github.com/vercel/vercel/pull/15047))
+
+- Move builders back into bundle ([#15059](https://github.com/vercel/vercel/pull/15059))
+
+- Updated dependencies [[`463395162462988e7d3276781d2fdff0685e225b`](https://github.com/vercel/vercel/commit/463395162462988e7d3276781d2fdff0685e225b), [`6e58410ff849c281735c6acae59b3b0e86136f15`](https://github.com/vercel/vercel/commit/6e58410ff849c281735c6acae59b3b0e86136f15)]:
+  - @vercel/go@3.4.1
+  - @vercel/ruby@2.3.1
+  - @vercel/python@6.13.0
+  - @vercel/static-build@2.8.37
+
+## 50.17.1
+
+### Patch Changes
+
+- Fix proxy-agent dependency issue ([#15044](https://github.com/vercel/vercel/pull/15044))
+
+## 50.17.0
+
+### Minor Changes
+
+- Install builder packages on demand ([#15023](https://github.com/vercel/vercel/pull/15023))
+
+- Display functions exceeding 250MB uncompressed size limit with total size and breakdown of largest dependencies (requires environment variable VERCEL_ANALYZE_BUILD_OUTPUT=1). ([#14067](https://github.com/vercel/vercel/pull/14067))
+
+### Patch Changes
+
+- Add `--format=json` option to `vercel integration list` and show project name in table header when results are scoped to a project ([#15007](https://github.com/vercel/vercel/pull/15007))
+
+- Fix builder import resolution from pre-installed depenencies ([#15041](https://github.com/vercel/vercel/pull/15041))
+
+- Services routing improvements: ([#15018](https://github.com/vercel/vercel/pull/15018))
+
+  - Fix route ownership scoping so parent service catch-alls (e.g. Vite SPA fallback) don't capture sibling service prefixes
+  - Move shared ownership-guard helpers (`getOwnershipGuard`, `scopeRouteSourceToOwnership`) to `@vercel/routing-utils`
+  - Place runtime service function outputs under internal `/_svc/<service>/index` namespace to prevent filesystem path leakage
+  - Block `/_svc` as a reserved routePrefix in service validation
+  - Scope all builder-emitted routes (not just route-owning builders) to their service ownership before merging
+
+- Updated dependencies []:
+  - @vercel/static-build@2.8.37
+  - @vercel/build-utils@13.4.0
+  - @vercel/next@4.15.28
+  - @vercel/redwood@2.4.9
+  - @vercel/rust@1.0.5
+
+## 50.16.0
+
+### Minor Changes
+
+- [services] synchronize dependencies in dev mode for JS/TS and Python services ([#14987](https://github.com/vercel/vercel/pull/14987))
+
+- Add `contract` cli cmd for checking contract commitments ([#14735](https://github.com/vercel/vercel/pull/14735))
+
+- [services] inject service URLs into web services as local paths ([#15024](https://github.com/vercel/vercel/pull/15024))
+
+- Add `usage` command to check billing and usage information ([#14733](https://github.com/vercel/vercel/pull/14733))
+
+### Patch Changes
+
+- Add `--plan` flag to `vercel integration add` for specifying a billing plan ID ([#14965](https://github.com/vercel/vercel/pull/14965))
+
+- Include the current Vercel CLI version in `.vercel/output/builds.json` generated by `vercel build`. ([#14999](https://github.com/vercel/vercel/pull/14999))
+
+- Fix `vc link` sometimes prompting to select a repo-linked Project twice and ensure `env pull` uses the newly linked `.vercel/project.json` instead of falling back to `.vercel/repo.json`. ([#15017](https://github.com/vercel/vercel/pull/15017))
+
+- non-interactive mode for link - ensureLink ([#15004](https://github.com/vercel/vercel/pull/15004))
+
+- Fixed deployment rate limit error message displaying incorrect retry time ([#14947](https://github.com/vercel/vercel/pull/14947))
+
+- [services] services dev server orchestrator framework fallback fix ([#14985](https://github.com/vercel/vercel/pull/14985))
+
+- Add new expirementalTrigger format for queues v2beta ([#14970](https://github.com/vercel/vercel/pull/14970))
+
+- non-interactive mode for link - selectOrg ([#15003](https://github.com/vercel/vercel/pull/15003))
+
+- non-interactive mode for link ([#15001](https://github.com/vercel/vercel/pull/15001))
+
+- Remove tags column from `integration discover` table and compact terminal views to reduce width on small screens. Tags remain available in JSON output. ([#15000](https://github.com/vercel/vercel/pull/15000))
+
+- non-interactive mode for link - enable for agents ([#15002](https://github.com/vercel/vercel/pull/15002))
+
+- Add `--breakdown` option to `vercel usage` for viewing usage broken down by period ([#14741](https://github.com/vercel/vercel/pull/14741))
+
+- Updated dependencies [[`8f2c79045858cd41fa89522ee13f2ce5d6c81be1`](https://github.com/vercel/vercel/commit/8f2c79045858cd41fa89522ee13f2ce5d6c81be1), [`2686071de8e17161babea397fcd12226de8ecce9`](https://github.com/vercel/vercel/commit/2686071de8e17161babea397fcd12226de8ecce9), [`2b9147bd5678dd9c6b4710aa5c1e8388f993898c`](https://github.com/vercel/vercel/commit/2b9147bd5678dd9c6b4710aa5c1e8388f993898c), [`a960cf23a42ff1a570c808ee9567670c24422f98`](https://github.com/vercel/vercel/commit/a960cf23a42ff1a570c808ee9567670c24422f98)]:
+  - @vercel/build-utils@13.4.0
+  - @vercel/python@6.12.0
+  - @vercel/backends@0.0.33
+  - @vercel/elysia@0.1.36
+  - @vercel/express@0.1.45
+  - @vercel/fastify@0.1.39
+  - @vercel/go@3.4.0
+  - @vercel/h3@0.1.45
+  - @vercel/hono@0.2.39
+  - @vercel/hydrogen@1.3.5
+  - @vercel/koa@0.1.19
+  - @vercel/nestjs@0.2.40
+  - @vercel/next@4.15.28
+  - @vercel/node@5.6.3
+  - @vercel/redwood@2.4.9
+  - @vercel/remix-builder@5.5.10
+  - @vercel/ruby@2.3.0
+  - @vercel/rust@1.0.5
+  - @vercel/static-build@2.8.37
+
+## 50.15.1
+
+### Patch Changes
+
+- Updated dependencies [[`52e1397166d4912079afe92fd8bf91664e59f43c`](https://github.com/vercel/vercel/commit/52e1397166d4912079afe92fd8bf91664e59f43c)]:
+  - @vercel/python@6.11.1
+
+## 50.15.0
+
+### Minor Changes
+
+- Add `vercel flags` command to manage feature flags from the CLI. This includes subcommands for listing, inspecting, creating, deleting, archiving, enabling, and disabling feature flags, as well as managing SDK keys for flag evaluation. ([#14710](https://github.com/vercel/vercel/pull/14710))
+
+  New commands:
+
+  - `vercel flags ls` - List all feature flags
+  - `vercel flags inspect <flag>` - Display detailed information about a feature flag, including its variants
+  - `vercel flags add <slug>` - Create a new feature flag
+  - `vercel flags rm <flag>` - Delete a feature flag (must be archived first)
+  - `vercel flags archive <flag>` - Archive a feature flag
+  - `vercel flags disable <flag>` - Disable a flag in an environment
+  - `vercel flags enable <flag>` - Enable a flag in an environment
+  - `vercel flags sdk-keys ls` - List SDK keys
+  - `vercel flags sdk-keys add` - Create a new SDK key
+  - `vercel flags sdk-keys rm <key>` - Delete an SDK key
+
+- Add `--metadata` / `-m` flag to `vercel integration add` for non-interactive provisioning ([#14871](https://github.com/vercel/vercel/pull/14871))
+
+- Add `vc link add` subcommand to append projects to existing repo.json ([#14968](https://github.com/vercel/vercel/pull/14968))
+
+- [services] detect and manage virtual environments for Python services ([#14952](https://github.com/vercel/vercel/pull/14952))
+
+- Improved startup time 1.2-1.5x for CLI commands by implementing a different bundling & lazy loading strategy ([#14930](https://github.com/vercel/vercel/pull/14930))
+
+  Specifically, speedup the following subcommands: deploy, env, list, link, build, dev (informed by telemetry end-user usage data). The rest of the commands also became faster due to reduced amount of code they need to load.
+
+### Patch Changes
+
+- Add `vercel integration discover` with human-readable and JSON output for installable marketplace integrations and products. ([#14948](https://github.com/vercel/vercel/pull/14948))
+
+- Add service configuration to BuildOptions ([#14918](https://github.com/vercel/vercel/pull/14918))
+
+- [cli] `integration add`: auto-connect resources to all environments and auto-run `env pull` after provisioning. Add `--no-connect` and `--no-env-pull` opt-out flags. Print resource dashboard URL on success. ([#14964](https://github.com/vercel/vercel/pull/14964))
+
+- Write `repo.json` "orgId" field on a per-project basis ([#14967](https://github.com/vercel/vercel/pull/14967))
+
+- - Fix services routing for runtime entrypoints by using extensionless function destinations, disabling framework `defaultRoutes` injection during services builds, and ensuring deterministic route merging precedence for services. ([#14946](https://github.com/vercel/vercel/pull/14946))
+  - Scope route-owning builder routes to their owning service prefixes in services mode, preventing cross-service route leakage
+- Updated dependencies [[`012a8e410d09d9a5dcf060b30b4b24b08500823d`](https://github.com/vercel/vercel/commit/012a8e410d09d9a5dcf060b30b4b24b08500823d), [`9b8f974bbb64fb857b068428b0c2fdccee6ad83c`](https://github.com/vercel/vercel/commit/9b8f974bbb64fb857b068428b0c2fdccee6ad83c), [`96310842f34741ccced49eb9bd392631c2de4d14`](https://github.com/vercel/vercel/commit/96310842f34741ccced49eb9bd392631c2de4d14)]:
+  - @vercel/build-utils@13.3.5
+  - @vercel/python@6.11.0
+  - @vercel/backends@0.0.32
+  - @vercel/elysia@0.1.35
+  - @vercel/express@0.1.44
+  - @vercel/fastify@0.1.38
+  - @vercel/go@3.4.0
+  - @vercel/h3@0.1.44
+  - @vercel/hono@0.2.38
+  - @vercel/hydrogen@1.3.5
+  - @vercel/koa@0.1.18
+  - @vercel/nestjs@0.2.39
+  - @vercel/next@4.15.28
+  - @vercel/node@5.6.2
+  - @vercel/redwood@2.4.9
+  - @vercel/remix-builder@5.5.10
+  - @vercel/ruby@2.3.0
+  - @vercel/rust@1.0.5
+  - @vercel/static-build@2.8.36
+
+## 50.14.1
+
+### Patch Changes
+
+- Add support for `regions` in `vercel.json` function-level configuration. ([#14963](https://github.com/vercel/vercel/pull/14963))
+
+  Matching function `regions` are now parsed from `functions` config, written into lambda output config, and documented in config types so they override top-level deployment regions for that function.
+
+- Remove `customErrorPage` configuration support from `vercel.json` ([#14832](https://github.com/vercel/vercel/pull/14832))
+
+- Updated dependencies [[`45963f54f26a3e54df58a3b6a30e383de4094dd1`](https://github.com/vercel/vercel/commit/45963f54f26a3e54df58a3b6a30e383de4094dd1), [`2c09a1d3486e905d6b1a9c6280739d81e9958cec`](https://github.com/vercel/vercel/commit/2c09a1d3486e905d6b1a9c6280739d81e9958cec), [`2c09a1d3486e905d6b1a9c6280739d81e9958cec`](https://github.com/vercel/vercel/commit/2c09a1d3486e905d6b1a9c6280739d81e9958cec), [`7a78b1b4144602550a3be48cd9a976e5e2934a51`](https://github.com/vercel/vercel/commit/7a78b1b4144602550a3be48cd9a976e5e2934a51), [`87ff85b1277d84021bc83aec6fc97021d3fdab9d`](https://github.com/vercel/vercel/commit/87ff85b1277d84021bc83aec6fc97021d3fdab9d)]:
+  - @vercel/build-utils@13.3.4
+  - @vercel/backends@0.0.31
+  - @vercel/python@6.10.0
+  - @vercel/elysia@0.1.34
+  - @vercel/express@0.1.43
+  - @vercel/fastify@0.1.37
+  - @vercel/go@3.4.0
+  - @vercel/h3@0.1.43
+  - @vercel/hono@0.2.37
+  - @vercel/hydrogen@1.3.5
+  - @vercel/koa@0.1.17
+  - @vercel/nestjs@0.2.38
+  - @vercel/next@4.15.28
+  - @vercel/node@5.6.1
+  - @vercel/redwood@2.4.9
+  - @vercel/remix-builder@5.5.10
+  - @vercel/ruby@2.3.0
+  - @vercel/rust@1.0.5
+  - @vercel/static-build@2.8.35
+
+## 50.14.0
+
+### Minor Changes
+
+- Add `--name` flag to `vercel integration add` command to specify custom resource names. When not provided, resource names are auto-generated using the pattern `{productSlug}-{color}-{noun}` to match the web checkout flow. ([#14863](https://github.com/vercel/vercel/pull/14863))
+
+- [services] add a dev lock for `vercel dev` to prevent launching multiple `vercel dev` processes for a multi-service projects. ([#14897](https://github.com/vercel/vercel/pull/14897))
+
+### Patch Changes
+
+- Pass detected agent name as `actor` in deployment request body ([#14955](https://github.com/vercel/vercel/pull/14955))
+
+- cli: load local .env files in `vercel env run` ([#14870](https://github.com/vercel/vercel/pull/14870))
+
+- Add `integration add <integration>/<product>` slash syntax to skip product selection prompt, and dynamic help listing available products for multi-product integrations ([#14898](https://github.com/vercel/vercel/pull/14898))
+
+- Add interactive and flag based configuration of rolling releases ([#14942](https://github.com/vercel/vercel/pull/14942))
+
+- Surface hidden marketplace CLI commands (`balance` and `create-threshold`) in `--help` output ([#14844](https://github.com/vercel/vercel/pull/14844))
+
+- Track deployment ID in telemetry after successful deployment creation. ([#14954](https://github.com/vercel/vercel/pull/14954))
+
+- Updated dependencies [[`2edb2843d99bdfa4bf4697826a5f6eeedccdef78`](https://github.com/vercel/vercel/commit/2edb2843d99bdfa4bf4697826a5f6eeedccdef78), [`ec03f4df820531ff2fc891f62ab865db15786f17`](https://github.com/vercel/vercel/commit/ec03f4df820531ff2fc891f62ab865db15786f17)]:
+  - @vercel/python@6.9.0
+  - @vercel/node@5.6.0
+  - @vercel/ruby@2.3.0
+  - @vercel/next@4.15.28
+  - @vercel/elysia@0.1.33
+  - @vercel/express@0.1.42
+  - @vercel/fastify@0.1.36
+  - @vercel/h3@0.1.42
+  - @vercel/hono@0.2.36
+  - @vercel/koa@0.1.16
+  - @vercel/nestjs@0.2.37
+
+## 50.13.2
+
+### Patch Changes
+
+- [services] add service name validation ([#14907](https://github.com/vercel/vercel/pull/14907))
+
+- fix(cli): correct permissive issues ([#14881](https://github.com/vercel/vercel/pull/14881))
+
+- Fix environment variable auto-pull during project linking to not interfere with explicit environment targeting. ([#14818](https://github.com/vercel/vercel/pull/14818))
+
+  - `vercel pull --environment=X` no longer auto-pulls development env vars during linking
+  - Skip env pull prompt in non-TTY environments (CI) during `vercel link`
+
+- Adding non-interactive mode for agents ([#14880](https://github.com/vercel/vercel/pull/14880))
+
+- Updated dependencies [[`d887f6cba4db5caf1cb320d94d6118da678c4bd3`](https://github.com/vercel/vercel/commit/d887f6cba4db5caf1cb320d94d6118da678c4bd3), [`12b2f08c4271133c784f276bc933592b28204af2`](https://github.com/vercel/vercel/commit/12b2f08c4271133c784f276bc933592b28204af2), [`2d61173cd73860fedc23edc0552c86d0e21fccd3`](https://github.com/vercel/vercel/commit/2d61173cd73860fedc23edc0552c86d0e21fccd3), [`f708ca65bccf6942bcd8501f34101e659aa256d6`](https://github.com/vercel/vercel/commit/f708ca65bccf6942bcd8501f34101e659aa256d6), [`9bf27beab1fe4f1f6d6126679f2687c209594027`](https://github.com/vercel/vercel/commit/9bf27beab1fe4f1f6d6126679f2687c209594027)]:
+  - @vercel/next@4.15.27
+  - @vercel/python@6.8.0
+  - @vercel/node@5.5.33
+  - @vercel/backends@0.0.30
+  - @vercel/static-build@2.8.34
+  - @vercel/build-utils@13.3.3
+  - @vercel/elysia@0.1.32
+  - @vercel/express@0.1.41
+  - @vercel/fastify@0.1.35
+  - @vercel/h3@0.1.41
+  - @vercel/hono@0.2.35
+  - @vercel/koa@0.1.15
+  - @vercel/nestjs@0.2.36
+  - @vercel/go@3.4.0
+  - @vercel/hydrogen@1.3.5
+  - @vercel/redwood@2.4.9
+  - @vercel/remix-builder@5.5.10
+  - @vercel/ruby@2.2.5
+  - @vercel/rust@1.0.5
+
+## 50.13.1
+
+### Patch Changes
+
+- Updated dependencies [[`6a4c0798c2240d2df2b166177fe19cc296ba31bb`](https://github.com/vercel/vercel/commit/6a4c0798c2240d2df2b166177fe19cc296ba31bb), [`8520612eb01131be823819e5bb72c120e6edfd9f`](https://github.com/vercel/vercel/commit/8520612eb01131be823819e5bb72c120e6edfd9f)]:
+  - @vercel/next@4.15.26
+
+## 50.13.0
+
+### Minor Changes
+
+- Adds experimental support for embedding Vercel Flags definitions during build. ([#14838](https://github.com/vercel/vercel/pull/14838))
+
+  When `VERCEL_EXPERIMENTAL_EMBED_FLAG_DEFINITIONS=1` is set, the CLI scans environment variables for Vercel Flags SDK keys (prefixed with `vf_`) and fetches their flag definitions. The definitions are written to a synthetic `@vercel/flags-definitions` module in `node_modules` that can be imported at runtime.
+
+### Patch Changes
+
+- Updated dependencies [[`a172b3c68ba75bf8f9e517fe476cebe2e32bdb8c`](https://github.com/vercel/vercel/commit/a172b3c68ba75bf8f9e517fe476cebe2e32bdb8c), [`d59e76b47c3a491afe5dff6ee76224ed77ac8d74`](https://github.com/vercel/vercel/commit/d59e76b47c3a491afe5dff6ee76224ed77ac8d74)]:
+  - @vercel/next@4.15.25
+
+## 50.12.3
+
+### Patch Changes
+
+- Updated dependencies [[`9561dbff50f66222cbc99d2a00042338ec692b4f`](https://github.com/vercel/vercel/commit/9561dbff50f66222cbc99d2a00042338ec692b4f), [`299527554c6dc1b94b08e89c677231409005cc75`](https://github.com/vercel/vercel/commit/299527554c6dc1b94b08e89c677231409005cc75)]:
+  - @vercel/next@4.15.24
+  - @vercel/python@6.7.0
+
+## 50.12.2
+
+### Patch Changes
+
+- Add source and defaultResourceName query params to legacy integration add web UI path ([#14868](https://github.com/vercel/vercel/pull/14868))
+
+- [services] build time service url env vars ([#14893](https://github.com/vercel/vercel/pull/14893))
+
+- Updated dependencies [[`fc357e11cb4b00ab8ec413a0ea3586a87e733f0e`](https://github.com/vercel/vercel/commit/fc357e11cb4b00ab8ec413a0ea3586a87e733f0e), [`84f121190813b2840a6a16279dcaa75dcb2872cd`](https://github.com/vercel/vercel/commit/84f121190813b2840a6a16279dcaa75dcb2872cd), [`ff320caa5c8a0857aad0b989699207a6a703256f`](https://github.com/vercel/vercel/commit/ff320caa5c8a0857aad0b989699207a6a703256f)]:
+  - @vercel/build-utils@13.3.2
+  - @vercel/go@3.4.0
+  - @vercel/backends@0.0.29
+  - @vercel/elysia@0.1.31
+  - @vercel/express@0.1.40
+  - @vercel/fastify@0.1.34
+  - @vercel/h3@0.1.40
+  - @vercel/hono@0.2.34
+  - @vercel/hydrogen@1.3.5
+  - @vercel/koa@0.1.14
+  - @vercel/nestjs@0.2.35
+  - @vercel/next@4.15.23
+  - @vercel/node@5.5.32
+  - @vercel/python@6.6.0
+  - @vercel/redwood@2.4.9
+  - @vercel/remix-builder@5.5.10
+  - @vercel/ruby@2.2.5
+  - @vercel/rust@1.0.5
+  - @vercel/static-build@2.8.33
+
+## 50.12.1
+
+### Patch Changes
+
+- Add support for `VERCEL_TOKEN` environment variable ([#14831](https://github.com/vercel/vercel/pull/14831))
+
+  The CLI now reads the `VERCEL_TOKEN` environment variable as an alternative to the `--token` flag. This allows for easier scripting and CI/CD integration without needing to pass the token as a command-line argument.
+
+  The `--token` flag takes precedence over the environment variable when both are provided.
+
+- Fix `vc link --repo` in git worktree ([#14867](https://github.com/vercel/vercel/pull/14867))
+
+- Simplify CLI update prompt to yes/no confirmation with changelog link in body ([#14885](https://github.com/vercel/vercel/pull/14885))
+
+- Updated dependencies [[`df1d02d5257e33dc10640b20eea1c1e59c5842cf`](https://github.com/vercel/vercel/commit/df1d02d5257e33dc10640b20eea1c1e59c5842cf), [`e558a1657f5aa43048cde0f3b97bead7c9bf1070`](https://github.com/vercel/vercel/commit/e558a1657f5aa43048cde0f3b97bead7c9bf1070)]:
+  - @vercel/next@4.15.23
+
+## 50.12.0
+
+### Minor Changes
+
+- Add project-wide log querying to the logs command with filtering by level, environment, source, status code, and time range. Auto-detects current git branch to filter logs. Streams live logs when a deployment is specified. ([#14808](https://github.com/vercel/vercel/pull/14808))
+
+### Patch Changes
+
+- Update deprecated tar package ([#14877](https://github.com/vercel/vercel/pull/14877))
+
+- Update help command for API ([#14883](https://github.com/vercel/vercel/pull/14883))
+
+- [services] `vercel dev` will add the known framework prefix to env vars for services ([#14866](https://github.com/vercel/vercel/pull/14866))
+
+- Fix typos in CLI help examples for marketplace integration commands ([#14841](https://github.com/vercel/vercel/pull/14841))
+
+- Fix malformed teamId query parameter in prepayment balance API ([#14859](https://github.com/vercel/vercel/pull/14859))
+
+- Updated dependencies [[`87a745eb501d3a94542b84f4e02ceca0a7359da0`](https://github.com/vercel/vercel/commit/87a745eb501d3a94542b84f4e02ceca0a7359da0), [`f45189244c2ca28083b0077532be4e2d9945faf0`](https://github.com/vercel/vercel/commit/f45189244c2ca28083b0077532be4e2d9945faf0), [`62cc6882af96db938f36f64e7c220516d1741150`](https://github.com/vercel/vercel/commit/62cc6882af96db938f36f64e7c220516d1741150)]:
+  - @vercel/go@3.3.5
+  - @vercel/build-utils@13.3.1
+  - @vercel/backends@0.0.28
+  - @vercel/elysia@0.1.30
+  - @vercel/express@0.1.39
+  - @vercel/fastify@0.1.33
+  - @vercel/h3@0.1.39
+  - @vercel/hono@0.2.33
+  - @vercel/hydrogen@1.3.5
+  - @vercel/koa@0.1.13
+  - @vercel/nestjs@0.2.34
+  - @vercel/next@4.15.22
+  - @vercel/node@5.5.31
+  - @vercel/python@6.6.0
+  - @vercel/redwood@2.4.9
+  - @vercel/remix-builder@5.5.10
+  - @vercel/ruby@2.2.5
+  - @vercel/rust@1.0.5
+  - @vercel/static-build@2.8.32
+
+## 50.11.0
+
+### Minor Changes
+
+- Add multi-service support for `vercel dev`. When `VERCEL_USE_EXPERIMENTAL_SERVICES=1` is set, the CLI auto-detects different multi-service layouts and orchestrates dev servers for each service through a single proxy server. ([#14805](https://github.com/vercel/vercel/pull/14805))
+
+### Patch Changes
+
+- [services] add `services` to `config.json` ([#14847](https://github.com/vercel/vercel/pull/14847))
+
+- Updated dependencies [[`3ee91bd6782888e626486c706dcba65fd51ba0e5`](https://github.com/vercel/vercel/commit/3ee91bd6782888e626486c706dcba65fd51ba0e5), [`81383be63cb499db3c2f1e3ef39153d6e5f1f5cf`](https://github.com/vercel/vercel/commit/81383be63cb499db3c2f1e3ef39153d6e5f1f5cf), [`2a6e1f5d55080e205e55481fa096b043650b382a`](https://github.com/vercel/vercel/commit/2a6e1f5d55080e205e55481fa096b043650b382a), [`ce9208286ed6d29d6764ea4d290680ad98e65d22`](https://github.com/vercel/vercel/commit/ce9208286ed6d29d6764ea4d290680ad98e65d22)]:
+  - @vercel/build-utils@13.3.0
+  - @vercel/python@6.6.0
+  - @vercel/next@4.15.22
+  - @vercel/backends@0.0.27
+  - @vercel/elysia@0.1.29
+  - @vercel/express@0.1.38
+  - @vercel/fastify@0.1.32
+  - @vercel/go@3.3.4
+  - @vercel/h3@0.1.38
+  - @vercel/hono@0.2.32
+  - @vercel/hydrogen@1.3.5
+  - @vercel/koa@0.1.12
+  - @vercel/nestjs@0.2.33
+  - @vercel/node@5.5.30
+  - @vercel/redwood@2.4.9
+  - @vercel/remix-builder@5.5.10
+  - @vercel/ruby@2.2.5
+  - @vercel/rust@1.0.5
+  - @vercel/static-build@2.8.31
+
+## 50.10.2
+
+### Patch Changes
+
+- Updated dependencies [[`45da221a89eae3b63137317dbbd9a5532c3a40c3`](https://github.com/vercel/vercel/commit/45da221a89eae3b63137317dbbd9a5532c3a40c3), [`349ac92f9a2e74fe372843b2753c129d7cd8d948`](https://github.com/vercel/vercel/commit/349ac92f9a2e74fe372843b2753c129d7cd8d948)]:
+  - @vercel/static-build@2.8.30
+  - @vercel/python@6.5.1
+
+## 50.10.1
+
+### Patch Changes
+
+- Move backends builder detection to detectBuilders phase ([#14830](https://github.com/vercel/vercel/pull/14830))
+
+- Updated dependencies [[`4500f1f482cdc19e0904be3b0e5922ceffc6de62`](https://github.com/vercel/vercel/commit/4500f1f482cdc19e0904be3b0e5922ceffc6de62), [`6d87d02723d4385ed1d08bb855fcc43f9466a984`](https://github.com/vercel/vercel/commit/6d87d02723d4385ed1d08bb855fcc43f9466a984)]:
+  - @vercel/build-utils@13.2.17
+  - @vercel/backends@0.0.26
+  - @vercel/elysia@0.1.28
+  - @vercel/express@0.1.37
+  - @vercel/fastify@0.1.31
+  - @vercel/go@3.3.4
+  - @vercel/h3@0.1.37
+  - @vercel/hono@0.2.31
+  - @vercel/hydrogen@1.3.5
+  - @vercel/koa@0.1.11
+  - @vercel/nestjs@0.2.32
+  - @vercel/next@4.15.21
+  - @vercel/node@5.5.29
+  - @vercel/python@6.5.0
+  - @vercel/redwood@2.4.9
+  - @vercel/remix-builder@5.5.10
+  - @vercel/ruby@2.2.5
+  - @vercel/rust@1.0.5
+  - @vercel/static-build@2.8.29
+
+## 50.10.0
+
+### Minor Changes
+
+- feat(cli): Add webhooks command for managing webhooks ([#14789](https://github.com/vercel/vercel/pull/14789))
+
+  Adds a new `webhooks` command to the Vercel CLI with the following subcommands:
+
+  - `webhooks ls` - List all webhooks with optional `--format json` output
+  - `webhooks get <id>` - Get details of a specific webhook with optional `--format json` output
+  - `webhooks create <url> --event <event>` - Create a new webhook with specified events
+  - `webhooks rm <id>` - Remove a webhook with `--yes` flag to skip confirmation
+
+  Webhook event types are fetched dynamically from the OpenAPI spec to stay in sync with the API.
+
+- Added experimental services support in the CLI new project flow. When `VERCEL_USE_EXPERIMENTAL_SERVICES=1` is set and a project's `vercel.json` contains `experimentalServices`, the CLI will detect and display the configured services during project setup, automatically selecting the "services" framework preset. ([#14776](https://github.com/vercel/vercel/pull/14776))
+
+### Patch Changes
+
+- Improve logsv2 command output format with compact single-line display, text-based level labels, dynamic column widths, and smart date display ([#14767](https://github.com/vercel/vercel/pull/14767))
+
+- Skip update check when running on Vercel to prevent unnecessary worker spawning in build container ([#14794](https://github.com/vercel/vercel/pull/14794))
+
+- fix --help exit codes for marketplace commands ([#14834](https://github.com/vercel/vercel/pull/14834))
+
+- Updated dependencies [[`687f73cebb6ae1cdd7c7feb0910967de99a17ad6`](https://github.com/vercel/vercel/commit/687f73cebb6ae1cdd7c7feb0910967de99a17ad6), [`e7c5d5fd41e124ef7314978b351696d130e89917`](https://github.com/vercel/vercel/commit/e7c5d5fd41e124ef7314978b351696d130e89917), [`c3104a1ae9dbf9048e08bb2fa85605a95b254876`](https://github.com/vercel/vercel/commit/c3104a1ae9dbf9048e08bb2fa85605a95b254876), [`b029736b4be8dac135bef77283f47e1450faf0a9`](https://github.com/vercel/vercel/commit/b029736b4be8dac135bef77283f47e1450faf0a9), [`d36c1ad3ddaf9303041e61a0a41d973b02007988`](https://github.com/vercel/vercel/commit/d36c1ad3ddaf9303041e61a0a41d973b02007988), [`5b31b133970539986ff9e98013d2c364536bd0b5`](https://github.com/vercel/vercel/commit/5b31b133970539986ff9e98013d2c364536bd0b5)]:
+  - @vercel/next@4.15.21
+  - @vercel/python@6.5.0
+  - @vercel/remix-builder@5.5.10
+  - @vercel/backends@0.0.25
+  - @vercel/static-build@2.8.28
+  - @vercel/node@5.5.28
+  - @vercel/express@0.1.36
+
+## 50.9.6
+
+### Patch Changes
+
+- Updated dependencies [[`4af9fb938b453e5473e08abf76fd992cd3962979`](https://github.com/vercel/vercel/commit/4af9fb938b453e5473e08abf76fd992cd3962979), [`2f40a42174ed49e9aed98fab5b5ca4e2b2dacf8e`](https://github.com/vercel/vercel/commit/2f40a42174ed49e9aed98fab5b5ca4e2b2dacf8e), [`3df0f7787542be38aa74f3ccfa744a724a6dde80`](https://github.com/vercel/vercel/commit/3df0f7787542be38aa74f3ccfa744a724a6dde80)]:
+  - @vercel/python@6.4.2
+  - @vercel/next@4.15.20
+  - @vercel/backends@0.0.24
+  - @vercel/express@0.1.35
+
+## 50.9.5
+
+### Patch Changes
+
+- Updated dependencies [[`26f1f5190c881ea0362157ac3622a3b49bdcba8d`](https://github.com/vercel/vercel/commit/26f1f5190c881ea0362157ac3622a3b49bdcba8d)]:
+  - @vercel/python@6.4.1
+
+## 50.9.4
+
+### Patch Changes
+
+- Updated dependencies [[`c0a87e350e67b67e1b8a3610cde16a7d86f931fd`](https://github.com/vercel/vercel/commit/c0a87e350e67b67e1b8a3610cde16a7d86f931fd), [`1bc969a200180c5828212c43861c7548dbd3e51c`](https://github.com/vercel/vercel/commit/1bc969a200180c5828212c43861c7548dbd3e51c)]:
+  - @vercel/next@4.15.19
+
+## 50.9.3
+
+### Patch Changes
+
+- Updated dependencies [[`eb74394228153cf3fd6728bc0a4cc3e80f3e6e8c`](https://github.com/vercel/vercel/commit/eb74394228153cf3fd6728bc0a4cc3e80f3e6e8c)]:
+  - @vercel/python@6.4.0
+
+## 50.9.2
+
+### Patch Changes
+
+- fix(cli): Scope DELETE confirmation prompt to `vercel api` command only ([#14787](https://github.com/vercel/vercel/pull/14787))
+
+  This fixes a regression from #14769 where the DELETE confirmation prompt was incorrectly applied to all DELETE operations (e.g., `vercel env rm`, `vercel alias rm`) instead of only the `vercel api` command. Commands like `env rm` and `alias rm` have their own `--yes` flags for confirmation and should not be affected.
+
+- experimental rust runtime framework preset ([#14765](https://github.com/vercel/vercel/pull/14765))
+
+- Add redirects command to top level help message. ([#14772](https://github.com/vercel/vercel/pull/14772))
+
+- Updated dependencies []:
+  - @vercel/static-build@2.8.28
+
+## 50.9.1
+
+### Patch Changes
+
+- Updated dependencies [[`cce5b52a24a5ca0471334d13482d2a6b3bfc7910`](https://github.com/vercel/vercel/commit/cce5b52a24a5ca0471334d13482d2a6b3bfc7910)]:
+  - @vercel/next@4.15.18
+
+## 50.9.0
+
+### Minor Changes
+
+- Add confirmation prompt for DELETE API operations and agent mode warning ([#14769](https://github.com/vercel/vercel/pull/14769))
+
+  - DELETE operations now require user confirmation before proceeding
+  - When running under an AI agent with `--dangerously-skip-permissions`, a warning is displayed to stderr
+  - In non-TTY mode, DELETE operations fail unless `--dangerously-skip-permissions` is used
+
+### Patch Changes
+
+- Add auto-provision flow for integration resources (behind feature flag) ([#14734](https://github.com/vercel/vercel/pull/14734))
+
+- Revert "[cli] Use promote flow when targeting production alias" ([#14771](https://github.com/vercel/vercel/pull/14771))
+
+- Improved curl generation with auth header placeholder ([#14752](https://github.com/vercel/vercel/pull/14752))
+
+## 50.8.1
+
+### Patch Changes
+
+- Updated dependencies [[`31afeb2546b316a2e9553ee937d9771b86898e0e`](https://github.com/vercel/vercel/commit/31afeb2546b316a2e9553ee937d9771b86898e0e)]:
+  - @vercel/ruby@2.2.5
+  - @vercel/static-build@2.8.28
+
+## 50.8.0
+
+### Minor Changes
+
+- Updated `vercel alias` command to use the promote flow when aliasing to a production alias. When the target alias matches one of the project's configured production domains, the command now calls the promote API instead of directly assigning the alias, ensuring proper production deployment handling. ([#14755](https://github.com/vercel/vercel/pull/14755))
+
+### Patch Changes
+
+- [experimental] Adds support for building multiple services when framework mode is set to "services" ([#14739](https://github.com/vercel/vercel/pull/14739))
+
+- Updated dependencies []:
+  - @vercel/static-build@2.8.28
+
+## 50.7.1
+
+### Patch Changes
+
+- Prebuilt Bulk Redirects ([#14627](https://github.com/vercel/vercel/pull/14627))
+
+- Updated dependencies []:
+  - @vercel/node@5.5.28
+
+## 50.7.0
+
+### Minor Changes
+
+- Add improved styling to vercel api interactive mode ([#14746](https://github.com/vercel/vercel/pull/14746))
+
+### Patch Changes
+
+- Update styling for beta commands ([#14750](https://github.com/vercel/vercel/pull/14750))
+
+## 50.6.2
+
+### Patch Changes
+
+- Add positional deployment argument to logsv2 command for backwards-compatible logs replacement ([#14717](https://github.com/vercel/vercel/pull/14717))
+
+## 50.6.1
+
+### Patch Changes
+
+- Add up to 30 seconds of random skew to APIs returning `Retry-After` headers to prevent thundering herds fighting over a single rate limit token. ([#14737](https://github.com/vercel/vercel/pull/14737))
+
+## 50.6.0
+
+### Minor Changes
+
+- Use condensed prompt for upgrade when on TTY ([#14736](https://github.com/vercel/vercel/pull/14736))
+
+### Patch Changes
+
+- Updated dependencies [[`ca38c18d1c442d193560620d4b15e73b7b6ea753`](https://github.com/vercel/vercel/commit/ca38c18d1c442d193560620d4b15e73b7b6ea753)]:
+  - @vercel/next@4.15.17
+
+## 50.5.2
+
+### Patch Changes
+
+- Add maxConcurrency to experimentalTriggers ([#14725](https://github.com/vercel/vercel/pull/14725))
+
+- Updated dependencies [[`556d9b418d411e74bd59f682264a31dc71163026`](https://github.com/vercel/vercel/commit/556d9b418d411e74bd59f682264a31dc71163026), [`c213ff76bbce37a0e933078e9a07d2c8c73952c4`](https://github.com/vercel/vercel/commit/c213ff76bbce37a0e933078e9a07d2c8c73952c4), [`556d9b418d411e74bd59f682264a31dc71163026`](https://github.com/vercel/vercel/commit/556d9b418d411e74bd59f682264a31dc71163026)]:
+  - @vercel/build-utils@13.2.16
+  - @vercel/python@6.3.2
+  - @vercel/backends@0.0.23
+  - @vercel/elysia@0.1.27
+  - @vercel/express@0.1.34
+  - @vercel/fastify@0.1.30
+  - @vercel/go@3.3.4
+  - @vercel/h3@0.1.36
+  - @vercel/hono@0.2.30
+  - @vercel/hydrogen@1.3.5
+  - @vercel/koa@0.1.10
+  - @vercel/nestjs@0.2.31
+  - @vercel/next@4.15.16
+  - @vercel/node@5.5.28
+  - @vercel/redwood@2.4.9
+  - @vercel/remix-builder@5.5.9
+  - @vercel/ruby@2.2.4
+  - @vercel/rust@1.0.5
+  - @vercel/static-build@2.8.28
+
+## 50.5.1
+
+### Patch Changes
+
+- Mild refactor of compile-vercel-config ([#14707](https://github.com/vercel/vercel/pull/14707))
+
+- Throw explicit error when vercel.ts routes compilation creates a conflict ([#14709](https://github.com/vercel/vercel/pull/14709))
+
+- vercel.ts: normalize items in `routes` array to routes format ([#14705](https://github.com/vercel/vercel/pull/14705))
+
+- Improvements to vercel api command. Better ls, and help output ([#14720](https://github.com/vercel/vercel/pull/14720))
+
+- Updated dependencies [[`e0e7e3cdd180eb1e07e2ebaba809a2486b546b5d`](https://github.com/vercel/vercel/commit/e0e7e3cdd180eb1e07e2ebaba809a2486b546b5d)]:
+  - @vercel/rust@1.0.5
+
+## 50.5.0
+
+### Minor Changes
+
+- New, consistent --format command for machine readable output ([#14609](https://github.com/vercel/vercel/pull/14609))
+
+- api command ([#14715](https://github.com/vercel/vercel/pull/14715))
+
+- Detect Augment and OpenCode agents ([#14635](https://github.com/vercel/vercel/pull/14635))
+
+### Patch Changes
+
+- Track CLI as source for marketplace integration installations ([#14713](https://github.com/vercel/vercel/pull/14713))
+
+- Do not show default project settings when framework is detected ([#14608](https://github.com/vercel/vercel/pull/14608))
+
+- Fix flakey link tests caused by Inquirer type-ahead search ([#14716](https://github.com/vercel/vercel/pull/14716))
+
+- Updated dependencies [[`64b4577b6d702335478af47c8395bf36daf4f311`](https://github.com/vercel/vercel/commit/64b4577b6d702335478af47c8395bf36daf4f311), [`1ba97e3af1c1240703df3297fbbf7af0f809dd56`](https://github.com/vercel/vercel/commit/1ba97e3af1c1240703df3297fbbf7af0f809dd56)]:
+  - @vercel/python@6.3.1
+  - @vercel/detect-agent@1.1.0
+
+## 50.4.11
+
+### Patch Changes
+
+- Add hidden `logsv2` command with request-logs API support ([#14656](https://github.com/vercel/vercel/pull/14656))
+
+## 50.4.10
+
+### Patch Changes
+
+- Add warning when adding/updating env vars ([#14696](https://github.com/vercel/vercel/pull/14696))
+
+  1. When keys have prefixes that expose values to the client
+  2. The value has whitespace
+  3. The values are exposed and the key matches a pattern for a sensitive value like a password
+
+- removing error ([#14704](https://github.com/vercel/vercel/pull/14704))
+
+- Updated dependencies [[`ee4463453cfe0711bf46491c080f97b196bdaa5a`](https://github.com/vercel/vercel/commit/ee4463453cfe0711bf46491c080f97b196bdaa5a), [`583c0521046dde3574afa506eb4fa7b9c150394f`](https://github.com/vercel/vercel/commit/583c0521046dde3574afa506eb4fa7b9c150394f), [`3eff9995d2f7703475bf67f99f15f08f1f693dd5`](https://github.com/vercel/vercel/commit/3eff9995d2f7703475bf67f99f15f08f1f693dd5)]:
+  - @vercel/build-utils@13.2.15
+  - @vercel/next@4.15.16
+  - @vercel/backends@0.0.23
+  - @vercel/elysia@0.1.26
+  - @vercel/express@0.1.33
+  - @vercel/fastify@0.1.29
+  - @vercel/go@3.3.4
+  - @vercel/h3@0.1.35
+  - @vercel/hono@0.2.29
+  - @vercel/hydrogen@1.3.5
+  - @vercel/koa@0.1.9
+  - @vercel/nestjs@0.2.30
+  - @vercel/node@5.5.27
+  - @vercel/python@6.3.0
+  - @vercel/redwood@2.4.9
+  - @vercel/remix-builder@5.5.9
+  - @vercel/ruby@2.2.4
+  - @vercel/rust@1.0.4
+  - @vercel/static-build@2.8.27
+
+## 50.4.9
+
+### Patch Changes
+
+- Add `experimentalServices` to `vercel.json` ([#14612](https://github.com/vercel/vercel/pull/14612))
+
+- Add syncpack to enforce @types/node version consistency across the monorepo. ([#14665](https://github.com/vercel/vercel/pull/14665))
+
+  Update @types/node to 20.11.0 and fix type compatibility issues.
+
+- Updated dependencies [[`62219fc149835b98a98e03272fd8c965489ee43f`](https://github.com/vercel/vercel/commit/62219fc149835b98a98e03272fd8c965489ee43f), [`c8dbba4d310cbdd0733e6552aa969dc706b1076e`](https://github.com/vercel/vercel/commit/c8dbba4d310cbdd0733e6552aa969dc706b1076e), [`c762e424822819ba1bd8dd0f1fe6496741f7b586`](https://github.com/vercel/vercel/commit/c762e424822819ba1bd8dd0f1fe6496741f7b586), [`8e4b946e795ae36f7b9984edbc5d8cd4887e6fc4`](https://github.com/vercel/vercel/commit/8e4b946e795ae36f7b9984edbc5d8cd4887e6fc4), [`7719d28c3ec368a236d149118025a049b110d9f4`](https://github.com/vercel/vercel/commit/7719d28c3ec368a236d149118025a049b110d9f4)]:
+  - @vercel/python@6.3.0
+  - @vercel/static-build@2.8.26
+  - @vercel/build-utils@13.2.14
+  - @vercel/go@3.3.4
+  - @vercel/backends@0.0.23
+  - @vercel/elysia@0.1.25
+  - @vercel/express@0.1.32
+  - @vercel/fastify@0.1.28
+  - @vercel/h3@0.1.34
+  - @vercel/hono@0.2.28
+  - @vercel/hydrogen@1.3.5
+  - @vercel/koa@0.1.8
+  - @vercel/nestjs@0.2.29
+  - @vercel/next@4.15.15
+  - @vercel/node@5.5.26
+  - @vercel/redwood@2.4.9
+  - @vercel/remix-builder@5.5.9
+  - @vercel/ruby@2.2.4
+  - @vercel/rust@1.0.4
+
+## 50.4.8
+
+### Patch Changes
+
+- [python] experimental python runtime framework preset ([#14646](https://github.com/vercel/vercel/pull/14646))
+
+- Updated dependencies [[`5f085b86b26310e027de5b757a4aac3ff88a9c02`](https://github.com/vercel/vercel/commit/5f085b86b26310e027de5b757a4aac3ff88a9c02), [`687e433a0230123108906876c4b9ea16e617f594`](https://github.com/vercel/vercel/commit/687e433a0230123108906876c4b9ea16e617f594)]:
+  - @vercel/build-utils@13.2.13
+  - @vercel/python@6.2.1
+  - @vercel/static-build@2.8.25
+  - @vercel/backends@0.0.22
+  - @vercel/elysia@0.1.24
+  - @vercel/express@0.1.31
+  - @vercel/fastify@0.1.27
+  - @vercel/go@3.3.3
+  - @vercel/h3@0.1.33
+  - @vercel/hono@0.2.27
+  - @vercel/hydrogen@1.3.5
+  - @vercel/koa@0.1.7
+  - @vercel/nestjs@0.2.28
+  - @vercel/next@4.15.15
+  - @vercel/node@5.5.25
+  - @vercel/redwood@2.4.9
+  - @vercel/remix-builder@5.5.9
+  - @vercel/ruby@2.2.4
+  - @vercel/rust@1.0.4
+
+## 50.4.7
+
+### Patch Changes
+
+- Updated dependencies [[`0869e01a9b2012b8a3f07d35b92829a8e1f8b3b5`](https://github.com/vercel/vercel/commit/0869e01a9b2012b8a3f07d35b92829a8e1f8b3b5)]:
+  - @vercel/python@6.2.0
+
+## 50.4.6
+
+### Patch Changes
+
+- Updated dependencies [[`186967277069593406948c0e3099477ba43e181a`](https://github.com/vercel/vercel/commit/186967277069593406948c0e3099477ba43e181a), [`b6767ac1736e308146399d675b53fef68b99fad3`](https://github.com/vercel/vercel/commit/b6767ac1736e308146399d675b53fef68b99fad3)]:
+  - @vercel/build-utils@13.2.12
+  - @vercel/go@3.3.3
+  - @vercel/backends@0.0.22
+  - @vercel/elysia@0.1.23
+  - @vercel/express@0.1.30
+  - @vercel/fastify@0.1.26
+  - @vercel/h3@0.1.32
+  - @vercel/hono@0.2.26
+  - @vercel/hydrogen@1.3.5
+  - @vercel/koa@0.1.6
+  - @vercel/nestjs@0.2.27
+  - @vercel/next@4.15.15
+  - @vercel/node@5.5.24
+  - @vercel/python@6.1.6
+  - @vercel/redwood@2.4.9
+  - @vercel/remix-builder@5.5.9
+  - @vercel/ruby@2.2.4
+  - @vercel/rust@1.0.4
+  - @vercel/static-build@2.8.24
+
+## 50.4.5
+
+### Patch Changes
+
+- Updated dependencies [[`06bf941478bf7bfe479193ca77cfe3b00ff1a85e`](https://github.com/vercel/vercel/commit/06bf941478bf7bfe479193ca77cfe3b00ff1a85e), [`06bf941478bf7bfe479193ca77cfe3b00ff1a85e`](https://github.com/vercel/vercel/commit/06bf941478bf7bfe479193ca77cfe3b00ff1a85e)]:
+  - @vercel/build-utils@13.2.11
+  - @vercel/go@3.3.2
+  - @vercel/backends@0.0.22
+  - @vercel/elysia@0.1.22
+  - @vercel/express@0.1.29
+  - @vercel/fastify@0.1.25
+  - @vercel/h3@0.1.31
+  - @vercel/hono@0.2.25
+  - @vercel/hydrogen@1.3.5
+  - @vercel/koa@0.1.5
+  - @vercel/nestjs@0.2.26
+  - @vercel/next@4.15.15
+  - @vercel/node@5.5.23
+  - @vercel/python@6.1.6
+  - @vercel/redwood@2.4.9
+  - @vercel/remix-builder@5.5.9
+  - @vercel/ruby@2.2.4
+  - @vercel/rust@1.0.4
+  - @vercel/static-build@2.8.23
+
+## 50.4.4
+
+### Patch Changes
+
+- Adjust `vc blob --help` wording for the `store` subcommand ([#14631](https://github.com/vercel/vercel/pull/14631))
+
+- Updated dependencies []:
+  - @vercel/static-build@2.8.22
+
+## 50.4.3
+
+### Patch Changes
+
+- Updated dependencies [[`1b6adc44482303dd8b7c25faca36ce37733b847a`](https://github.com/vercel/vercel/commit/1b6adc44482303dd8b7c25faca36ce37733b847a)]:
+  - @vercel/go@3.3.1
+
+## 50.4.2
+
+### Patch Changes
+
+- Updated dependencies [[`f46cab88668c148f2ff9728dd8cafc4f4ea6dda6`](https://github.com/vercel/vercel/commit/f46cab88668c148f2ff9728dd8cafc4f4ea6dda6)]:
+  - @vercel/build-utils@13.2.10
+  - @vercel/backends@0.0.22
+  - @vercel/elysia@0.1.21
+  - @vercel/express@0.1.28
+  - @vercel/fastify@0.1.24
+  - @vercel/go@3.3.0
+  - @vercel/h3@0.1.30
+  - @vercel/hono@0.2.24
+  - @vercel/hydrogen@1.3.5
+  - @vercel/koa@0.1.4
+  - @vercel/nestjs@0.2.25
+  - @vercel/next@4.15.15
+  - @vercel/node@5.5.22
+  - @vercel/python@6.1.6
+  - @vercel/redwood@2.4.9
+  - @vercel/remix-builder@5.5.9
+  - @vercel/ruby@2.2.4
+  - @vercel/rust@1.0.4
+  - @vercel/static-build@2.8.21
+
+## 50.4.1
+
+### Patch Changes
+
+- Updated dependencies [[`74a6b49c53a5cee731c89437b06fc875731c0a87`](https://github.com/vercel/vercel/commit/74a6b49c53a5cee731c89437b06fc875731c0a87)]:
+  - @vercel/build-utils@13.2.9
+  - @vercel/next@4.15.15
+  - @vercel/node@5.5.21
+  - @vercel/redwood@2.4.9
+  - @vercel/remix-builder@5.5.9
+  - @vercel/static-build@2.8.20
+  - @vercel/backends@0.0.22
+  - @vercel/elysia@0.1.20
+  - @vercel/express@0.1.27
+  - @vercel/fastify@0.1.23
+  - @vercel/go@3.3.0
+  - @vercel/h3@0.1.29
+  - @vercel/hono@0.2.23
+  - @vercel/hydrogen@1.3.5
+  - @vercel/koa@0.1.3
+  - @vercel/nestjs@0.2.24
+  - @vercel/python@6.1.6
+  - @vercel/ruby@2.2.4
+  - @vercel/rust@1.0.4
+
+## 50.4.0
+
+### Minor Changes
+
+- Defer sentry init until needed ([#14610](https://github.com/vercel/vercel/pull/14610))
+
+### Patch Changes
+
+- Updated dependencies [[`2763c6ce1c5e0181eb97817bb79d793c7ad13a19`](https://github.com/vercel/vercel/commit/2763c6ce1c5e0181eb97817bb79d793c7ad13a19)]:
+  - @vercel/backends@0.0.22
+
+## 50.3.3
+
+### Patch Changes
+
+- Updating validation for custom deployment ids ([#14594](https://github.com/vercel/vercel/pull/14594))
+
+- [cli] Add validation for CRON_SECRET environment variable during build to detect invalid HTTP header characters ([#14576](https://github.com/vercel/vercel/pull/14576))
+
+- Updated dependencies [[`92fe2dfd81c617fb733fec95a2547024d120a408`](https://github.com/vercel/vercel/commit/92fe2dfd81c617fb733fec95a2547024d120a408)]:
+  - @vercel/build-utils@13.2.8
+  - @vercel/static-build@2.8.19
+  - @vercel/backends@0.0.21
+  - @vercel/hydrogen@1.3.5
+  - @vercel/redwood@2.4.8
+  - @vercel/remix-builder@5.5.8
+  - @vercel/next@4.15.14
+  - @vercel/node@5.5.20
+  - @vercel/elysia@0.1.19
+  - @vercel/express@0.1.26
+  - @vercel/fastify@0.1.22
+  - @vercel/go@3.3.0
+  - @vercel/h3@0.1.28
+  - @vercel/hono@0.2.22
+  - @vercel/koa@0.1.2
+  - @vercel/nestjs@0.2.23
+  - @vercel/python@6.1.6
+  - @vercel/ruby@2.2.4
+  - @vercel/rust@1.0.4
+
+## 50.3.2
+
+### Patch Changes
+
+- Fix issue with experimental backends builder that didn't respect api functions output ([#14606](https://github.com/vercel/vercel/pull/14606))
+
+- Updated dependencies [[`b7fe57260459697e7bb16fabde80f4caf147aec4`](https://github.com/vercel/vercel/commit/b7fe57260459697e7bb16fabde80f4caf147aec4), [`460443ef814240f03bb385f95f22431bf496b5fa`](https://github.com/vercel/vercel/commit/460443ef814240f03bb385f95f22431bf496b5fa)]:
+  - @vercel/build-utils@13.2.7
+  - @vercel/node@5.5.19
+  - @vercel/static-build@2.8.18
+  - @vercel/next@4.15.13
+  - @vercel/remix-builder@5.5.7
+  - @vercel/redwood@2.4.7
+  - @vercel/hydrogen@1.3.4
+  - @vercel/backends@0.0.20
+  - @vercel/koa@0.1.1
+  - @vercel/elysia@0.1.18
+  - @vercel/express@0.1.25
+  - @vercel/fastify@0.1.21
+  - @vercel/go@3.3.0
+  - @vercel/h3@0.1.27
+  - @vercel/hono@0.2.21
+  - @vercel/nestjs@0.2.22
+  - @vercel/python@6.1.6
+  - @vercel/ruby@2.2.4
+  - @vercel/rust@1.0.4
+
+## 50.3.1
+
+### Patch Changes
+
+- Exit early in `vc bisect` if good and bad URLs are the same ([#14590](https://github.com/vercel/vercel/pull/14590))
+
+- Update missing command error message ([#14603](https://github.com/vercel/vercel/pull/14603))
+
+- Ensure internal build step runs if a build script is missing ([#14564](https://github.com/vercel/vercel/pull/14564))
+
+- Updated dependencies [[`984164ff5f148fb6fd397902d16db780e9b98e6c`](https://github.com/vercel/vercel/commit/984164ff5f148fb6fd397902d16db780e9b98e6c), [`6d3c5b66324221f33290022897674af54461333e`](https://github.com/vercel/vercel/commit/6d3c5b66324221f33290022897674af54461333e), [`540fb3594de35206b0a50d894d28a7d4d788b44b`](https://github.com/vercel/vercel/commit/540fb3594de35206b0a50d894d28a7d4d788b44b), [`239b4181e311b43cdd705376c27e83466295be2f`](https://github.com/vercel/vercel/commit/239b4181e311b43cdd705376c27e83466295be2f), [`6d3c5b66324221f33290022897674af54461333e`](https://github.com/vercel/vercel/commit/6d3c5b66324221f33290022897674af54461333e)]:
+  - @vercel/build-utils@13.2.6
+  - @vercel/backends@0.0.19
+  - @vercel/express@0.1.24
+  - @vercel/hono@0.2.20
+  - @vercel/next@4.15.12
+  - @vercel/node@5.5.18
+  - @vercel/elysia@0.1.17
+  - @vercel/fastify@0.1.20
+  - @vercel/go@3.3.0
+  - @vercel/h3@0.1.26
+  - @vercel/hydrogen@1.3.3
+  - @vercel/nestjs@0.2.21
+  - @vercel/python@6.1.6
+  - @vercel/redwood@2.4.6
+  - @vercel/remix-builder@5.5.6
+  - @vercel/ruby@2.2.4
+  - @vercel/rust@1.0.4
+  - @vercel/static-build@2.8.17
+
+## 50.3.0
+
+### Minor Changes
+
+- Add upgrade command ([#14584](https://github.com/vercel/vercel/pull/14584))
+
+- Support typo detection for commands as well as frameworks ([#14586](https://github.com/vercel/vercel/pull/14586))
+
+### Patch Changes
+
+- Migrate CLI build output from CommonJS to ESM ([#14566](https://github.com/vercel/vercel/pull/14566))
+
+  - Change CLI package to use ESM format (`"type": "module"`)
+  - Add ESM shim banner for CommonJS compatibility (`require`, `__filename`, `__dirname`)
+  - Rename worker files to `.cjs` extension for explicit CommonJS handling
+  - Fix `getPackageJSON` to handle ESM `file://` URLs from stack traces
+  - Convert `scripts/start.js` to use dynamic import
+
+## 50.2.0
+
+### Minor Changes
+
+- Add `vercel env run` command to run commands with environment variables from the linked Vercel project without writing them to the filesystem ([#14582](https://github.com/vercel/vercel/pull/14582))
+
+- Merge computed rewrites/redirects to routes in Vercel config ([#14518](https://github.com/vercel/vercel/pull/14518))
+
+### Patch Changes
+
+- Adding in user configured deploymentId to build output type ([#14497](https://github.com/vercel/vercel/pull/14497))
+
+- skip secondary installation for vercel.ts ([#14471](https://github.com/vercel/vercel/pull/14471))
+
+- Updated dependencies [[`2eb1b7678bece13e442f8404d519bd07891eb500`](https://github.com/vercel/vercel/commit/2eb1b7678bece13e442f8404d519bd07891eb500), [`39c95ff6b643a63509571818e67a792df09fd71f`](https://github.com/vercel/vercel/commit/39c95ff6b643a63509571818e67a792df09fd71f), [`d63084dac296ccb2077ed742bc2ade0264da851d`](https://github.com/vercel/vercel/commit/d63084dac296ccb2077ed742bc2ade0264da851d)]:
+  - @vercel/next@4.15.11
+  - @vercel/build-utils@13.2.5
+  - @vercel/redwood@2.4.6
+  - @vercel/rust@1.0.4
+  - @vercel/static-build@2.8.16
+  - @vercel/backends@0.0.18
+  - @vercel/elysia@0.1.16
+  - @vercel/express@0.1.23
+  - @vercel/fastify@0.1.19
+  - @vercel/go@3.3.0
+  - @vercel/h3@0.1.25
+  - @vercel/hono@0.2.19
+  - @vercel/hydrogen@1.3.3
+  - @vercel/nestjs@0.2.20
+  - @vercel/node@5.5.17
+  - @vercel/python@6.1.6
+  - @vercel/remix-builder@5.5.6
+  - @vercel/ruby@2.2.4
+
+## 50.1.6
+
+### Patch Changes
+
+- Don't allow prefix of `dpl_` for prebuilt IDs ([#14496](https://github.com/vercel/vercel/pull/14496))
+
+- Updated dependencies []:
+  - @vercel/backends@0.0.18
+  - @vercel/express@0.1.22
+
+## 50.1.5
+
+### Patch Changes
+
+- Disable Sentry session tracking ([#14539](https://github.com/vercel/vercel/pull/14539))
+
+## 50.1.4
+
+### Patch Changes
+
+- Use more accurate config file name in errors ([#14482](https://github.com/vercel/vercel/pull/14482))
+
+- Fix issue when VERCEL_BACKENDS_BUILDS was enabled where non-backend projects wrote v2 outputs ([#14469](https://github.com/vercel/vercel/pull/14469))
+
+- Updated dependencies [[`ccfb9debe22cc8a75685df7d6e99ba180b2438f3`](https://github.com/vercel/vercel/commit/ccfb9debe22cc8a75685df7d6e99ba180b2438f3), [`d4490e7ffbf47a6efb87fe3b66b6368fb0ac9d3b`](https://github.com/vercel/vercel/commit/d4490e7ffbf47a6efb87fe3b66b6368fb0ac9d3b), [`dcd9ee12bc21e68b4fcf1b89455bc4c3dc34b5cd`](https://github.com/vercel/vercel/commit/dcd9ee12bc21e68b4fcf1b89455bc4c3dc34b5cd)]:
+  - @vercel/next@4.15.10
+  - @vercel/go@3.3.0
+  - @vercel/python@6.1.6
+  - @vercel/node@5.5.16
+
+## 50.1.3
+
+### Patch Changes
+
+- Run install command earlier for vercel.ts ([#14504](https://github.com/vercel/vercel/pull/14504))
+
+- [python] only create api builders for `.py` files that export an app or handler ([#14493](https://github.com/vercel/vercel/pull/14493))
+
+- Remove vercel.ts feature flag ([#14501](https://github.com/vercel/vercel/pull/14501))
+
+- Updated dependencies [[`f8e79cd385e3635a5d8227cb357af381b883d053`](https://github.com/vercel/vercel/commit/f8e79cd385e3635a5d8227cb357af381b883d053), [`c55475f865ecf22f27b8b17f6fc98b9e1455ab5d`](https://github.com/vercel/vercel/commit/c55475f865ecf22f27b8b17f6fc98b9e1455ab5d)]:
+  - @vercel/ruby@2.2.4
+  - @vercel/build-utils@13.2.4
+  - @vercel/python@6.1.5
+  - @vercel/backends@0.0.17
+  - @vercel/elysia@0.1.15
+  - @vercel/express@0.1.21
+  - @vercel/fastify@0.1.18
+  - @vercel/go@3.2.4
+  - @vercel/h3@0.1.24
+  - @vercel/hono@0.2.18
+  - @vercel/hydrogen@1.3.3
+  - @vercel/nestjs@0.2.19
+  - @vercel/next@4.15.9
+  - @vercel/node@5.5.16
+  - @vercel/redwood@2.4.6
+  - @vercel/remix-builder@5.5.6
+  - @vercel/rust@1.0.4
+  - @vercel/static-build@2.8.15
+
+## 50.1.2
+
+### Patch Changes
+
+- Remove `content-encoding` response header for CLI extensions proxy ([#14489](https://github.com/vercel/vercel/pull/14489))
+
+## 50.1.1
+
+### Patch Changes
+
+- Revert env pull conditional quoting changes ([#14485](https://github.com/vercel/vercel/pull/14485))
+
+## 50.1.0
+
+### Minor Changes
+
+- Bugfix: handle json values with newlines when pulling environment variables ([#14479](https://github.com/vercel/vercel/pull/14479))
+
+- Add out to deploy command for aliasing production domains ([#14458](https://github.com/vercel/vercel/pull/14458))
+
+### Patch Changes
+
+- Add support for `customErrorPage` configuration in `vercel.json` to customize pages for platform errors. ([#14466](https://github.com/vercel/vercel/pull/14466))
+
+- Add a vercel redirects upload command to bulk upload redirects from CSV or JSON files. ([#14459](https://github.com/vercel/vercel/pull/14459))
+
+- Updated dependencies [[`2fdee16711f0c87c7eb23f722d0b289a0d6ca5fc`](https://github.com/vercel/vercel/commit/2fdee16711f0c87c7eb23f722d0b289a0d6ca5fc), [`e8641664b82dbc5f924ee571f9d7b3842a8a6b2b`](https://github.com/vercel/vercel/commit/e8641664b82dbc5f924ee571f9d7b3842a8a6b2b), [`1f85d5a78d3cf1bae22d801596c6c10d83e1bafe`](https://github.com/vercel/vercel/commit/1f85d5a78d3cf1bae22d801596c6c10d83e1bafe)]:
+  - @vercel/python@6.1.4
+  - @vercel/next@4.15.9
+
+## 50.0.1
+
+### Patch Changes
+
+- Run install command earlier if using vercel.ts ([#14462](https://github.com/vercel/vercel/pull/14462))
+
+- Better error handling for vercel config parsing ([#14453](https://github.com/vercel/vercel/pull/14453))
+
+## 50.0.0
+
+### Major Changes
+
+- Fix env pull incorrectly escaping JSON environment variables ([#14456](https://github.com/vercel/vercel/pull/14456))
+
+### Minor Changes
+
+- Add json flag to inspect command ([#14435](https://github.com/vercel/vercel/pull/14435))
+
+### Patch Changes
+
+- Updated dependencies [[`3524f74fcf81fffd29f5012d4c860b2fda2ceeb9`](https://github.com/vercel/vercel/commit/3524f74fcf81fffd29f5012d4c860b2fda2ceeb9), [`c00a2756a8b63e775a451c4d8c11dd93a5e6b5c1`](https://github.com/vercel/vercel/commit/c00a2756a8b63e775a451c4d8c11dd93a5e6b5c1), [`e3b66ffaf709ccd1b851593231eb1f5b893bff27`](https://github.com/vercel/vercel/commit/e3b66ffaf709ccd1b851593231eb1f5b893bff27)]:
+  - @vercel/python@6.1.3
+  - @vercel/express@0.1.20
+  - @vercel/fastify@0.1.17
+  - @vercel/elysia@0.1.14
+  - @vercel/nestjs@0.2.18
+  - @vercel/hono@0.2.17
+  - @vercel/h3@0.1.23
+  - @vercel/build-utils@13.2.3
+  - @vercel/next@4.15.8
+  - @vercel/redwood@2.4.6
+  - @vercel/rust@1.0.4
+  - @vercel/static-build@2.8.14
+
+## 49.2.0
+
+### Minor Changes
+
+- Improves `env pull` with conditional quoting of environment variables ([#14402](https://github.com/vercel/vercel/pull/14402))
+
+### Patch Changes
+
+- Improve handling of 429 error codes and Retry-After headers ([#14443](https://github.com/vercel/vercel/pull/14443))
+
+- Add options to vercel redirects commands to specify status code, case sensitivity, and preserving query params when adding redirects. Rename --staged flag to --staging and show diffs when listing redirects for the staging version. ([#14437](https://github.com/vercel/vercel/pull/14437))
+
+- Updated dependencies [[`bc36a99aac6d9400ad158890e54a4e9f7a49d91d`](https://github.com/vercel/vercel/commit/bc36a99aac6d9400ad158890e54a4e9f7a49d91d), [`059be0adac65649f861335c1a86f4e600d69155a`](https://github.com/vercel/vercel/commit/059be0adac65649f861335c1a86f4e600d69155a)]:
+  - @vercel/backends@0.0.17
+  - @vercel/python@6.1.2
+  - @vercel/express@0.1.19
+
+## 49.1.2
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @vercel/backends@0.0.16
+
+## 49.1.1
+
+### Patch Changes
+
+- Fix example API url ([#14417](https://github.com/vercel/vercel/pull/14417))
+
+- Fix vc build not respecting .vercelignore ([#14399](https://github.com/vercel/vercel/pull/14399))
+
+## 49.1.0
+
+### Minor Changes
+
+- Add new CLI commands for upcoming bulk redirects feature. ([#14393](https://github.com/vercel/vercel/pull/14393))
+
+## 49.0.0
+
+### Major Changes
+
+- Standardize ls argument errors ([#14360](https://github.com/vercel/vercel/pull/14360))
+
+### Patch Changes
+
+- Use `workspace:*` for workspace dependencies ([#14396](https://github.com/vercel/vercel/pull/14396))
+
+- add config path compilation util ([#14312](https://github.com/vercel/vercel/pull/14312))
+
+- Improve messaging for vc pull ([#14351](https://github.com/vercel/vercel/pull/14351))
+
+- Don't prompt to env pull when linking to a newly created project ([#14392](https://github.com/vercel/vercel/pull/14392))
+
+- support for alternative vercel config files in build, dev, and deploy commands ([#14314](https://github.com/vercel/vercel/pull/14314))
+
+- Updated dependencies [[`6bdbf9e170507a973a53bd881c8c7ecbaa3a930c`](https://github.com/vercel/vercel/commit/6bdbf9e170507a973a53bd881c8c7ecbaa3a930c)]:
+  - @vercel/backends@0.0.15
+  - @vercel/build-utils@13.2.3
+  - @vercel/elysia@0.1.13
+  - @vercel/express@0.1.18
+  - @vercel/fastify@0.1.16
+  - @vercel/go@3.2.4
+  - @vercel/h3@0.1.22
+  - @vercel/hono@0.2.16
+  - @vercel/hydrogen@1.3.3
+  - @vercel/nestjs@0.2.17
+  - @vercel/next@4.15.8
+  - @vercel/node@5.5.15
+  - @vercel/python@6.1.1
+  - @vercel/redwood@2.4.6
+  - @vercel/remix-builder@5.5.6
+  - @vercel/ruby@2.2.3
+  - @vercel/rust@1.0.4
+  - @vercel/static-build@2.8.14
+
+## 48.12.1
+
+### Patch Changes
+
+- Updated dependencies [[`f9b8fb23d1d2f873c5c3a0534b12d1e463689bb6`](https://github.com/vercel/vercel/commit/f9b8fb23d1d2f873c5c3a0534b12d1e463689bb6)]:
+  - @vercel/build-utils@13.2.2
+  - @vercel/backends@0.0.14
+  - @vercel/express@0.1.17
+  - @vercel/redwood@2.4.5
+  - @vercel/remix-builder@5.5.5
+  - @vercel/hono@0.2.15
+  - @vercel/next@4.15.7
+  - @vercel/node@5.5.14
+  - @vercel/elysia@0.1.12
+  - @vercel/fastify@0.1.15
+  - @vercel/h3@0.1.21
+  - @vercel/nestjs@0.2.16
+  - @vercel/static-build@2.8.13
+
+## 48.12.0
+
+### Minor Changes
+
+- Install nestjs builder in cli ([#14377](https://github.com/vercel/vercel/pull/14377))
+
+## 48.11.1
+
+### Patch Changes
+
+- Prompts if environment vairables should be sensitive. Masks value when inputting new environment variable. ([#14326](https://github.com/vercel/vercel/pull/14326))
+
+- Updated dependencies [[`d5586f84dc67740626011cebd18625e993d9e2b2`](https://github.com/vercel/vercel/commit/d5586f84dc67740626011cebd18625e993d9e2b2), [`99ead3d90328874b0f42d338e1e397b9f9d2c2bf`](https://github.com/vercel/vercel/commit/99ead3d90328874b0f42d338e1e397b9f9d2c2bf), [`2ac2f0ea5597a9cd242707fba3ed28a521a75da3`](https://github.com/vercel/vercel/commit/2ac2f0ea5597a9cd242707fba3ed28a521a75da3)]:
+  - @vercel/python@6.1.0
+  - @vercel/next@4.15.6
+  - @vercel/static-build@2.8.12
+  - @vercel/build-utils@13.2.1
+  - @vercel/backends@0.0.13
+  - @vercel/redwood@2.4.4
+  - @vercel/remix-builder@5.5.4
+  - @vercel/node@5.5.13
+  - @vercel/elysia@0.1.11
+  - @vercel/express@0.1.16
+  - @vercel/fastify@0.1.14
+  - @vercel/h3@0.1.20
+  - @vercel/hono@0.2.14
+
+## 48.11.0
+
+### Minor Changes
+
+- Prompt to pull environment variables after successful project linking ([#13697](https://github.com/vercel/vercel/pull/13697))
+
+### Patch Changes
+
+- Enable `@vercel/rust` cli fs detection ([#14330](https://github.com/vercel/vercel/pull/14330))
+
+## 48.10.14
+
+### Patch Changes
+
+- Updated dependencies [[`e2b3a0b0a939f09d8fdefc8d493733defac4997a`](https://github.com/vercel/vercel/commit/e2b3a0b0a939f09d8fdefc8d493733defac4997a)]:
+  - @vercel/backends@0.0.12
+  - @vercel/express@0.1.15
+  - @vercel/redwood@2.4.3
+  - @vercel/remix-builder@5.5.3
+  - @vercel/hono@0.2.13
+  - @vercel/next@4.15.5
+  - @vercel/node@5.5.12
+  - @vercel/elysia@0.1.10
+  - @vercel/fastify@0.1.13
+  - @vercel/h3@0.1.19
+
+## 48.10.13
+
+### Patch Changes
+
+- Updated dependencies [[`611b2432b600381d5bebb4245765d411e62895b3`](https://github.com/vercel/vercel/commit/611b2432b600381d5bebb4245765d411e62895b3)]:
+  - @vercel/next@4.15.4
+
+## 48.10.12
+
+### Patch Changes
+
+- Fix project naming with vc link --repo ([#14335](https://github.com/vercel/vercel/pull/14335))
+
+- Updated dependencies [[`2beb1222fbdde06e8a153521871c0a3b33228045`](https://github.com/vercel/vercel/commit/2beb1222fbdde06e8a153521871c0a3b33228045)]:
+  - @vercel/build-utils@13.2.0
+  - @vercel/node@5.5.11
+  - @vercel/backends@0.0.11
+  - @vercel/elysia@0.1.9
+  - @vercel/express@0.1.14
+  - @vercel/fastify@0.1.12
+  - @vercel/h3@0.1.18
+  - @vercel/hono@0.2.12
+  - @vercel/static-build@2.8.11
+
+## 48.10.11
+
+### Patch Changes
+
+- Updated dependencies [[`fb70f3eef445879bcb28962a86c5691bff618f73`](https://github.com/vercel/vercel/commit/fb70f3eef445879bcb28962a86c5691bff618f73)]:
+  - @vercel/build-utils@13.1.2
+  - @vercel/backends@0.0.11
+  - @vercel/elysia@0.1.8
+  - @vercel/express@0.1.13
+  - @vercel/fastify@0.1.11
+  - @vercel/h3@0.1.17
+  - @vercel/hono@0.2.11
+  - @vercel/node@5.5.10
+  - @vercel/static-build@2.8.10
+
+## 48.10.10
+
+### Patch Changes
+
+- Updated dependencies [[`e9566780378abc94828a6e00320add54c95bdc0c`](https://github.com/vercel/vercel/commit/e9566780378abc94828a6e00320add54c95bdc0c)]:
+  - @vercel/python@6.0.8
+
+## 48.10.9
+
+### Patch Changes
+
+- Updated dependencies [[`ac51c0e5a0258cf8c5547984ab488cd61ab4c944`](https://github.com/vercel/vercel/commit/ac51c0e5a0258cf8c5547984ab488cd61ab4c944), [`a9340f6f5022eed96d1e42344b5bb67f1239ca41`](https://github.com/vercel/vercel/commit/a9340f6f5022eed96d1e42344b5bb67f1239ca41)]:
+  - @vercel/python@6.0.7
+  - @vercel/build-utils@13.1.1
+  - @vercel/backends@0.0.11
+  - @vercel/elysia@0.1.7
+  - @vercel/express@0.1.12
+  - @vercel/fastify@0.1.10
+  - @vercel/h3@0.1.16
+  - @vercel/hono@0.2.10
+  - @vercel/node@5.5.9
+  - @vercel/static-build@2.8.9
+
+## 48.10.8
+
+### Patch Changes
+
+- Updated dependencies [[`10de9d8d6ebdef57f4b0ca7dabc277651b317d7c`](https://github.com/vercel/vercel/commit/10de9d8d6ebdef57f4b0ca7dabc277651b317d7c)]:
+  - @vercel/backends@0.0.10
+  - @vercel/express@0.1.11
+
+## 48.10.7
+
+### Patch Changes
+
+- Support python builder for manual routes ([#14319](https://github.com/vercel/vercel/pull/14319))
+
+- prefer the first production alias for `vercel curl` when no deployment is provided ([#14307](https://github.com/vercel/vercel/pull/14307))
+
+## 48.10.6
+
+### Patch Changes
+
+- Bugfix: stop streaming logs after successful deploy ([#14321](https://github.com/vercel/vercel/pull/14321))
+
+## 48.10.5
+
+### Patch Changes
+
+- Shows more descriptive log message while building ([#14301](https://github.com/vercel/vercel/pull/14301))
+
+- Bump @vercel/fun to support executable runtimes ([#14305](https://github.com/vercel/vercel/pull/14305))
+
+- Updated dependencies [[`0a1db0d2f42aa5c6f80541d6cadf3904d6131a80`](https://github.com/vercel/vercel/commit/0a1db0d2f42aa5c6f80541d6cadf3904d6131a80), [`e20394a5a76207267966393edf0e66e4e9a1d213`](https://github.com/vercel/vercel/commit/e20394a5a76207267966393edf0e66e4e9a1d213)]:
+  - @vercel/build-utils@13.1.0
+  - @vercel/python@6.0.6
+  - @vercel/backends@0.0.9
+  - @vercel/elysia@0.1.6
+  - @vercel/express@0.1.10
+  - @vercel/fastify@0.1.9
+  - @vercel/h3@0.1.15
+  - @vercel/hono@0.2.9
+  - @vercel/node@5.5.8
+  - @vercel/static-build@2.8.8
+
+## 48.10.4
+
+### Patch Changes
+
+- adds support for missing protocol when using the `--deployment` flag of `vercel curl` ([#14297](https://github.com/vercel/vercel/pull/14297))
+
+- Update deployment status emoji to show loading indicator (⏳) initially, then change to success (✅) when deployment is ready. This provides better visual feedback during the deployment process. ([#14278](https://github.com/vercel/vercel/pull/14278))
+
+- Updated dependencies [[`2329dff0836e8699922eed7e70326511f93dd9f8`](https://github.com/vercel/vercel/commit/2329dff0836e8699922eed7e70326511f93dd9f8)]:
+  - @vercel/build-utils@13.0.2
+  - @vercel/node@5.5.7
+  - @vercel/backends@0.0.9
+  - @vercel/elysia@0.1.5
+  - @vercel/express@0.1.9
+  - @vercel/fastify@0.1.8
+  - @vercel/h3@0.1.14
+  - @vercel/hono@0.2.8
+  - @vercel/static-build@2.8.7
+
+## 48.10.3
+
+### Patch Changes
+
+- Updated http-proxy dependency to http-proxy-node16 ([#14251](https://github.com/vercel/vercel/pull/14251))
+
+- Updated dependencies [[`cf1183cb80e407238af2dd2a8d5e605f621c5d91`](https://github.com/vercel/vercel/commit/cf1183cb80e407238af2dd2a8d5e605f621c5d91)]:
+  - @vercel/backends@0.0.8
+  - @vercel/express@0.1.8
+
+## 48.10.2
+
+### Patch Changes
+
+- Fix issue where manual routes was checking wrong path for routes.json ([#14266](https://github.com/vercel/vercel/pull/14266))
+
+## 48.10.1
+
+### Patch Changes
+
+- Updated dependencies [[`6c9fdcc6632b6572e662fb15f5ede7ccdad9c23d`](https://github.com/vercel/vercel/commit/6c9fdcc6632b6572e662fb15f5ede7ccdad9c23d)]:
+  - @vercel/python@6.0.5
+
+## 48.10.0
+
+### Minor Changes
+
+- Adding in command vc open, to open project in browser ([#14237](https://github.com/vercel/vercel/pull/14237))
+
+## 48.9.2
+
+### Patch Changes
+
+- Updated dependencies [[`69f56e68bf56677a2c97dcd2cc83388a9cde0f08`](https://github.com/vercel/vercel/commit/69f56e68bf56677a2c97dcd2cc83388a9cde0f08), [`e77b39019d09be29896298cb992423f4f23f61e1`](https://github.com/vercel/vercel/commit/e77b39019d09be29896298cb992423f4f23f61e1), [`6221d3c49375450891d4bb1bba9e9702132f671b`](https://github.com/vercel/vercel/commit/6221d3c49375450891d4bb1bba9e9702132f671b), [`9727b014cfe8f1d79af8d489c532e1ec0a9c9d51`](https://github.com/vercel/vercel/commit/9727b014cfe8f1d79af8d489c532e1ec0a9c9d51), [`4e8d707ea94feb5fed1775fa2db7e276447e70cb`](https://github.com/vercel/vercel/commit/4e8d707ea94feb5fed1775fa2db7e276447e70cb), [`51e6515580668731b47d4ae7c75b2f5df4caf8d3`](https://github.com/vercel/vercel/commit/51e6515580668731b47d4ae7c75b2f5df4caf8d3), [`4c310f1e747d4e3281b279a42ea5601aa6efe6c2`](https://github.com/vercel/vercel/commit/4c310f1e747d4e3281b279a42ea5601aa6efe6c2)]:
+  - @vercel/next@4.15.3
+  - @vercel/ruby@2.2.2
+  - @vercel/static-build@2.8.6
+  - @vercel/build-utils@13.0.1
+  - @vercel/backends@0.0.7
+  - @vercel/hydrogen@1.3.2
+  - @vercel/redwood@2.4.2
+  - @vercel/remix-builder@5.5.2
+  - @vercel/node@5.5.6
+  - @vercel/python@6.0.4
+  - @vercel/elysia@0.1.4
+  - @vercel/express@0.1.7
+  - @vercel/fastify@0.1.7
+  - @vercel/h3@0.1.13
+  - @vercel/hono@0.2.7
+
+## 48.9.1
+
+### Patch Changes
+
+- Include account info in curl requests ([#14221](https://github.com/vercel/vercel/pull/14221))
+
+- feat: [vercel curl & vercel httpstat] validation for full url ([#14209](https://github.com/vercel/vercel/pull/14209))
+
+- Updated dependencies [[`3dbaa57ed7061d40c82a70d48e57f0d3ca38f32d`](https://github.com/vercel/vercel/commit/3dbaa57ed7061d40c82a70d48e57f0d3ca38f32d), [`62651e302de8c2913b658b5cfd5c9e1dd192a03c`](https://github.com/vercel/vercel/commit/62651e302de8c2913b658b5cfd5c9e1dd192a03c), [`d485db0fe0ceaeddea8993f6d6d81348df0762ea`](https://github.com/vercel/vercel/commit/d485db0fe0ceaeddea8993f6d6d81348df0762ea), [`fd83a14365e529930c77fd03358a1d4e42c125f0`](https://github.com/vercel/vercel/commit/fd83a14365e529930c77fd03358a1d4e42c125f0), [`b2f517bcf1b9af299d9b381cf329a24e86dc2686`](https://github.com/vercel/vercel/commit/b2f517bcf1b9af299d9b381cf329a24e86dc2686)]:
+  - @vercel/python@6.0.3
+  - @vercel/backends@0.0.6
+
+## 48.9.0
+
+### Minor Changes
+
+- Add `vercel httpstat` command for HTTP timing visualization. This new command provides beautiful timing statistics for Vercel deployments, wrapping the httpstat tool with automatic deployment URL resolution and protection bypass handling. ([#14195](https://github.com/vercel/vercel/pull/14195))
+
+### Patch Changes
+
+- Add elysia dep to the CLI ([#14218](https://github.com/vercel/vercel/pull/14218))
+
+- Updated dependencies [[`0391e5b3e4087af0337cb782f27b4c59c8c15735`](https://github.com/vercel/vercel/commit/0391e5b3e4087af0337cb782f27b4c59c8c15735), [`bbf0c2c05454530a994781dc5a2ebc9e94c068df`](https://github.com/vercel/vercel/commit/bbf0c2c05454530a994781dc5a2ebc9e94c068df), [`6430affe714b17b7314223fb835d452de214a695`](https://github.com/vercel/vercel/commit/6430affe714b17b7314223fb835d452de214a695), [`314a62920d965765c71b198ca672ff44242fd1fd`](https://github.com/vercel/vercel/commit/314a62920d965765c71b198ca672ff44242fd1fd)]:
+  - @vercel/python@6.0.2
+  - @vercel/next@4.15.2
+  - @vercel/build-utils@13.0.0
+  - @vercel/static-build@2.8.5
+  - @vercel/backends@0.0.5
+  - @vercel/hydrogen@1.3.1
+  - @vercel/redwood@2.4.1
+  - @vercel/remix-builder@5.5.1
+  - @vercel/node@5.5.5
+  - @vercel/elysia@0.1.3
+  - @vercel/express@0.1.6
+  - @vercel/fastify@0.1.6
+  - @vercel/h3@0.1.12
+  - @vercel/hono@0.2.6
+
+## 48.8.2
+
+### Patch Changes
+
+- Add fastify as a direct dependency ([#14202](https://github.com/vercel/vercel/pull/14202))
+
+## 48.8.1
+
+### Patch Changes
+
+- [python] allow arbitrary entrypoints in pyproject.toml ([#14181](https://github.com/vercel/vercel/pull/14181))
+
+- Add helper for detecting backend builders ([#14182](https://github.com/vercel/vercel/pull/14182))
+
+- Remove env var guard for experimental manual routes ([#14182](https://github.com/vercel/vercel/pull/14182))
+
+- Updated dependencies [[`1e8a3a874ec2c837dff062728866ed7ac498e57e`](https://github.com/vercel/vercel/commit/1e8a3a874ec2c837dff062728866ed7ac498e57e), [`21214ebaf1077f1a9d1d7d4046bffe79db0196d2`](https://github.com/vercel/vercel/commit/21214ebaf1077f1a9d1d7d4046bffe79db0196d2), [`de6c3f8d9d2b43c6b83cd97dd54ca1427a71fbab`](https://github.com/vercel/vercel/commit/de6c3f8d9d2b43c6b83cd97dd54ca1427a71fbab), [`ed0d8875a077731cba5515830afc14c616b0eedd`](https://github.com/vercel/vercel/commit/ed0d8875a077731cba5515830afc14c616b0eedd), [`06a8810b86134b7f3f800f0be82835198ea84a75`](https://github.com/vercel/vercel/commit/06a8810b86134b7f3f800f0be82835198ea84a75)]:
+  - @vercel/python@6.0.1
+  - @vercel/build-utils@12.2.4
+  - @vercel/next@4.15.1
+  - @vercel/backends@0.0.4
+  - @vercel/express@0.1.5
+  - @vercel/h3@0.1.11
+  - @vercel/hono@0.2.5
+  - @vercel/node@5.5.4
+  - @vercel/static-build@2.8.4
+
+## 48.8.0
+
+### Minor Changes
+
+- Add TanStack Start framework preset ([#14188](https://github.com/vercel/vercel/pull/14188))
+
+- [cli] adds `vc curl` beta command ([#14170](https://github.com/vercel/vercel/pull/14170))
+
+### Patch Changes
+
+- Updated dependencies [[`00c960f0c187650152580f14ab17770cec46dfc2`](https://github.com/vercel/vercel/commit/00c960f0c187650152580f14ab17770cec46dfc2)]:
+  - @vercel/next@4.15.0
+
+## 48.7.1
+
+### Patch Changes
+
+- Re-enable experimental backends support ([#14163](https://github.com/vercel/vercel/pull/14163))
+
+- Updated dependencies [[`055f9cd9f560085cabe243e2d213b62dbdb5160c`](https://github.com/vercel/vercel/commit/055f9cd9f560085cabe243e2d213b62dbdb5160c), [`55a1f7691ab944e133a43fc859fb8f373c5982c0`](https://github.com/vercel/vercel/commit/55a1f7691ab944e133a43fc859fb8f373c5982c0)]:
+  - @vercel/python@6.0.0
+  - @vercel/build-utils@12.2.3
+  - @vercel/node@5.5.3
+  - @vercel/backends@0.0.4
+  - @vercel/express@0.1.4
+  - @vercel/h3@0.1.10
+  - @vercel/hono@0.2.4
+  - @vercel/static-build@2.8.3
+
+## 48.7.0
+
+### Minor Changes
+
+- [cli] add new commands `vercel cache invalidate --srcimg` ([#14169](https://github.com/vercel/vercel/pull/14169))
+
+## 48.6.7
+
+### Patch Changes
+
+- Updated dependencies [[`f843e147b71ce44af214647c78eab4a6109db98b`](https://github.com/vercel/vercel/commit/f843e147b71ce44af214647c78eab4a6109db98b), [`2de7ca658769b3d4d3c38c5194bb75a63bd895a4`](https://github.com/vercel/vercel/commit/2de7ca658769b3d4d3c38c5194bb75a63bd895a4)]:
+  - @vercel/build-utils@12.2.2
+  - @vercel/backends@0.0.4
+  - @vercel/express@0.1.3
+  - @vercel/h3@0.1.9
+  - @vercel/hono@0.2.3
+  - @vercel/node@5.5.2
+  - @vercel/static-build@2.8.2
+
+## 48.6.6
+
+### Patch Changes
+
+- Fix regression on node 20.17 and earlier ([#14158](https://github.com/vercel/vercel/pull/14158))
+
+## 48.6.5
+
+### Patch Changes
+
+- Enable experimental backends mode ([#14155](https://github.com/vercel/vercel/pull/14155))
+
+## 48.6.4
+
+### Patch Changes
+
+- Updated dependencies [[`0e63b0b007dd5705434ff594e7576c86dda939bc`](https://github.com/vercel/vercel/commit/0e63b0b007dd5705434ff594e7576c86dda939bc)]:
+  - @vercel/build-utils@12.2.1
+  - @vercel/backends@0.0.3
+  - @vercel/express@0.1.2
+  - @vercel/h3@0.1.8
+  - @vercel/hono@0.2.2
+  - @vercel/node@5.5.1
+  - @vercel/static-build@2.8.1
+
+## 48.6.3
+
+### Patch Changes
+
+- Fix vc build regression ([#14149](https://github.com/vercel/vercel/pull/14149))
+
+## 48.6.2
+
+### Patch Changes
+
+- Add experimental support for routes.json ([#14138](https://github.com/vercel/vercel/pull/14138))
+
+- Updated dependencies [[`2f586d89e744ee905626080de5f49b140739dde7`](https://github.com/vercel/vercel/commit/2f586d89e744ee905626080de5f49b140739dde7), [`2f586d89e744ee905626080de5f49b140739dde7`](https://github.com/vercel/vercel/commit/2f586d89e744ee905626080de5f49b140739dde7)]:
+  - @vercel/backends@0.0.3
+
+## 48.6.1
+
+### Patch Changes
+
+- Replace experimental builders for Express and Hono with a @vercel/backends package ([#14065](https://github.com/vercel/vercel/pull/14065))
+
+- Updated dependencies [[`c40a0e7c53755cf5bed642256498da3d3102d8ac`](https://github.com/vercel/vercel/commit/c40a0e7c53755cf5bed642256498da3d3102d8ac), [`c6cf33d7db28f858d7e34d08ec871a28423ded2a`](https://github.com/vercel/vercel/commit/c6cf33d7db28f858d7e34d08ec871a28423ded2a), [`c6cf33d7db28f858d7e34d08ec871a28423ded2a`](https://github.com/vercel/vercel/commit/c6cf33d7db28f858d7e34d08ec871a28423ded2a)]:
+  - @vercel/next@4.14.1
+  - @vercel/express@0.1.1
+  - @vercel/backends@0.0.2
+  - @vercel/hono@0.2.1
+
+## 48.6.0
+
+### Minor Changes
+
+- Add support for Bun through a vercel.json property ([#14130](https://github.com/vercel/vercel/pull/14130))
+
+### Patch Changes
+
+- Updated dependencies [[`970781cb50ebdb0379056abe1700bba4a53fcf7c`](https://github.com/vercel/vercel/commit/970781cb50ebdb0379056abe1700bba4a53fcf7c)]:
+  - @vercel/static-build@2.8.0
+  - @vercel/build-utils@12.2.0
+  - @vercel/hydrogen@1.3.0
+  - @vercel/express@0.1.0
+  - @vercel/redwood@2.4.0
+  - @vercel/remix-builder@5.5.0
+  - @vercel/hono@0.2.0
+  - @vercel/next@4.14.0
+  - @vercel/node@5.5.0
+  - @vercel/h3@0.1.7
+
+## 48.5.0
+
+### Minor Changes
+
+- Add zero-config support for Fastify ([#14120](https://github.com/vercel/vercel/pull/14120))
+
+### Patch Changes
+
+- Fix bug that was over-showing the local settings override log ([#14118](https://github.com/vercel/vercel/pull/14118))
+
+## 48.4.1
+
+### Patch Changes
+
+- Updated dependencies [[`ff370d874863bb2a00a19de4bdef3a707296b9f2`](https://github.com/vercel/vercel/commit/ff370d874863bb2a00a19de4bdef3a707296b9f2)]:
+  - @vercel/node@5.4.1
+  - @vercel/express@0.0.26
+  - @vercel/h3@0.1.6
+  - @vercel/hono@0.1.7
+
+## 48.4.0
+
+### Minor Changes
+
+- Add nestjs example ([#14063](https://github.com/vercel/vercel/pull/14063))
+
+### Patch Changes
+
+- Collect contact information when purchasing domains ([#14106](https://github.com/vercel/vercel/pull/14106))
+
+- Updated dependencies [[`71b1f42168ea4a9fdd9b312d76b9ec79e3155e91`](https://github.com/vercel/vercel/commit/71b1f42168ea4a9fdd9b312d76b9ec79e3155e91)]:
+  - @vercel/next@4.13.4
+
+## 48.3.0
+
+### Minor Changes
+
+- Add vc dev support for NestJS ([#14103](https://github.com/vercel/vercel/pull/14103))
+
+### Patch Changes
+
+- Fix vc init express ([#14103](https://github.com/vercel/vercel/pull/14103))
+
+- Updated dependencies [[`bcf9c18da437d9566eeff1fdaedb11abb00c080c`](https://github.com/vercel/vercel/commit/bcf9c18da437d9566eeff1fdaedb11abb00c080c), [`bcf9c18da437d9566eeff1fdaedb11abb00c080c`](https://github.com/vercel/vercel/commit/bcf9c18da437d9566eeff1fdaedb11abb00c080c), [`bcf9c18da437d9566eeff1fdaedb11abb00c080c`](https://github.com/vercel/vercel/commit/bcf9c18da437d9566eeff1fdaedb11abb00c080c), [`bcf9c18da437d9566eeff1fdaedb11abb00c080c`](https://github.com/vercel/vercel/commit/bcf9c18da437d9566eeff1fdaedb11abb00c080c)]:
+  - @vercel/python@5.0.10
+  - @vercel/build-utils@12.1.3
+  - @vercel/node@5.4.0
+  - @vercel/express@0.0.25
+  - @vercel/h3@0.1.5
+  - @vercel/hono@0.1.6
+  - @vercel/static-build@2.7.26
+
+## 48.2.9
+
+### Patch Changes
+
+- Updated dependencies [[`42c79ea5c3b19d7a117930ddb94b5374350be8ad`](https://github.com/vercel/vercel/commit/42c79ea5c3b19d7a117930ddb94b5374350be8ad)]:
+  - @vercel/python@5.0.9
+
+## 48.2.8
+
+### Patch Changes
+
+- Update domains commands to use the new domains APIs ([#14061](https://github.com/vercel/vercel/pull/14061))
+
+## 48.2.7
+
+### Patch Changes
+
+- Updated dependencies [[`164f315092324dafdb5be3b3dd0437e6d11c92c9`](https://github.com/vercel/vercel/commit/164f315092324dafdb5be3b3dd0437e6d11c92c9)]:
+  - @vercel/next@4.13.3
+
+## 48.2.6
+
+### Patch Changes
+
+- Updated dependencies [[`0beba3d232717612203a04d7523dcb0dab06be38`](https://github.com/vercel/vercel/commit/0beba3d232717612203a04d7523dcb0dab06be38), [`60b7697ccd433859dc922ab1780b95304f76c5fc`](https://github.com/vercel/vercel/commit/60b7697ccd433859dc922ab1780b95304f76c5fc)]:
+  - @vercel/python@5.0.8
+
+## 48.2.5
+
+### Patch Changes
+
+- Updated dependencies [[`df38583152228b40060a5b11ef63c6a33cb12249`](https://github.com/vercel/vercel/commit/df38583152228b40060a5b11ef63c6a33cb12249)]:
+  - @vercel/build-utils@12.1.2
+  - @vercel/h3@0.1.4
+  - @vercel/node@5.3.26
+  - @vercel/express@0.0.24
+  - @vercel/hono@0.1.5
+  - @vercel/static-build@2.7.25
+
+## 48.2.4
+
+### Patch Changes
+
+- Updated dependencies [[`0fd2477a7510c7856c6d7e6622c72b712c285fe7`](https://github.com/vercel/vercel/commit/0fd2477a7510c7856c6d7e6622c72b712c285fe7)]:
+  - @vercel/build-utils@12.1.1
+  - @vercel/express@0.0.23
+  - @vercel/h3@0.1.3
+  - @vercel/hono@0.1.4
+  - @vercel/node@5.3.25
+  - @vercel/static-build@2.7.24
+
+## 48.2.3
+
+### Patch Changes
+
+- Introduce --standalone flag, allowing build artifacts to be fully contained within the .vercel folder. ([#14049](https://github.com/vercel/vercel/pull/14049))
+
+## 48.2.2
+
+### Patch Changes
+
+- Updated dependencies [[`9f72ec949fb0bb62f6780a6641cc1828a618e2d7`](https://github.com/vercel/vercel/commit/9f72ec949fb0bb62f6780a6641cc1828a618e2d7), [`be090db4f0504cea4258eec835e00efe3cd31d91`](https://github.com/vercel/vercel/commit/be090db4f0504cea4258eec835e00efe3cd31d91)]:
+  - @vercel/next@4.13.2
+  - @vercel/remix-builder@5.4.13
+
+## 48.2.1
+
+### Patch Changes
+
+- Updated dependencies [[`629b79e4a92d24c773ec6b3928e3f3274fb4dc8b`](https://github.com/vercel/vercel/commit/629b79e4a92d24c773ec6b3928e3f3274fb4dc8b), [`dfb057d11dadbf394258ece1aae823d327165a40`](https://github.com/vercel/vercel/commit/dfb057d11dadbf394258ece1aae823d327165a40)]:
+  - @vercel/next@4.13.1
+  - @vercel/hono@0.1.3
+
+## 48.2.0
+
+### Minor Changes
+
+- Add --status flag to list command for deployment filtering ([#13993](https://github.com/vercel/vercel/pull/13993))
+
+  The `vercel list` command now supports filtering deployments by their status using the `--status` or `-s` flag. This feature allows users to filter deployments by one or more status values.
+
+  Features:
+
+  - Filter by single status: `vercel list --status READY`
+  - Filter by multiple statuses: `vercel list --status READY,BUILDING`
+  - Support for all deployment statuses: BUILDING, ERROR, INITIALIZING, QUEUED, READY, CANCELED
+  - Input validation with clear error messages
+  - Compatible with existing filters (environment, meta, etc.)
+  - Comprehensive test coverage and telemetry tracking
+
+### Patch Changes
+
+- Updated dependencies [[`2eebd3a0029d20070811c9fc8dd37f6edb947f26`](https://github.com/vercel/vercel/commit/2eebd3a0029d20070811c9fc8dd37f6edb947f26), [`4f0ff3381b6ff2dec417413993ea749577441586`](https://github.com/vercel/vercel/commit/4f0ff3381b6ff2dec417413993ea749577441586)]:
+  - @vercel/python@5.0.7
+
+## 48.1.7
+
+### Patch Changes
+
+- [python] Use static builder for /public for FastAPI ([#14027](https://github.com/vercel/vercel/pull/14027))
+
+- Updated dependencies [[`da6ca6d80915221b7f60cd711e4fada41a828e4c`](https://github.com/vercel/vercel/commit/da6ca6d80915221b7f60cd711e4fada41a828e4c), [`ede42e5bd507996632b0b0630cfd757ddcc8a9f1`](https://github.com/vercel/vercel/commit/ede42e5bd507996632b0b0630cfd757ddcc8a9f1), [`a96e57b68cf1344a147862c957024a9c48330aae`](https://github.com/vercel/vercel/commit/a96e57b68cf1344a147862c957024a9c48330aae), [`da6ca6d80915221b7f60cd711e4fada41a828e4c`](https://github.com/vercel/vercel/commit/da6ca6d80915221b7f60cd711e4fada41a828e4c)]:
+  - @vercel/python@5.0.6
+
+## 48.1.6
+
+### Patch Changes
+
+- Updated dependencies [[`9997fe264bb50c0f9dc610a276a0fa4049b8c72e`](https://github.com/vercel/vercel/commit/9997fe264bb50c0f9dc610a276a0fa4049b8c72e)]:
+  - @vercel/express@0.0.22
+
+## 48.1.5
+
+### Patch Changes
+
+- Updated dependencies [[`1327110e0e866b44c6012069442ca2b16a6706b2`](https://github.com/vercel/vercel/commit/1327110e0e866b44c6012069442ca2b16a6706b2), [`057a44929ceeafd6848ade9ac5cc47ec0d357496`](https://github.com/vercel/vercel/commit/057a44929ceeafd6848ade9ac5cc47ec0d357496)]:
+  - @vercel/next@4.13.0
+  - @vercel/express@0.0.21
+
+## 48.1.4
+
+### Patch Changes
+
+- Updated dependencies [[`ec3a2a8a334976d94d3cc79e1b134e11f75cd78f`](https://github.com/vercel/vercel/commit/ec3a2a8a334976d94d3cc79e1b134e11f75cd78f)]:
+  - @vercel/express@0.0.20
+
+## 48.1.3
+
+### Patch Changes
+
+- Add experimental o11y support for express when `VERCEL_EXPERIMENTAL_EXPRESS_BUILD=1` ([#13963](https://github.com/vercel/vercel/pull/13963))
+
+- Updated dependencies [[`353eca54fe2a892ca04fa66a1665d89d7a722a7a`](https://github.com/vercel/vercel/commit/353eca54fe2a892ca04fa66a1665d89d7a722a7a)]:
+  - @vercel/express@0.0.19
+
+## 48.1.2
+
+### Patch Changes
+
+- Fix relative path for experimental standalone mode ([#13973](https://github.com/vercel/vercel/pull/13973))
+
+## 48.1.1
+
+### Patch Changes
+
+- Add support for VERCEL_EXPERIMENTAL_STANDALONE_BUILD build env ([#13948](https://github.com/vercel/vercel/pull/13948))
+
+- Updated dependencies [[`c10395ad9dfd874f9a0f1d4a77748c67e4084339`](https://github.com/vercel/vercel/commit/c10395ad9dfd874f9a0f1d4a77748c67e4084339), [`5eac17d9c045d3c9582d8a69fc1a6ec30fdaa0b0`](https://github.com/vercel/vercel/commit/5eac17d9c045d3c9582d8a69fc1a6ec30fdaa0b0), [`6142e863d187c54af7f774f72412f33ca93ed967`](https://github.com/vercel/vercel/commit/6142e863d187c54af7f774f72412f33ca93ed967)]:
+  - @vercel/h3@0.1.2
+  - @vercel/node@5.3.24
+  - @vercel/detect-agent@1.0.0
+  - @vercel/express@0.0.18
+  - @vercel/hono@0.1.2
+
+## 48.1.0
+
+### Minor Changes
+
+- Add `env update` command to update an environment variable. ([#13894](https://github.com/vercel/vercel/pull/13894))
+
+  Previously it was required to remove and re-add the environment variable to update it.
+
+### Patch Changes
+
+- Updated dependencies [[`07d80bc46919ed8d0ad9dc5938848d39224d7db2`](https://github.com/vercel/vercel/commit/07d80bc46919ed8d0ad9dc5938848d39224d7db2), [`7e4b04b4f110142b5fd09ba4567b79ac3aa432c5`](https://github.com/vercel/vercel/commit/7e4b04b4f110142b5fd09ba4567b79ac3aa432c5), [`20849c717da6d26d3487c414bee1560d0dd78909`](https://github.com/vercel/vercel/commit/20849c717da6d26d3487c414bee1560d0dd78909), [`aaddc91799f5b26a626dd1a7c0e070f334d09be5`](https://github.com/vercel/vercel/commit/aaddc91799f5b26a626dd1a7c0e070f334d09be5)]:
+  - @vercel/python@5.0.5
+  - @vercel/next@4.12.6
+  - @vercel/node@5.3.23
+  - @vercel/express@0.0.17
+  - @vercel/h3@0.1.1
+  - @vercel/hono@0.1.1
+
+## 48.0.3
+
+### Patch Changes
+
+- fix(cli): handle triggering re-auth with legacy token + flags ([#13955](https://github.com/vercel/vercel/pull/13955))
+
+  If the CLI was using a legacy token (ie, was signed in on a version previous to 48.0.0) and did not have a SAML authorization for a team resource, commands with flags unknown to vc login failed to initiate the SAML re-authentication flow as we were parsing all arguments. This change ensures that the user is prompted to log in again in such cases.
+
+- Updated dependencies [[`426aca07b47590a0f1b7631e92c8776d5f8d661d`](https://github.com/vercel/vercel/commit/426aca07b47590a0f1b7631e92c8776d5f8d661d)]:
+  - @vercel/hono@0.1.0
+  - @vercel/h3@0.1.0
+
+## 48.0.2
+
+### Patch Changes
+
+- Updated dependencies [[`d0fd9e7b4ad98a490921945641da5b5d8d6a69b7`](https://github.com/vercel/vercel/commit/d0fd9e7b4ad98a490921945641da5b5d8d6a69b7)]:
+  - @vercel/hono@0.0.25
+
+## 48.0.1
+
+### Patch Changes
+
+- Updated dependencies [[`0186beb2f677e2527042ab0d9ba293aedf54d734`](https://github.com/vercel/vercel/commit/0186beb2f677e2527042ab0d9ba293aedf54d734), [`742c2501986f03b79ce954f85d0a35e62ef32b62`](https://github.com/vercel/vercel/commit/742c2501986f03b79ce954f85d0a35e62ef32b62), [`7d66bd96c96cfcfe6d8b996a968701b974e32fa8`](https://github.com/vercel/vercel/commit/7d66bd96c96cfcfe6d8b996a968701b974e32fa8), [`1afa175f4e36c4f16d9db7d278816d9938932f34`](https://github.com/vercel/vercel/commit/1afa175f4e36c4f16d9db7d278816d9938932f34)]:
+  - @vercel/next@4.12.5
+  - @vercel/express@0.0.16
+  - @vercel/hono@0.0.24
+
+## 48.0.0
+
+### Major Changes
+
+- The `vercel login` command has been overhauled, see below for how to use the new flow. ([#13802](https://github.com/vercel/vercel/pull/13802))
+
+  ## Breaking changes
+
+  The following are now obsolete:
+
+  - Passing the `email` argument or `--github`, `--gitlab`, `--bitbucket` flags. Run the command without any options:
+
+  ```diff
+  - $ vercel login your@email.com
+  - $ vercel login --github
+  - $ vercel login --gitlab
+  - $ vercel login --bitbucket
+  + $ vercel login
+  ```
+
+  Choose your preferred authentication method in the browser instead.
+
+  - Passing the `teamId`/`teamSlug` argument. Run the command without any options:
+
+  ```diff
+  - $ vercel login team
+  + $ vercel login
+  ```
+
+  After signing in with any of the non-SAML methods, you will be prompted to authorize individual teams.
+
+  - `--oob`: Visit [vercel.com/device](https://vercel.com/device) on any browser-capable device and enter the code shown in the terminal. This flag is now obsolete.
+
+  > [!TIP]
+  > Hit <kbd>Enter</kbd> to open the link automatically, if you are signing in from a browser-capable device.
+
+  > [!IMPORTANT]
+  > Read the instructions carefully to match your location, IP, and request time when approving the device, as you will be granting access to your Vercel account.
+
+  ## Resources
+
+  - [`vercel login` Documentation](https://vercel.com/docs/cli/login)
+  - `vercel login --help`
+
+  **Good to know:** The new login experience is built on top of the [OAuth 2.0 Device Flow](https://datatracker.ietf.org/doc/html/rfc8628) specification.
+
+### Minor Changes
+
+- [cli] add new commands `vercel cache invalidate --tag` and `vercel cache dangerously-delete --tag` ([#13898](https://github.com/vercel/vercel/pull/13898))
+
+### Patch Changes
+
+- Updated dependencies [[`d7c8d4a1d5ef2298a50726e66f6afe354c389ea6`](https://github.com/vercel/vercel/commit/d7c8d4a1d5ef2298a50726e66f6afe354c389ea6)]:
+  - @vercel/python@5.0.4
+
+## 47.1.4
+
+### Patch Changes
+
+- Updated dependencies [[`5d7922f15f0c969b347dabc15c52972f1e482a38`](https://github.com/vercel/vercel/commit/5d7922f15f0c969b347dabc15c52972f1e482a38)]:
+  - @vercel/python@5.0.3
+
+## 47.1.3
+
+### Patch Changes
+
+- Updated dependencies [[`4f294cd5a5c73b33b41250f47216966a5158cf16`](https://github.com/vercel/vercel/commit/4f294cd5a5c73b33b41250f47216966a5158cf16)]:
+  - @vercel/python@5.0.2
+
+## 47.1.2
+
+### Patch Changes
+
+- Updated dependencies [[`e0c7af044a7039b641317eeee21cdc7fa1dc1b0b`](https://github.com/vercel/vercel/commit/e0c7af044a7039b641317eeee21cdc7fa1dc1b0b)]:
+  - @vercel/python@5.0.1
+
+## 47.1.1
+
+### Patch Changes
+
+- Updated dependencies [[`d39fd1e138b96509af6b8ebf9cc634f44d1ed38f`](https://github.com/vercel/vercel/commit/d39fd1e138b96509af6b8ebf9cc634f44d1ed38f)]:
+  - @vercel/node@5.3.22
+  - @vercel/express@0.0.15
+  - @vercel/hono@0.0.23
+
+## 47.1.0
+
+### Minor Changes
+
+- Add guidance flag for deploy and env commands ([#13900](https://github.com/vercel/vercel/pull/13900))
+
+## 47.0.7
+
+### Patch Changes
+
+- Fix build errored deployments to always show full build logs ([#13901](https://github.com/vercel/vercel/pull/13901))
+
+## 47.0.6
+
+### Patch Changes
+
+- chore(cli): telemetry on login state ([#13886](https://github.com/vercel/vercel/pull/13886))
+
+- fix(cli): correct access token expiry check during token refresh ([#13888](https://github.com/vercel/vercel/pull/13888))
+
+- Updated dependencies [[`d06a3611ba68177287df9cb01343be4d88148a16`](https://github.com/vercel/vercel/commit/d06a3611ba68177287df9cb01343be4d88148a16)]:
+  - @vercel/static-build@2.7.23
+
+## 47.0.5
+
+### Patch Changes
+
+- Updated dependencies [[`db47f7031bacfe0d07e5a657788e1e74c134bf81`](https://github.com/vercel/vercel/commit/db47f7031bacfe0d07e5a657788e1e74c134bf81)]:
+  - @vercel/node@5.3.21
+  - @vercel/express@0.0.14
+  - @vercel/hono@0.0.22
+
+## 47.0.4
+
+### Patch Changes
+
+- Reverts a regression in `vercel login --future` introduced in [#13855](https://github.com/vercel/vercel/pull/13855) ([#13872](https://github.com/vercel/vercel/pull/13872))
+
+## 47.0.3
+
+### Patch Changes
+
+- Undo change that set min node version to node 20 since Vercel CLI still needs to work on Node 18 for upgrade paths. ([#13865](https://github.com/vercel/vercel/pull/13865))
+
+## 47.0.2
+
+### Patch Changes
+
+- feat(cli): telemetry on login state ([#13855](https://github.com/vercel/vercel/pull/13855))
+
+- Updated dependencies [[`fa9310f879f9e4c72c64bbf542e1e242914f800f`](https://github.com/vercel/vercel/commit/fa9310f879f9e4c72c64bbf542e1e242914f800f), [`c93f5e6c8563cef8e1f6b6caa6afbe2a43a8af61`](https://github.com/vercel/vercel/commit/c93f5e6c8563cef8e1f6b6caa6afbe2a43a8af61), [`c93f5e6c8563cef8e1f6b6caa6afbe2a43a8af61`](https://github.com/vercel/vercel/commit/c93f5e6c8563cef8e1f6b6caa6afbe2a43a8af61)]:
+  - @vercel/build-utils@12.1.0
+  - @vercel/express@0.0.13
+  - @vercel/hono@0.0.21
+  - @vercel/node@5.3.20
+  - @vercel/static-build@2.7.22
+
+## 47.0.1
+
+### Patch Changes
+
+- Updated dependencies [[`17f3c91aa96ce272d265d809f3b765a12a1f38b3`](https://github.com/vercel/vercel/commit/17f3c91aa96ce272d265d809f3b765a12a1f38b3), [`fea94eea32f9df7c72d9ea95434d84c44f4ef082`](https://github.com/vercel/vercel/commit/fea94eea32f9df7c72d9ea95434d84c44f4ef082)]:
+  - @vercel/next@4.12.4
+  - @vercel/hono@0.0.20
+  - @vercel/node@5.3.19
+  - @vercel/express@0.0.12
+
+## 47.0.0
+
+### Major Changes
+
+- Drop Node.js 18, bump minimum to Node.js 20 ([#13856](https://github.com/vercel/vercel/pull/13856))
+
+### Patch Changes
+
+- Updated dependencies [[`d1ca3ed3ac1b9830403dc9dc3520e963ef8bec8e`](https://github.com/vercel/vercel/commit/d1ca3ed3ac1b9830403dc9dc3520e963ef8bec8e)]:
+  - @vercel/build-utils@12.0.0
+  - @vercel/express@0.0.11
+  - @vercel/hono@0.0.19
+  - @vercel/node@5.3.18
+  - @vercel/static-build@2.7.21
+
+## 46.1.1
+
+### Patch Changes
+
+- Updated dependencies [[`11f71c3813b0e43fdc8923c2da3c0438893c18b5`](https://github.com/vercel/vercel/commit/11f71c3813b0e43fdc8923c2da3c0438893c18b5)]:
+  - @vercel/next@4.12.3
+
+## 46.1.0
+
+### Minor Changes
+
+- MCP command clean-up ([#13788](https://github.com/vercel/vercel/pull/13788))
+
+### Patch Changes
+
+- Fix runtime link ([#13833](https://github.com/vercel/vercel/pull/13833))
+
+- Updated dependencies [[`2f9a6e68f845ff06c60c7cdab15bb4f4321ac8ed`](https://github.com/vercel/vercel/commit/2f9a6e68f845ff06c60c7cdab15bb4f4321ac8ed), [`dc0dedda5d8c5657ae03d3a69b855e02abba5797`](https://github.com/vercel/vercel/commit/dc0dedda5d8c5657ae03d3a69b855e02abba5797), [`a6ac37a8f1f12bb94725fafbeb09e3a58fea6603`](https://github.com/vercel/vercel/commit/a6ac37a8f1f12bb94725fafbeb09e3a58fea6603), [`f450c6a5b625a0cdd0e77b688a002e9871c784d5`](https://github.com/vercel/vercel/commit/f450c6a5b625a0cdd0e77b688a002e9871c784d5), [`2f9a6e68f845ff06c60c7cdab15bb4f4321ac8ed`](https://github.com/vercel/vercel/commit/2f9a6e68f845ff06c60c7cdab15bb4f4321ac8ed)]:
+  - @vercel/express@0.0.10
+  - @vercel/hono@0.0.18
+  - @vercel/node@5.3.17
+  - @vercel/next@4.12.2
+
+## 46.0.5
+
+### Patch Changes
+
+- Change `vc teams ls` command header to "Team name" ([#13705](https://github.com/vercel/vercel/pull/13705))
+
+- Updated dependencies []:
+  - @vercel/express@0.0.9
+  - @vercel/hono@0.0.17
+  - @vercel/hydrogen@1.2.4
+  - @vercel/node@5.3.16
+  - @vercel/redwood@2.3.6
+  - @vercel/remix-builder@5.4.12
+  - @vercel/static-build@2.7.20
+
+## 46.0.4
+
+### Patch Changes
+
+- Updated dependencies [[`9cc5e3a04f4158545e55a9c0c66c13ac51db1ce1`](https://github.com/vercel/vercel/commit/9cc5e3a04f4158545e55a9c0c66c13ac51db1ce1), [`0985931965d9ba8f2a0198f34a4a4838c341769a`](https://github.com/vercel/vercel/commit/0985931965d9ba8f2a0198f34a4a4838c341769a)]:
+  - @vercel/express@0.0.8
+  - @vercel/hono@0.0.16
+  - @vercel/node@5.3.15
+  - @vercel/next@4.12.1
+  - @vercel/redwood@2.3.5
+  - @vercel/remix-builder@5.4.11
+
+## 46.0.3
+
+### Patch Changes
+
+- Add support for the supportsCancellation function flag ([#13807](https://github.com/vercel/vercel/pull/13807))
+
+- Updated dependencies [[`28a41c6fddc7a3bc92fa54279063428b329e3104`](https://github.com/vercel/vercel/commit/28a41c6fddc7a3bc92fa54279063428b329e3104), [`2876dace493b97f4cae7f3839484ee36ed8ac363`](https://github.com/vercel/vercel/commit/2876dace493b97f4cae7f3839484ee36ed8ac363), [`f63fbb7853cc9991716c0fc57fd5f480b2706964`](https://github.com/vercel/vercel/commit/f63fbb7853cc9991716c0fc57fd5f480b2706964), [`ba284f86454412ab209e0a972c14ed218401c6cc`](https://github.com/vercel/vercel/commit/ba284f86454412ab209e0a972c14ed218401c6cc)]:
+  - @vercel/build-utils@11.0.2
+  - @vercel/express@0.0.7
+  - @vercel/hono@0.0.15
+  - @vercel/next@4.12.0
+  - @vercel/node@5.3.14
+  - @vercel/static-build@2.7.19
+
+## 46.0.2
+
+### Patch Changes
+
+- feat(cli): add SSO re-authorization support to --future ([#13771](https://github.com/vercel/vercel/pull/13771))
+
+- Return the correct exit code in the Vercel command ([#13780](https://github.com/vercel/vercel/pull/13780))
+
+- Updated dependencies [[`fcf7791f1dae2967c09c09b78aedf00be5d25303`](https://github.com/vercel/vercel/commit/fcf7791f1dae2967c09c09b78aedf00be5d25303), [`b9e399c69ebeb71d9150e8aa994294b0c2be8c9f`](https://github.com/vercel/vercel/commit/b9e399c69ebeb71d9150e8aa994294b0c2be8c9f)]:
+  - @vercel/next@4.11.3
+
+## 46.0.1
+
+### Patch Changes
+
+- Remove deprecation warning ([#13717](https://github.com/vercel/vercel/pull/13717))
+
+## 46.0.0
+
+### Major Changes
+
+- Adding in mcp command to connect to supported clients ([#13751](https://github.com/vercel/vercel/pull/13751))
+
+## 45.0.10
+
+### Patch Changes
+
+- Use @vercel/detect-agent for agent detection ([#13760](https://github.com/vercel/vercel/pull/13760))
+
+- Updated dependencies [[`bebaf76f5df3e640c96d913049588c7ab741719b`](https://github.com/vercel/vercel/commit/bebaf76f5df3e640c96d913049588c7ab741719b)]:
+  - @vercel/node@5.3.13
+  - @vercel/express@0.0.6
+  - @vercel/hono@0.0.14
+
+## 45.0.9
+
+### Patch Changes
+
+- Update framework dependencies ([#13757](https://github.com/vercel/vercel/pull/13757))
+
+## 45.0.8
+
+### Patch Changes
+
+- Updated dependencies [[`7a88b3c2dc0b10d624c1d59d1013efb4a5a4a365`](https://github.com/vercel/vercel/commit/7a88b3c2dc0b10d624c1d59d1013efb4a5a4a365)]:
+  - @vercel/hono@0.0.13
+
+## 45.0.7
+
+### Patch Changes
+
+- Updated dependencies [[`0c95aeb94d885b0ca8145282fc77bdaa6585c681`](https://github.com/vercel/vercel/commit/0c95aeb94d885b0ca8145282fc77bdaa6585c681)]:
+  - @vercel/express@0.0.5
+
+## 45.0.6
+
+### Patch Changes
+
+- Migrate to agent detect package in steps ([#13746](https://github.com/vercel/vercel/pull/13746))
+
+## 45.0.5
+
+### Patch Changes
+
+- Move agent detection logic to its own package ([#13736](https://github.com/vercel/vercel/pull/13736))
+
+- Update dependencies for CLI ([#13743](https://github.com/vercel/vercel/pull/13743))
+
+## 45.0.4
+
+### Patch Changes
+
+- Updated dependencies [[`8dc72da59da50e666b6dd174d8f2f7d045405bb2`](https://github.com/vercel/vercel/commit/8dc72da59da50e666b6dd174d8f2f7d045405bb2)]:
+  - @vercel/express@0.0.4
+  - @vercel/hono@0.0.12
+
+## 45.0.3
+
+### Patch Changes
+
+- Updated dependencies [[`23eb3cc7efbb0f86b5d930178c15039b02641c99`](https://github.com/vercel/vercel/commit/23eb3cc7efbb0f86b5d930178c15039b02641c99), [`d06771715244e21f6b705a9d3ac7227206bdff42`](https://github.com/vercel/vercel/commit/d06771715244e21f6b705a9d3ac7227206bdff42)]:
+  - @vercel/next@4.11.2
+  - @vercel/hono@0.0.11
+
+## 45.0.2
+
+### Patch Changes
+
+- Updated dependencies [[`ba961065f808d3cb756729caea70677ec00b51bc`](https://github.com/vercel/vercel/commit/ba961065f808d3cb756729caea70677ec00b51bc)]:
+  - @vercel/next@4.11.1
+
+## 45.0.1
+
+### Patch Changes
+
+- Add `@vercel/express` framework builder ([#13714](https://github.com/vercel/vercel/pull/13714))
+
+- Updated dependencies [[`f5eb9eee45deb0e8f32846ee629c3a6a0ea6759d`](https://github.com/vercel/vercel/commit/f5eb9eee45deb0e8f32846ee629c3a6a0ea6759d)]:
+  - @vercel/express@0.0.3
+
+## 45.0.0
+
+### Major Changes
+
+- Disable logs by default on vercel build and show them on error ([#13695](https://github.com/vercel/vercel/pull/13695))
+
+### Minor Changes
+
+- Add project settings option on link ([#13685](https://github.com/vercel/vercel/pull/13685))
+
+### Patch Changes
+
+- Fix 404 status for /api routes when using Hono with the vercel dev server ([#13706](https://github.com/vercel/vercel/pull/13706))
+
+- `vc login --future` no longer parses `teamId` out of the access token ([#13690](https://github.com/vercel/vercel/pull/13690))
+
+- Fix blob token in error message ([#13703](https://github.com/vercel/vercel/pull/13703))
+
+- Integration test fixes ([#13694](https://github.com/vercel/vercel/pull/13694))
+
+- Updated dependencies [[`8a020e07c2116833bbe39ee43f62efad9f7de0de`](https://github.com/vercel/vercel/commit/8a020e07c2116833bbe39ee43f62efad9f7de0de), [`5eb982e20d82ca22f7e79ea60c288b876fa661e9`](https://github.com/vercel/vercel/commit/5eb982e20d82ca22f7e79ea60c288b876fa661e9), [`ce8eec3bbaca1909abc9f054b7f6e92aed5a343e`](https://github.com/vercel/vercel/commit/ce8eec3bbaca1909abc9f054b7f6e92aed5a343e)]:
+  - @vercel/build-utils@11.0.1
+  - @vercel/hono@0.0.10
+  - @vercel/node@5.3.12
+  - @vercel/static-build@2.7.18
+
+## 44.7.3
+
+### Patch Changes
+
+- Updated dependencies [[`60772fe5e76463d8ff8208e5dd6ffdfcedb9c565`](https://github.com/vercel/vercel/commit/60772fe5e76463d8ff8208e5dd6ffdfcedb9c565)]:
+  - @vercel/go@3.2.3
+
+## 44.7.2
+
+### Patch Changes
+
+- Remove duplicate teamId param when fetching stores ([#13674](https://github.com/vercel/vercel/pull/13674))
+
+## 44.7.1
+
+### Patch Changes
+
+- Updated dependencies [[`a4e72c3c53ddbfccfb31c483ab1e745c68282371`](https://github.com/vercel/vercel/commit/a4e72c3c53ddbfccfb31c483ab1e745c68282371)]:
+  - @vercel/hono@0.0.9
+  - @vercel/node@5.3.11
+
+## 44.7.0
+
+### Minor Changes
+
+- Make framework detection text prettier ([#13654](https://github.com/vercel/vercel/pull/13654))
+
+### Patch Changes
+
+- Improve non-debug error log for user fetch ([#13657](https://github.com/vercel/vercel/pull/13657))
+
+- Updated dependencies [[`e9ef3b82c7093ac750173fc2a2d2747ba25f6c78`](https://github.com/vercel/vercel/commit/e9ef3b82c7093ac750173fc2a2d2747ba25f6c78), [`b1993ee3af72d12859bbc621744b687fbc968a1b`](https://github.com/vercel/vercel/commit/b1993ee3af72d12859bbc621744b687fbc968a1b)]:
+  - @vercel/next@4.11.0
+  - @vercel/hono@0.0.8
+  - @vercel/node@5.3.10
+
+## 44.6.7
+
+### Patch Changes
+
+- Updated dependencies [[`8e3912d2510a13b484567fee4ee9e985df922780`](https://github.com/vercel/vercel/commit/8e3912d2510a13b484567fee4ee9e985df922780), [`a78f91c2e36e20f3725d758021691fc06a90f0b4`](https://github.com/vercel/vercel/commit/a78f91c2e36e20f3725d758021691fc06a90f0b4)]:
+  - @vercel/next@4.10.11
+  - @vercel/node@5.3.9
+  - @vercel/hono@0.0.7
+
+## 44.6.6
+
+### Patch Changes
+
+- Updated dependencies [[`24f47647b272c18c38187f32130bfd58a04d9d97`](https://github.com/vercel/vercel/commit/24f47647b272c18c38187f32130bfd58a04d9d97), [`df172a801b3da2515afa0e228461e61a45a7c64a`](https://github.com/vercel/vercel/commit/df172a801b3da2515afa0e228461e61a45a7c64a), [`99ec6718b0ddffac67a8a66608c718fce99bf542`](https://github.com/vercel/vercel/commit/99ec6718b0ddffac67a8a66608c718fce99bf542), [`003343e128ccb3848a3c966f1f16f0d19df012e8`](https://github.com/vercel/vercel/commit/003343e128ccb3848a3c966f1f16f0d19df012e8)]:
+  - @vercel/next@4.10.10
+  - @vercel/hono@0.0.6
+  - @vercel/node@5.3.8
+
+## 44.6.5
+
+### Patch Changes
+
+- Support `vc dev` for hono framework ([#13637](https://github.com/vercel/vercel/pull/13637))
+
+- Save projectName in project.json when linking a Project. ([#13611](https://github.com/vercel/vercel/pull/13611))
+
+- Updated dependencies [[`52e212359509cbb36da786f6cbaf48b9e930d423`](https://github.com/vercel/vercel/commit/52e212359509cbb36da786f6cbaf48b9e930d423), [`21afa1623f72ee81439d1f34028f921cd66b5589`](https://github.com/vercel/vercel/commit/21afa1623f72ee81439d1f34028f921cd66b5589)]:
+  - @vercel/hono@0.0.5
+  - @vercel/next@4.10.9
+
+## 44.6.4
+
+### Patch Changes
+
+- Updated dependencies [[`68e194575272fd8a24b7e88057475397b3492196`](https://github.com/vercel/vercel/commit/68e194575272fd8a24b7e88057475397b3492196)]:
+  - @vercel/python@5.0.0
+
+## 44.6.3
+
+### Patch Changes
+
+- Updated dependencies [[`04ab34baac9c5c3b5b4c7c4092ca9f739c533454`](https://github.com/vercel/vercel/commit/04ab34baac9c5c3b5b4c7c4092ca9f739c533454)]:
+  - @vercel/hono@0.0.4
+
+## 44.6.2
+
+### Patch Changes
+
+- Updated dependencies [[`f816c405a7cbda4ff8c4231741f90c0608412ba6`](https://github.com/vercel/vercel/commit/f816c405a7cbda4ff8c4231741f90c0608412ba6)]:
+  - @vercel/hono@0.0.3
+
+## 44.6.1
+
+### Patch Changes
+
+- Updated dependencies [[`a646bee5f8f1fe7ac9451605e81f15b2e275d5b0`](https://github.com/vercel/vercel/commit/a646bee5f8f1fe7ac9451605e81f15b2e275d5b0)]:
+  - @vercel/next@4.10.8
+
+## 44.6.0
+
+### Minor Changes
+
+- Add --json flag to projects list ([#13578](https://github.com/vercel/vercel/pull/13578))
+
+- Adds framework detection and an associated builder for Hono. ([#13594](https://github.com/vercel/vercel/pull/13594))
+
+### Patch Changes
+
+- Updated dependencies [[`4e1731ead55caeb5e51b45b4dab3a6c9bb1d63e9`](https://github.com/vercel/vercel/commit/4e1731ead55caeb5e51b45b4dab3a6c9bb1d63e9), [`b79db72d870a8d2e98e36a7413c656ae80fed01f`](https://github.com/vercel/vercel/commit/b79db72d870a8d2e98e36a7413c656ae80fed01f)]:
+  - @vercel/node@5.3.7
+  - @vercel/hono@0.0.2
+  - @vercel/build-utils@11.0.0
+  - @vercel/static-build@2.7.17
+
+## 44.5.5
+
+### Patch Changes
+
+- Updated dependencies [[`ad18ebf61438332fca31d2960b2c35ca609a45fa`](https://github.com/vercel/vercel/commit/ad18ebf61438332fca31d2960b2c35ca609a45fa)]:
+  - @vercel/next@4.10.7
+
+## 44.5.4
+
+### Patch Changes
+
+- Updated dependencies [[`e6fd638c1b54474e2f73c37c24156fead1f60722`](https://github.com/vercel/vercel/commit/e6fd638c1b54474e2f73c37c24156fead1f60722)]:
+  - @vercel/next@4.10.6
+
+## 44.5.3
+
+### Patch Changes
+
+- Updated dependencies [[`501d4da4f3be995111eafe6d6197000365a5a377`](https://github.com/vercel/vercel/commit/501d4da4f3be995111eafe6d6197000365a5a377)]:
+  - @vercel/next@4.10.5
+
+## 44.5.2
+
+### Patch Changes
+
+- Updated dependencies [[`861d4723b91dabd697215ae214b95a7cbba5e6a7`](https://github.com/vercel/vercel/commit/861d4723b91dabd697215ae214b95a7cbba5e6a7), [`205cba1c42ecaa2aec92a9839d2162557f44662e`](https://github.com/vercel/vercel/commit/205cba1c42ecaa2aec92a9839d2162557f44662e)]:
+  - @vercel/next@4.10.4
+  - @vercel/python@4.8.0
+
+## 44.5.1
+
+### Patch Changes
+
+- Updated dependencies [[`a4601064d0c0e8d63b5ad9fe6afff5f6677dfe1d`](https://github.com/vercel/vercel/commit/a4601064d0c0e8d63b5ad9fe6afff5f6677dfe1d), [`be124640b352749684e2cb7f455bc5ad3cb5852f`](https://github.com/vercel/vercel/commit/be124640b352749684e2cb7f455bc5ad3cb5852f)]:
+  - @vercel/next@4.10.3
+
+## 44.5.0
+
+### Minor Changes
+
+- Add Google login functionality ([#13489](https://github.com/vercel/vercel/pull/13489))
+
+- Add support to create a project with Vercel Auth disabled. ([#13528](https://github.com/vercel/vercel/pull/13528))
+
+  The default for Vercel Auth is Standard Protection. Add a prompt so that Vercel Auth can be disabled when creating a new project.
+
+### Patch Changes
+
+- Updated dependencies [[`b0fa60d216ca9b3ff6b13d507f8b656169f88df1`](https://github.com/vercel/vercel/commit/b0fa60d216ca9b3ff6b13d507f8b656169f88df1)]:
+  - @vercel/next@4.10.2
+
+## 44.4.3
+
+### Patch Changes
+
+- Updated dependencies [[`56e154e2a3c4cdb7c1fd1d4e7c529fb1653f4eb5`](https://github.com/vercel/vercel/commit/56e154e2a3c4cdb7c1fd1d4e7c529fb1653f4eb5)]:
+  - @vercel/python@4.7.4
+
+## 44.4.2
+
+### Patch Changes
+
+- Reverting support for `preferredRegion` ([#13566](https://github.com/vercel/vercel/pull/13566))
+
+- Updated dependencies [[`bae121f5ba238a7e98ac6159bc4cf36e23c33142`](https://github.com/vercel/vercel/commit/bae121f5ba238a7e98ac6159bc4cf36e23c33142)]:
+  - @vercel/static-build@2.7.16
+  - @vercel/build-utils@10.6.7
+  - @vercel/hydrogen@1.2.3
+  - @vercel/redwood@2.3.4
+  - @vercel/python@4.7.3
+  - @vercel/remix-builder@5.4.10
+  - @vercel/next@4.10.1
+  - @vercel/node@5.3.6
+  - @vercel/ruby@2.2.1
+  - @vercel/go@3.2.2
+
+## 44.4.1
+
+### Patch Changes
+
+- Updated dependencies [[`f37cd4e2eb35764a658f617643e2ab228191e7e2`](https://github.com/vercel/vercel/commit/f37cd4e2eb35764a658f617643e2ab228191e7e2)]:
+  - @vercel/build-utils@10.6.6
+  - @vercel/node@5.3.5
+  - @vercel/static-build@2.7.15
+
+## 44.4.0
+
+### Minor Changes
+
+- Adds support for user configured `preferredRegion` for Node.js Functions ([#13546](https://github.com/vercel/vercel/pull/13546))
+
+### Patch Changes
+
+- Updated dependencies [[`7aa34eca64cbe70a9662bfcde82d23ab0eca527d`](https://github.com/vercel/vercel/commit/7aa34eca64cbe70a9662bfcde82d23ab0eca527d)]:
+  - @vercel/next@4.10.0
+
+## 44.3.0
+
+### Minor Changes
+
+- Add stdin and pipe support to `vc blob put` command. ([#13524](https://github.com/vercel/vercel/pull/13524))
+
+  Usage:
+
+  ```sh
+  cat file.txt | vc blob put --pathname file-from-stdin.txt
+  ```
+
+- Add region support to `vc blob store add` ([#13525](https://github.com/vercel/vercel/pull/13525))
+
+  You can now create Vercel Blob stores in any of the 19 Vercel Edge Regions:
+  https://vercel.com/docs/edge-network/regions.
+
+  Usage:
+
+  ```sh
+  vc blob store add --region cdg1
+  ```
+
+  Will create a Vercel Blob store in France 🇫.
+
+### Patch Changes
+
+- Change how files are uploaded for the `blob` commands. Before we were reading ([#13523](https://github.com/vercel/vercel/pull/13523))
+  files fully in memory and then sending them to the Vercel Blob API. We will now
+  stream files from disk to the Vercel Blob API, avoiding the need to read them
+  all in memory and making the upload more efficient.
+
+## 44.2.13
+
+### Patch Changes
+
+- rename experimental maxAttempts to maxDeliveries ([#13534](https://github.com/vercel/vercel/pull/13534))
+
+- Updated dependencies [[`ed2d1c1ea934e803c5e656b1663034176aef2f27`](https://github.com/vercel/vercel/commit/ed2d1c1ea934e803c5e656b1663034176aef2f27)]:
+  - @vercel/build-utils@10.6.5
+  - @vercel/node@5.3.4
+  - @vercel/static-build@2.7.14
+
+## 44.2.12
+
+### Patch Changes
+
+- simplify experimental triggers ([#13527](https://github.com/vercel/vercel/pull/13527))
+
+- Updated dependencies [[`dc424e1b09230e35f4953e2c4d1ccdab18f57d8c`](https://github.com/vercel/vercel/commit/dc424e1b09230e35f4953e2c4d1ccdab18f57d8c)]:
+  - @vercel/build-utils@10.6.4
+  - @vercel/next@4.9.5
+  - @vercel/node@5.3.3
+  - @vercel/static-build@2.7.13
+
+## 44.2.11
+
+### Patch Changes
+
+- [cli] Send `commitAuthorEmail` with the git meta ([#13508](https://github.com/vercel/vercel/pull/13508))
+
+## 44.2.10
+
+### Patch Changes
+
+- make POST method required ([#13518](https://github.com/vercel/vercel/pull/13518))
+
+- Updated dependencies [[`612f2af54c05ed758243122fe9ef2743c8ebd4c8`](https://github.com/vercel/vercel/commit/612f2af54c05ed758243122fe9ef2743c8ebd4c8), [`abf657ed5d52caa8965dcd3147174e940cca72b1`](https://github.com/vercel/vercel/commit/abf657ed5d52caa8965dcd3147174e940cca72b1)]:
+  - @vercel/build-utils@10.6.3
+  - @vercel/next@4.9.4
+  - @vercel/node@5.3.2
+  - @vercel/static-build@2.7.12
+
+## 44.2.9
+
+### Patch Changes
+
+- Add CloudEventTrigger support for Lambda functions ([#13503](https://github.com/vercel/vercel/pull/13503))
+
+- Updated dependencies [[`7103cde0b7e0468773d1c596e223105233260e40`](https://github.com/vercel/vercel/commit/7103cde0b7e0468773d1c596e223105233260e40)]:
+  - @vercel/build-utils@10.6.2
+  - @vercel/next@4.9.3
+  - @vercel/static-build@2.7.11
+  - @vercel/node@5.3.1
+
+## 44.2.8
+
+### Patch Changes
+
+- [cli] Report detected agent to CLI telemetry ([#13506](https://github.com/vercel/vercel/pull/13506))
+
 ## 44.2.7
 
 ### Patch Changes

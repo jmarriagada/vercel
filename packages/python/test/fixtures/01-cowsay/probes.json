@@ -1,6 +1,12 @@
 {
   "probes": [
     {
+      "logMustContain": "Using uv "
+    },
+    {
+      "logMustNotContain": "falling back to pip"
+    },
+    {
       "path": "/api",
       "mustContain": "pip:RANDOMNESS_PLACEHOLDER",
       "responseHeaders": {
@@ -13,6 +19,9 @@
       "responseHeaders": {
         "content-type": "text/plain"
       }
+    },
+    {
+      "logMustContain": "Using python version: 3.12"
     }
   ]
 }

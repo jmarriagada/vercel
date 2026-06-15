@@ -5,8 +5,8 @@ const path = require('path');
 const _fetch = require('node-fetch');
 const fetch = require('./fetch-retry');
 const fileModeSymbol = Symbol('fileMode');
-const { logWithinTest } = require('./log');
 const ms = require('ms');
+const { handleTransientError } = require('./transient-error');
 
 const IS_CI = !!process.env.CI;
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -36,7 +36,25 @@ async function nowDeploy(projectName, bodies, randomness, uploadNowJson, opts) {
     VERCEL_DEBUG,
     VERCEL_CLI_VERSION,
     VERCEL_FORCE_PYTHON_STREAMING,
+    VERCEL_FORCE_BUILD_IN_HIVE,
+    VERCEL_BUILD_CONTAINER_VERSION,
+    VERCEL_RUNTIME_PYTHON,
+    VERCEL_PYTHON_COMPILEALL,
+    VERCEL_WORKERS_PYTHON,
   } = process.env;
+
+  // Warn if using custom build container configuration
+  if (VERCEL_FORCE_BUILD_IN_HIVE || VERCEL_BUILD_CONTAINER_VERSION) {
+    console.log('⚠️ Running tests against a custom build container');
+    if (VERCEL_FORCE_BUILD_IN_HIVE) {
+      console.log(`VERCEL_FORCE_BUILD_IN_HIVE=${VERCEL_FORCE_BUILD_IN_HIVE}`);
+    }
+    if (VERCEL_BUILD_CONTAINER_VERSION) {
+      console.log(
+        `VERCEL_BUILD_CONTAINER_VERSION=${VERCEL_BUILD_CONTAINER_VERSION}`
+      );
+    }
+  }
   const nowJson = JSON.parse(
     bodies['vercel.json'] || bodies['now.json'] || '{}'
   );
@@ -63,15 +81,36 @@ async function nowDeploy(projectName, bodies, randomness, uploadNowJson, opts) {
         VERCEL_DEBUG,
         VERCEL_CLI_VERSION,
         VERCEL_FORCE_PYTHON_STREAMING,
+        VERCEL_FORCE_BUILD_IN_HIVE,
+        VERCEL_BUILD_CONTAINER_VERSION,
+        VERCEL_RUNTIME_PYTHON,
+        VERCEL_PYTHON_COMPILEALL,
+        VERCEL_WORKERS_PYTHON,
         NEXT_TELEMETRY_DISABLED: '1',
       },
     },
   };
 
-  logWithinTest(`posting ${files.length} files`);
+  console.log(`posting ${files.length} files`);
 
   for (const { file: filename } of files) {
-    await filePost(bodies[filename], digestOfFile(bodies[filename]));
+    let attempts = 0;
+    while (true) {
+      try {
+        await filePost(bodies[filename], digestOfFile(bodies[filename]));
+        break;
+      } catch (error) {
+        if (handleTransientError(error, 'file_upload') && attempts < 3) {
+          attempts++;
+          console.log(
+            `Transient error uploading ${filename} (attempt ${attempts}): ${error.message}`
+          );
+          await new Promise(r => setTimeout(r, 1000 * attempts));
+          continue;
+        }
+        throw error;
+      }
+    }
   }
 
   let deploymentId;
@@ -85,13 +124,25 @@ async function nowDeploy(projectName, bodies, randomness, uploadNowJson, opts) {
     deploymentUrl = json.url;
   }
 
-  logWithinTest('id', deploymentId);
+  console.log('id', deploymentId);
 
   for (let i = 0; i < 750; i += 1) {
-    const deployment = await deploymentGet(deploymentId);
+    let deployment;
+    try {
+      deployment = await deploymentGet(deploymentId);
+    } catch (error) {
+      if (handleTransientError(error, 'deployment_poll')) {
+        console.log(
+          `Transient error polling deployment ${deploymentId} (attempt ${i}): ${error.message}`
+        );
+        await new Promise(r => setTimeout(r, 1000));
+        continue;
+      }
+      throw error;
+    }
     const { readyState } = deployment;
     if (readyState === 'ERROR') {
-      logWithinTest('state is ERROR, throwing');
+      console.log('state is ERROR, throwing');
       const error = new Error(
         `State of https://${deploymentUrl} is ERROR: ${deployment.errorMessage}`
       );
@@ -99,18 +150,65 @@ async function nowDeploy(projectName, bodies, randomness, uploadNowJson, opts) {
       throw error;
     }
     if (readyState === 'READY') {
-      logWithinTest(`State of https://${deploymentUrl} is READY, moving on`);
+      console.log(`State of https://${deploymentUrl} is READY, moving on`);
       break;
     }
     if (i % 25 === 0) {
-      logWithinTest(
+      console.log(
         `State of https://${deploymentUrl} is ${readyState}, retry number ${i}`
       );
     }
     await new Promise(r => setTimeout(r, 1000));
   }
 
+  await disableSSO(deploymentId, deploymentUrl);
+
   return { deploymentId, deploymentUrl };
+}
+
+async function disableSSO(deploymentId, deploymentUrl) {
+  const deployRes = await fetchWithAuth(
+    `/v13/deployments/${encodeURIComponent(deploymentId)}`
+  );
+  if (!deployRes.ok) return;
+
+  const { projectId } = await deployRes.json();
+  if (!projectId) return;
+
+  const settingRes = await fetchWithAuth(
+    `/v5/projects/${encodeURIComponent(projectId)}`,
+    {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ssoProtection: null }),
+    }
+  );
+
+  if (!settingRes.ok) {
+    console.log(
+      `Warning: failed to disable SSO protection (status: ${settingRes.status})`
+    );
+    return;
+  }
+
+  // Wait for the SSO change to propagate
+  for (let i = 0; i < 10; i++) {
+    let res;
+    try {
+      res = await _fetch(`https://${deploymentUrl}`);
+    } catch (error) {
+      if (handleTransientError(error, 'sso_propagation')) {
+        console.log(
+          `Transient error checking SSO propagation for ${deploymentUrl} (attempt ${i}): ${error.message}`
+        );
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        continue;
+      }
+      throw error;
+    }
+    if (res.status !== 401) return;
+    await new Promise(resolve => setTimeout(resolve, 1000));
+  }
 }
 
 function digestOfFile(body) {
@@ -141,7 +239,7 @@ async function filePost(body, digest) {
   if (json.error) {
     const { status, statusText, headers } = resp;
     const { message } = json.error;
-    logWithinTest('Fetch Error', { url, status, statusText, headers, digest });
+    console.log('Fetch Error', { url, status, statusText, headers, digest });
     throw new Error(message);
   }
   return json;
@@ -162,7 +260,7 @@ async function deploymentPost(payload, opts = {}) {
   if (json.error) {
     const { status, statusText, headers } = resp;
     const { message } = json.error;
-    logWithinTest('Fetch Error', { url, status, statusText, headers });
+    console.log('Fetch Error', { url, status, statusText, headers });
     throw new Error(message);
   }
   return json;
@@ -175,7 +273,7 @@ async function deploymentGet(deploymentId) {
   if (json.error) {
     const { status, statusText, headers } = resp;
     const { message } = json.error;
-    logWithinTest('Fetch Error', { url, status, statusText, headers, message });
+    console.log('Fetch Error', { url, status, statusText, headers, message });
     throw new Error(message);
   }
   return json;
@@ -225,9 +323,7 @@ async function fetchTokenWithRetry(retries = 5) {
   } = process.env;
   if (VERCEL_TOKEN || NOW_TOKEN || TEMP_TOKEN) {
     if (!TEMP_TOKEN && !IS_CI) {
-      logWithinTest(
-        'Your personal token will be used to make test deployments.'
-      );
+      console.log('Your personal token will be used to make test deployments.');
     }
     return VERCEL_TOKEN || NOW_TOKEN || TEMP_TOKEN;
   }
@@ -266,12 +362,12 @@ async function fetchTokenWithRetry(retries = 5) {
 
     return data.token;
   } catch (error) {
-    logWithinTest(
+    console.log(
       `Failed to fetch token. Retries remaining: ${retries}`,
       error.message
     );
     if (retries === 0) {
-      logWithinTest(error);
+      console.log(error);
       throw error;
     }
     await sleep(500);
@@ -287,8 +383,8 @@ async function fetchApi(url, opts = {}) {
     : `https://${apiHost}${url}`;
 
   if (process.env.VERBOSE) {
-    logWithinTest('fetch', method, url);
-    if (body) logWithinTest(encodeURIComponent(body).slice(0, 80));
+    console.log('fetch', method, url);
+    if (body) console.log(encodeURIComponent(body).slice(0, 80));
   }
 
   if (!opts.headers) opts.headers = {};

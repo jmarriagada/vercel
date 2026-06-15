@@ -35,6 +35,18 @@ function supportsRootCommand(turboSemVer: string | undefined) {
   return !semver.intersects(turboSemVer, '<1.8.0');
 }
 
+function supportsFilter(turboSemVer: string | undefined) {
+  if (!turboSemVer) {
+    return true;
+  }
+
+  if (!semver.validRange(turboSemVer)) {
+    return true;
+  }
+
+  return !semver.intersects(turboSemVer, '<=1.1.0');
+}
+
 type MonorepoDefaultSettings = {
   buildCommand?: string | null;
   installCommand?: string | null;
@@ -60,8 +72,9 @@ export async function getMonorepoDefaultSettings(
   ]);
 
   if (monorepoManager === 'turbo') {
-    const [turboJSONBuf, packageJSONBuf] = await Promise.all([
+    const [turboJSONBuf, turboJSONCBuf, packageJSONBuf] = await Promise.all([
       detectorFilesystem.readFile('turbo.json').catch(() => null),
+      detectorFilesystem.readFile('turbo.jsonc').catch(() => null),
       detectorFilesystem.readFile('package.json').catch(() => null),
     ]);
 
@@ -69,8 +82,11 @@ export async function getMonorepoDefaultSettings(
     let hasTurboTasks = false;
     let turboSemVer = null;
 
-    if (turboJSONBuf !== null) {
-      const turboJSON = JSON5.parse(turboJSONBuf.toString('utf-8'));
+    // Try turbo.json first, then fall back to turbo.jsonc
+    const turboConfigBuf = turboJSONBuf || turboJSONCBuf;
+
+    if (turboConfigBuf !== null) {
+      const turboJSON = JSON5.parse(turboConfigBuf.toString('utf-8'));
 
       hasTurboTasks = 'tasks' in (turboJSON || {});
 
@@ -109,9 +125,10 @@ export async function getMonorepoDefaultSettings(
     if (projectPath) {
       if (supportsRootCommand(turboSemVer)) {
         buildCommand = `turbo run build`;
-      } else {
-        // We don't know for sure if the local `turbo` supports inference.
+      } else if (supportsFilter(turboSemVer)) {
         buildCommand = `cd ${relativeToRoot} && turbo run build --filter={${projectPath}}...`;
+      } else {
+        buildCommand = `cd ${relativeToRoot} && turbo run build --scope=${projectName}`;
       }
     }
 

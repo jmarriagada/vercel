@@ -9,6 +9,7 @@ import {
   resolve,
   sep,
   parse as parsePath,
+  extname,
 } from 'path';
 import { Project } from 'ts-morph';
 import { nodeFileTrace } from '@vercel/nft';
@@ -23,10 +24,14 @@ import {
   runNpmInstall,
   runPackageJsonScript,
   getNodeVersion,
-  getSpawnOptions,
   debug,
   isSymbolicLink,
   walkParentDirs,
+  execCommand,
+  getEnvForPackageManager,
+  scanParentDirs,
+  isBunVersion,
+  getReportedServiceType,
 } from '@vercel/build-utils';
 import type {
   File,
@@ -40,6 +45,7 @@ import type {
 import { getConfig, type BaseFunctionConfig } from '@vercel/static-config';
 
 import { Register, register } from './typescript';
+import { generateProjectManifest } from './diagnostics';
 import {
   validateConfiguredRuntime,
   entrypointToOutputPath,
@@ -53,12 +59,12 @@ interface DownloadOptions {
   workPath: string;
   config: Config;
   meta: Meta;
+  considerBuildCommand: boolean;
 }
 
 const require_ = createRequire(__filename);
 
-// eslint-disable-next-line no-useless-escape
-const libPathRegEx = /^node_modules|[\/\\]node_modules[\/\\]/;
+const libPathRegEx = /^node_modules|[/\\]node_modules[/\\]/;
 
 async function downloadInstallAndBundle({
   files,
@@ -66,6 +72,7 @@ async function downloadInstallAndBundle({
   workPath,
   config,
   meta,
+  considerBuildCommand,
 }: DownloadOptions) {
   const downloadedFiles = await download(files, workPath, meta);
   const entrypointFsDirname = join(workPath, dirname(entrypoint));
@@ -75,17 +82,54 @@ async function downloadInstallAndBundle({
     config,
     meta
   );
-  const spawnOpts = getSpawnOptions(meta, nodeVersion);
-  await runNpmInstall(
-    entrypointFsDirname,
-    [],
-    spawnOpts,
-    meta,
-    nodeVersion,
-    config.projectSettings?.createdAt
-  );
+
+  const {
+    cliType,
+    lockfilePath,
+    lockfileVersion,
+    packageJsonPackageManager,
+    turboSupportsCorepackHome,
+  } = await scanParentDirs(entrypointFsDirname, true);
+
+  const spawnEnv = getEnvForPackageManager({
+    cliType,
+    lockfileVersion,
+    packageJsonPackageManager,
+    env: process.env,
+    turboSupportsCorepackHome,
+    projectCreatedAt: config.projectSettings?.createdAt,
+  });
+
+  const installCommand = config.projectSettings?.installCommand;
+  if (typeof installCommand === 'string' && considerBuildCommand) {
+    if (installCommand.trim()) {
+      console.log(`Running "install" command: \`${installCommand}\`...`);
+      await execCommand(installCommand, {
+        env: spawnEnv,
+        cwd: entrypointFsDirname,
+      });
+    } else {
+      console.log(`Skipping "install" command...`);
+    }
+  } else {
+    await runNpmInstall(
+      entrypointFsDirname,
+      [],
+      { env: spawnEnv },
+      meta,
+      config.projectSettings?.createdAt
+    );
+  }
   const entrypointPath = downloadedFiles[entrypoint].fsPath;
-  return { entrypointPath, entrypointFsDirname, nodeVersion, spawnOpts };
+  return {
+    entrypointPath,
+    entrypointFsDirname,
+    nodeVersion,
+    spawnEnv,
+    cliType,
+    lockfilePath,
+    lockfileVersion,
+  };
 }
 
 function renameTStoJS(path: string) {
@@ -94,6 +138,12 @@ function renameTStoJS(path: string) {
   }
   if (path.endsWith('.tsx')) {
     return path.slice(0, -4) + '.js';
+  }
+  if (path.endsWith('.mts')) {
+    return path.slice(0, -4) + '.mjs';
+  }
+  if (path.endsWith('.cts')) {
+    return path.slice(0, -4) + '.cjs';
   }
   return path;
 }
@@ -158,10 +208,13 @@ async function compile(
     shouldAddSourcemapSupport = true;
     return source;
   }
+  const isBun = isBunVersion(nodeVersion);
 
   const conditions = isEdgeFunction
     ? ['edge-light', 'browser', 'module', 'import', 'require']
-    : undefined;
+    : isBun
+      ? ['bun']
+      : undefined;
 
   const { fileList, esmFileList, warnings } = await nodeFileTrace(
     [...inputFiles],
@@ -170,6 +223,7 @@ async function compile(
       processCwd: workPath,
       ts: true,
       mixedModules: true,
+      moduleSyncCatchall: true,
       conditions,
       resolve(id, parent, job, cjsResolve) {
         const normalizedWasmImports = id.replace(/\.wasm\?module$/i, '.wasm');
@@ -220,7 +274,9 @@ async function compile(
 
           if (
             (fsPath.endsWith('.ts') && !fsPath.endsWith('.d.ts')) ||
-            fsPath.endsWith('.tsx')
+            fsPath.endsWith('.tsx') ||
+            fsPath.endsWith('.mts') ||
+            fsPath.endsWith('.cts')
           ) {
             source = compileTypeScript(fsPath, source.toString());
           }
@@ -245,7 +301,6 @@ async function compile(
       },
     }
   );
-
   for (const warning of warnings) {
     debug(`Warning from trace: ${warning.message}`);
   }
@@ -290,6 +345,7 @@ async function compile(
     file =>
       !file.endsWith('.ts') &&
       !file.endsWith('.tsx') &&
+      !file.endsWith('.mts') &&
       !file.endsWith('.mjs') &&
       !file.match(libPathRegEx)
   );
@@ -360,33 +416,107 @@ function getAWSLambdaHandler(entrypoint: string, config: Config) {
   return '';
 }
 
-export const build: BuildV3 = async ({
+// Track whether bundling routes have already been emitted so they are only
+// included once across all bundled entrypoint builds.
+let bundlingRoutesEmitted = false;
+
+/** @internal Reset bundling routes state between test runs. */
+export function _resetBundlingRoutesEmitted() {
+  bundlingRoutesEmitted = false;
+}
+
+export const build = async ({
   files,
   entrypoint,
+  shim,
+  useWebApi,
   workPath,
   repoRootPath,
   config = {},
   meta = {},
-}) => {
+  service,
+  considerBuildCommand = false,
+  entrypointCallback,
+  checks = () => {},
+}: Parameters<BuildV3>[0] & {
+  shim?: (handler: string) => string;
+  useWebApi?: boolean;
+  considerBuildCommand?: boolean;
+  /**
+   * This is called once any user build scripts have run so that the entrypoint can be detected
+   * from files that may have been created by the build script.
+   */
+  entrypointCallback?: () => Promise<string>;
+  checks?: (project: { config: Config; isBun: boolean }) => void;
+}): Promise<BuildResultV3> => {
   const baseDir = repoRootPath || workPath;
   const awsLambdaHandler = getAWSLambdaHandler(entrypoint, config);
 
-  const { entrypointPath, entrypointFsDirname, nodeVersion, spawnOpts } =
-    await downloadInstallAndBundle({
-      files,
-      entrypoint,
-      workPath,
-      config,
-      meta,
-    });
-
-  await runPackageJsonScript(
+  const {
+    entrypointPath: _entrypointPath,
     entrypointFsDirname,
-    // Don't consider "build" script since its intended for frontend code
-    ['vercel-build', 'now-build'],
-    spawnOpts,
-    config.projectSettings?.createdAt
-  );
+    nodeVersion,
+    spawnEnv,
+    cliType,
+    lockfilePath,
+    lockfileVersion,
+  } = await downloadInstallAndBundle({
+    files,
+    entrypoint,
+    workPath,
+    config,
+    meta,
+    considerBuildCommand,
+  });
+
+  let entrypointPath = _entrypointPath;
+
+  const projectBuildCommand = config.projectSettings?.buildCommand;
+
+  // For traditional api-folder builds, the `build` script or project build command isn't used.
+  // but we're reusing the node builder for hono and express, where they should be treated as the
+  // primary builder
+  if (projectBuildCommand && considerBuildCommand) {
+    await execCommand(projectBuildCommand, {
+      // Yarn v2 PnP mode may be activated, so force
+      // "node-modules" linker style
+      env: {
+        YARN_NODE_LINKER: 'node-modules',
+        ...spawnEnv,
+      },
+
+      cwd: workPath,
+    });
+  } else {
+    const possibleScripts = considerBuildCommand
+      ? ['vercel-build', 'now-build', 'build']
+      : ['vercel-build', 'now-build'];
+
+    await runPackageJsonScript(
+      entrypointFsDirname,
+      possibleScripts,
+      { env: spawnEnv },
+      config.projectSettings?.createdAt
+    );
+  }
+  if (entrypointCallback) {
+    const entrypoint = await entrypointCallback();
+    entrypointPath = join(entrypointFsDirname, entrypoint);
+    const functionConfig = config.functions?.[entrypoint];
+    if (functionConfig) {
+      const normalizeArray = (value: any) =>
+        Array.isArray(value) ? value : value ? [value] : [];
+
+      config.includeFiles = [
+        ...normalizeArray(config.includeFiles),
+        ...normalizeArray(functionConfig.includeFiles),
+      ];
+      config.excludeFiles = [
+        ...normalizeArray(config.excludeFiles),
+        ...normalizeArray(functionConfig.excludeFiles),
+      ];
+    }
+  }
 
   const isMiddleware = config.middleware === true;
   let isEdgeFunction = isMiddleware;
@@ -400,6 +530,11 @@ export const build: BuildV3 = async ({
   if (runtime) {
     isEdgeFunction = isEdgeRuntime(runtime);
   }
+
+  checks({
+    config,
+    isBun: isBunVersion(nodeVersion),
+  });
 
   debug('Tracing input files...');
   const traceTime = Date.now();
@@ -417,7 +552,7 @@ export const build: BuildV3 = async ({
   let routes: BuildResultV3['routes'];
   let output: BuildResultV3['output'] | undefined;
 
-  const handler = renameTStoJS(relative(baseDir, entrypointPath));
+  let handler = renameTStoJS(relative(baseDir, entrypointPath));
   const outputPath = entrypointToOutputPath(entrypoint, config.zeroConfig);
 
   // Add a `route` for Middleware
@@ -445,6 +580,30 @@ export const build: BuildV3 = async ({
     ];
   }
 
+  if (shim) {
+    const handlerFilename = basename(handler);
+    const handlerDir = dirname(handler);
+    const extension = extname(handlerFilename);
+    const extMap: Record<string, string> = {
+      '.ts': '.js',
+      '.mts': '.mjs',
+      '.mjs': '.mjs',
+      '.cjs': '.cjs',
+      '.js': '.js',
+    };
+    const ext = extMap[extension];
+    if (!ext) {
+      throw new Error(`Unsupported extension for ${entrypoint}`);
+    }
+    const filename = `shim${ext}`;
+    const shimHandler =
+      handlerDir === '.' ? filename : join(handlerDir, filename);
+    preparedFiles[shimHandler] = new FileBlob({
+      data: shim(handlerFilename),
+    });
+    handler = shimHandler;
+  }
+
   if (isEdgeFunction) {
     output = new EdgeFunction({
       entrypoint: handler,
@@ -458,18 +617,90 @@ export const build: BuildV3 = async ({
       config.helpers === false || process.env.NODEJS_HELPERS === '0'
     );
 
-    const supportsResponseStreaming =
+    // AWS custom handlers can't stream responses. The canonical gate
+    // lives in `@vercel/build-utils`'s `getLambdaSupportsStreaming`, but
+    // the build-container picks that up on its own rollout cadence —
+    // until then this build-time signal is what protects users on the
+    // Node builder. Keep this in sync with the central gate.
+    let supportsResponseStreaming: boolean | undefined;
+    if (awsLambdaHandler) {
+      supportsResponseStreaming = false;
+    } else if (
       (staticConfig?.supportsResponseStreaming ??
         staticConfig?.experimentalResponseStreaming) === true
-        ? true
-        : undefined;
+    ) {
+      supportsResponseStreaming = true;
+    }
+
+    const enableBundling =
+      process.env.VERCEL_API_FUNCTION_BUNDLING === '1' &&
+      config.zeroConfig === true &&
+      !isMiddleware &&
+      !isEdgeFunction;
+
+    if (enableBundling) {
+      // All bundleable lambdas share this identical handler file so that
+      // groupLambdas can match their handler field and digest, grouping
+      // them into a single Lambda. At runtime, the shared handler uses
+      // x-matched-path to route to the correct user entrypoint.
+      const bundledHandlerName = '___vc_bundled_api_handler.js';
+      const entrypointPrefix = relative(baseDir, workPath).split(sep).join('/');
+      preparedFiles[bundledHandlerName] = new FileBlob({
+        data: readFileSync(
+          join(dirname(__filename), 'bundling-handler.js'),
+          'utf8'
+        ).replace(
+          'process.env.VERCEL_ENTRYPOINT_PREFIX',
+          JSON.stringify(entrypointPrefix)
+        ),
+      });
+      handler = bundledHandlerName;
+
+      // Inject x-matched-path as a request header so the bundled handler
+      // knows which entrypoint to invoke. These routes are identical for
+      // every bundled entrypoint, so only emit them once to avoid
+      // inflating the route table during route merging.
+      if (!bundlingRoutesEmitted) {
+        bundlingRoutesEmitted = true;
+        routes = [
+          { handle: 'hit' },
+          {
+            src: '/index(?:/)?',
+            transforms: [
+              {
+                type: 'request.headers' as const,
+                op: 'set' as const,
+                target: { key: 'x-matched-path' },
+                args: '/',
+              },
+            ],
+            continue: true,
+            important: true,
+          },
+          {
+            src: '/((?!index$).*?)(?:/)?',
+            transforms: [
+              {
+                type: 'request.headers' as const,
+                op: 'set' as const,
+                target: { key: 'x-matched-path' },
+                args: '/$1',
+              },
+            ],
+            continue: true,
+            important: true,
+          },
+        ];
+      }
+    }
 
     output = new NodejsLambda({
       files: preparedFiles,
       handler,
+      experimentalAllowBundling: enableBundling || undefined,
       architecture: staticConfig?.architecture,
       runtime: nodeVersion.runtime,
-      useWebApi: isMiddleware,
+      useWebApi: isMiddleware ? true : (useWebApi ?? staticConfig?.useWebApi),
       shouldAddHelpers: isMiddleware ? false : shouldAddHelpers,
       shouldAddSourcemapSupport,
       awsLambdaHandler,
@@ -478,7 +709,26 @@ export const build: BuildV3 = async ({
       regions: normalizeRequestedRegions(
         staticConfig?.preferredRegion ?? staticConfig?.regions
       ),
+      shouldDisableAutomaticFetchInstrumentation:
+        process.env.VERCEL_TRACING_DISABLE_AUTOMATIC_FETCH_INSTRUMENTATION ===
+        '1',
     });
+  }
+
+  try {
+    await generateProjectManifest({
+      workPath,
+      nodeVersion,
+      cliType,
+      lockfilePath,
+      lockfileVersion,
+      framework: config.framework ?? undefined,
+      serviceType: service ? getReportedServiceType(service) : undefined,
+    });
+  } catch (err) {
+    debug(
+      `Failed to write node manifest: ${err instanceof Error ? err.message : String(err)}`
+    );
   }
 
   return { routes, output };

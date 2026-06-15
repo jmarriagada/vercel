@@ -1,15 +1,13 @@
 import fs from 'fs';
 import AJV from 'ajv';
-import chalk from 'chalk';
 import { join, relative } from 'path';
 import { ensureDir } from 'fs-extra';
 import { promisify } from 'util';
 
 import getProjectByIdOrName from '../projects/get-project-by-id-or-name';
+import getOrgById from './get-org-by-id';
 import type Client from '../client';
 import { InvalidToken, isAPIError, ProjectNotFound } from '../errors-ts';
-import getUser from '../get-user';
-import getTeamById from '../teams/get-team-by-id';
 import type {
   Project,
   ProjectLinkResult,
@@ -17,7 +15,7 @@ import type {
   ProjectLink,
 } from '@vercel-internals/types';
 import { prependEmoji, emoji, type EmojiLabel } from '../emoji';
-import { isDirectory } from '../config/global-path';
+import { isDirectory } from '../fs';
 import { NowBuildError, getPlatformEnv } from '@vercel/build-utils';
 import outputCode from '../output/code';
 import { isErrnoException, isError } from '@vercel/error-utils';
@@ -25,6 +23,9 @@ import { findProjectsFromPath, getRepoLink } from '../link/repo';
 import { addToGitIgnore } from '../link/add-to-gitignore';
 import type { RepoProjectConfig } from '../link/repo';
 import output from '../../output-manager';
+import { printAlignedLabel } from '../output/print-aligned-label';
+import pull from '../../commands/env/pull';
+import { resolveProjectCwd } from './find-project-root';
 
 const readFile = promisify(fs.readFile);
 const writeFile = promisify(fs.writeFile);
@@ -44,6 +45,10 @@ const linkSchema = {
       minLength: 1,
     },
     orgId: {
+      type: 'string',
+      minLength: 1,
+    },
+    projectName: {
       type: 'string',
       minLength: 1,
     },
@@ -72,17 +77,42 @@ export function getVercelDirectory(cwd: string): string {
 
 export async function getProjectLink(
   client: Client,
-  path: string
+  path: string,
+  projectName?: string,
+  projectNameIsExplicit?: boolean
 ): Promise<ProjectLink | null> {
-  return (
-    (await getProjectLinkFromRepoLink(client, path)) ||
-    (await getLinkFromDir(getVercelDirectory(path)))
+  // Prefer an explicit per-directory link (`.vercel/project.json`) over a
+  // repository-level link (`.vercel/repo.json`). This prevents scenarios where
+  // a freshly-created local link (e.g. after `vc link`) is ignored and the
+  // user is re-prompted to select a repo-linked project again.
+  // When `projectNameIsExplicit` is true, the caller is resolving a user-
+  // supplied `--project` value, so mismatched local links must not win.
+  const dirLink = await getLinkFromDir(getVercelDirectory(path));
+  if (dirLink) {
+    if (!projectNameIsExplicit || !projectName) {
+      return dirLink;
+    }
+
+    if (
+      dirLink.projectId === projectName ||
+      dirLink.projectName === projectName
+    ) {
+      return dirLink;
+    }
+  }
+  return await getProjectLinkFromRepoLink(
+    client,
+    path,
+    projectName,
+    projectNameIsExplicit
   );
 }
 
 async function getProjectLinkFromRepoLink(
   client: Client,
-  path: string
+  path: string,
+  projectName?: string,
+  projectNameIsExplicit?: boolean
 ): Promise<ProjectLink | null> {
   const repoLink = await getRepoLink(client, path);
   if (!repoLink?.repoConfig) {
@@ -93,23 +123,61 @@ async function getProjectLinkFromRepoLink(
     relative(repoLink.rootPath, path)
   );
   let project: RepoProjectConfig | undefined;
-  if (projects.length === 1) {
+
+  if (projectName && projectNameIsExplicit) {
+    project = repoLink.repoConfig.projects.find(
+      p => p.id === projectName || p.name === projectName
+    );
+  } else if (projects.length === 1) {
     project = projects[0];
   } else {
     const selectableProjects =
       projects.length > 0 ? projects : repoLink.repoConfig.projects;
-    project = await client.input.select({
-      message: `Please select a Project:`,
-      choices: selectableProjects.map(p => ({
-        value: p,
-        name: p.name,
-      })),
-    });
+
+    // If --project flag was provided, match by ID or name
+    if (projectName) {
+      project = selectableProjects.find(
+        p => p.id === projectName || p.name === projectName
+      );
+    }
+
+    // Fall back to interactive selection if no project was found
+    if (!project) {
+      if (client.nonInteractive) {
+        if (selectableProjects.length === 1) {
+          project = selectableProjects[0];
+        } else {
+          return null;
+        }
+      } else {
+        project = await client.input.select({
+          message: `Please select a Project:`,
+          choices: selectableProjects.map(p => ({
+            value: p,
+            name: p.name,
+          })),
+        });
+      }
+    }
   }
   if (project) {
+    // Prefer project-level orgId, fall back to top-level for backwards compat
+    const orgId = project.orgId ?? repoLink.repoConfig.orgId;
+    if (!orgId) {
+      const projectInfo = [
+        project.name ? `name: "${project.name}"` : '',
+        project.directory ? `directory: "${project.directory}"` : '',
+      ]
+        .filter(Boolean)
+        .join(', ');
+      const details = projectInfo ? ` Project: { ${projectInfo} }.` : '';
+      throw new Error(
+        `Could not determine org ID from repo.json config at "${repoLink.repoConfigPath}".${details} Please re-link the repository.`
+      );
+    }
     return {
       repoRoot: repoLink.rootPath,
-      orgId: repoLink.repoConfig.orgId,
+      orgId,
       projectId: project.id,
       projectRootDirectory: project.directory,
     };
@@ -127,6 +195,20 @@ export async function getLinkFromDir<T = ProjectLink>(
     const link: T = JSON.parse(json);
 
     if (!ajv.validate(linkSchema, link)) {
+      const raw = link as Record<string, unknown>;
+      const projectId = raw.projectId;
+      const orgId = raw.orgId;
+      const hasPlainLinkIds =
+        typeof projectId === 'string' &&
+        projectId.length > 0 &&
+        typeof orgId === 'string' &&
+        orgId.length > 0;
+      if (!hasPlainLinkIds) {
+        // `vercel pull` with a repo-level link writes settings-only `project.json`
+        // (see writeProjectSettings). Treat as no per-directory link and fall
+        // back to `.vercel/repo.json` resolution.
+        return null;
+      }
       throw new Error(
         `Project Settings are invalid. To link your project again, remove the ${dir} directory.`
       );
@@ -154,18 +236,6 @@ export async function getLinkFromDir<T = ProjectLink>(
   }
 }
 
-async function getOrgById(client: Client, orgId: string): Promise<Org | null> {
-  if (orgId.startsWith('team_')) {
-    const team = await getTeamById(client, orgId);
-    if (!team) return null;
-    return { type: 'team', id: team.id, slug: team.slug };
-  }
-
-  const user = await getUser(client);
-  if (user.id !== orgId) return null;
-  return { type: 'user', id: orgId, slug: user.username };
-}
-
 async function hasProjectLink(
   client: Client,
   projectLink: ProjectLink,
@@ -183,11 +253,22 @@ async function hasProjectLink(
 
   // linked via `repo.json`?
   const repoLink = await getRepoLink(client, path);
-  if (
-    repoLink?.repoConfig?.orgId === projectLink.orgId &&
-    repoLink.repoConfig.projects.find(p => p.id === projectLink.projectId)
-  ) {
-    return true;
+  if (repoLink?.repoConfig) {
+    const matchingProject = repoLink.repoConfig.projects.find(
+      p => p.id === projectLink.projectId
+    );
+    if (matchingProject) {
+      // Prefer project-level orgId, fall back to top-level for backwards compat
+      const orgId = matchingProject.orgId ?? repoLink.repoConfig.orgId;
+      if (!orgId) {
+        throw new Error(
+          `Invalid "repo.json": missing "orgId" for project "${matchingProject.id}" and no top-level "orgId" is defined.`
+        );
+      }
+      if (orgId === projectLink.orgId) {
+        return true;
+      }
+    }
   }
 
   // if the project is already linked, we skip linking
@@ -205,8 +286,18 @@ async function hasProjectLink(
 
 export async function getLinkedProject(
   client: Client,
-  path = client.cwd
+  path = client.cwd,
+  projectName?: string,
+  /**
+   * When `true`, resolve `projectName` via the API if no local link matches.
+   * Only enable for explicit user-supplied names (e.g. `--project`) so that
+   * implicit `projectName` defaults (like a directory basename) keep their
+   * existing `not_linked` → `setupAndLink` flow.
+   */
+  apiFallback?: boolean
 ): Promise<ProjectLinkResult> {
+  path = await resolveProjectCwd(path);
+
   const VERCEL_ORG_ID = getPlatformEnv('ORG_ID');
   const VERCEL_PROJECT_ID = getPlatformEnv('PROJECT_ID');
   const shouldUseEnv = Boolean(VERCEL_ORG_ID && VERCEL_PROJECT_ID);
@@ -222,10 +313,26 @@ export async function getLinkedProject(
     return { status: 'error', exitCode: 1 };
   }
 
-  const link =
+  let link =
     VERCEL_ORG_ID && VERCEL_PROJECT_ID
       ? { orgId: VERCEL_ORG_ID, projectId: VERCEL_PROJECT_ID }
-      : await getProjectLink(client, path);
+      : await getProjectLink(client, path, projectName, apiFallback);
+
+  // Resolve `projectName` via the API when no local link matches. Enables
+  // non-interactive CI use (e.g. `vercel deploy --project my-app`).
+  if (!link && projectName && apiFallback) {
+    try {
+      const apiProject = await getProjectByIdOrName(client, projectName);
+      if (!(apiProject instanceof ProjectNotFound)) {
+        link = {
+          projectId: apiProject.id,
+          orgId: apiProject.accountId,
+        };
+      }
+    } catch {
+      // Swallow; caller handles `not_linked` below.
+    }
+  }
 
   if (!link) {
     return { status: 'not_linked', org: null, project: null };
@@ -235,16 +342,42 @@ export async function getLinkedProject(
   let org: Org | null = null;
   let project: Project | ProjectNotFound | null = null;
   try {
-    [org, project] = await Promise.all([
+    const [orgResult, projectResult] = await Promise.allSettled([
       getOrgById(client, link.orgId),
       getProjectByIdOrName(client, link.projectId, link.orgId),
     ]);
+
+    if (orgResult.status === 'fulfilled') {
+      org = orgResult.value;
+    } else if (
+      isAPIError(orgResult.reason) &&
+      (orgResult.reason.status === 404 ||
+        orgResult.reason.code === 'not_found' ||
+        orgResult.reason.code === 'mock_unimplemented')
+    ) {
+      org = null;
+    } else {
+      throw orgResult.reason;
+    }
+
+    if (projectResult.status === 'fulfilled') {
+      project = projectResult.value;
+    } else if (
+      isAPIError(projectResult.reason) &&
+      (projectResult.reason.status === 404 ||
+        projectResult.reason.code === 'not_found' ||
+        projectResult.reason.code === 'mock_unimplemented')
+    ) {
+      project = new ProjectNotFound(link.projectId);
+    } else {
+      throw projectResult.reason;
+    }
   } catch (err: unknown) {
     if (isAPIError(err) && err.status === 403) {
       output.stopSpinner();
 
       if (err.missingToken || err.invalidToken) {
-        throw new InvalidToken();
+        throw new InvalidToken(client.authConfig.tokenSource);
       } else if (err.code === 'forbidden' || err.code === 'team_unauthorized') {
         throw new NowBuildError({
           message: `Could not retrieve Project Settings. To link your Project, remove the ${outputCode(
@@ -285,10 +418,23 @@ export async function getLinkedProject(
   return { status: 'linked', org, project, repoRoot: link.repoRoot };
 }
 
+const VERCEL_DIR_README_CONTENT = `> Why do I have a folder named ".vercel" in my project?
+The ".vercel" folder is created when you link a directory to a Vercel project.
+
+> What does the "project.json" file contain?
+The "project.json" file contains:
+- The ID of the Vercel project that you linked ("projectId")
+- The ID of the user or team your Vercel project is owned by ("orgId")
+
+> Should I commit the ".vercel" folder?
+No, you should not share the ".vercel" folder with anyone.
+Upon creation, it will be automatically added to your ".gitignore" file.
+`;
+
 export async function writeReadme(path: string) {
   await writeFile(
     join(path, VERCEL_DIR, VERCEL_DIR_README),
-    await readFile(join(__dirname, 'VERCEL_DIR_README.txt'), 'utf8')
+    VERCEL_DIR_README_CONTENT
   );
 }
 
@@ -298,7 +444,9 @@ export async function linkFolderToProject(
   projectLink: ProjectLink,
   projectName: string,
   orgSlug: string,
-  successEmoji: EmojiLabel = 'link'
+  successEmoji: EmojiLabel = 'link',
+  autoConfirm: boolean = false,
+  pullEnv: boolean = true
 ) {
   // if the project is already linked, we skip linking
   if (await hasProjectLink(client, projectLink, path)) {
@@ -318,22 +466,54 @@ export async function linkFolderToProject(
 
   await writeFile(
     join(path, VERCEL_DIR, VERCEL_DIR_PROJECT),
-    JSON.stringify(projectLink)
+    JSON.stringify({
+      ...projectLink,
+      projectName,
+    })
   );
 
   await writeReadme(path);
 
-  // update .gitignore
-  const isGitIgnoreUpdated = await addToGitIgnore(path);
+  // update .gitignore (silent — git status surfaces the change on demand)
+  await addToGitIgnore(path);
 
-  output.print(
-    prependEmoji(
-      `Linked to ${chalk.bold(
-        `${orgSlug}/${projectName}`
-      )} (created ${VERCEL_DIR}${
-        isGitIgnoreUpdated ? ' and added it to .gitignore' : ''
-      })`,
-      emoji(successEmoji)
-    ) + '\n'
-  );
+  printAlignedLabel('Linked', `${orgSlug}/${projectName}`);
+
+  if (!pullEnv) {
+    return;
+  }
+
+  // Skip env pull prompt in CI/non-TTY and in `--non-interactive` (agents, scripts).
+  if (!client.stdin.isTTY || client.nonInteractive) {
+    return;
+  }
+
+  const pullEnvConfirmed =
+    autoConfirm ||
+    (await client.input.confirm(
+      'Would you like to pull environment variables now?',
+      true
+    ));
+
+  if (pullEnvConfirmed) {
+    const originalCwd = client.cwd;
+    try {
+      client.cwd = path;
+
+      const args = autoConfirm ? ['--yes'] : [];
+      const exitCode = await pull(client, args, 'vercel-cli:link');
+
+      if (exitCode !== 0) {
+        output.error(
+          'Failed to pull environment variables. You can run `vc env pull` manually.'
+        );
+      }
+    } catch (_error) {
+      output.error(
+        'Failed to pull environment variables. You can run `vc env pull` manually.'
+      );
+    } finally {
+      client.cwd = originalCwd;
+    }
+  }
 }

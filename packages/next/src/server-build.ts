@@ -14,7 +14,7 @@ import {
   Files,
   BuildResultV2Typical as BuildResult,
 } from '@vercel/build-utils';
-import { Route, RouteWithHandle } from '@vercel/routing-utils';
+import { Route, RouteWithHandle, RouteWithSrc } from '@vercel/routing-utils';
 import { MAX_AGE_ONE_YEAR } from '.';
 import {
   NextRequiredServerFilesManifest,
@@ -51,12 +51,13 @@ import {
   CreateLambdaFromPseudoLayersOptions,
   getPostponeResumePathname,
   LambdaGroup,
-  MAX_UNCOMPRESSED_LAMBDA_SIZE,
+  getMaxUncompressedLambdaSize,
   RenderingMode,
   getPostponeResumeOutput,
   getNodeMiddleware,
-  getStaticSegmentRoutes,
+  getServerActionMetaRoutes,
 } from './utils';
+import { INTERNAL_PAGES } from './constants';
 import {
   nodeFileTrace,
   NodeFileTraceReasons,
@@ -66,6 +67,7 @@ import resolveFrom from 'resolve-from';
 import fs, { lstat } from 'fs-extra';
 import escapeStringRegexp from 'escape-string-regexp';
 import prettyBytes from 'pretty-bytes';
+import { getAppRouterPathnameFilesMap } from './metadata';
 
 // related PR: https://github.com/vercel/next.js/pull/30046
 const CORRECT_NOT_FOUND_ROUTES_VERSION = 'v12.0.1';
@@ -73,6 +75,8 @@ const CORRECT_MIDDLEWARE_ORDER_VERSION = 'v12.1.7-canary.29';
 const NEXT_DATA_MIDDLEWARE_RESOLVING_VERSION = 'v12.1.7-canary.33';
 const EMPTY_ALLOW_QUERY_FOR_PRERENDERED_VERSION = 'v12.2.0';
 const CORRECTED_MANIFESTS_VERSION = 'v12.2.0';
+// Needs https://github.com/vercel/next.js/pull/89263
+const DYNAMICALLY_RENDER_404_VERSION = 'v16.2.0-canary.17';
 
 // Ideally this should be in a Next.js manifest so we can change it in
 // the future but this also allows us to improve existing versions
@@ -111,6 +115,7 @@ export async function serverBuild({
   config = {},
   functionsConfigManifest,
   privateOutputs,
+  files,
   baseDir,
   workPath,
   entryPath,
@@ -125,6 +130,7 @@ export async function serverBuild({
   afterFilesRewrites,
   fallbackRewrites,
   headers,
+  onMatchHeaders,
   dataRoutes,
   hasIsr404Page,
   hasIsr500Page,
@@ -147,7 +153,10 @@ export async function serverBuild({
   variantsManifest,
   experimentalPPRRoutes,
   isAppPPREnabled,
+  isAppFullPPREnabled,
   isAppClientSegmentCacheEnabled,
+  isAppClientParamParsingEnabled,
+  clientParamParsingOrigins,
 }: {
   appPathRoutesManifest?: Record<string, string>;
   dynamicPages: string[];
@@ -172,6 +181,7 @@ export async function serverBuild({
   entryDirectory: string;
   outputDirectory: string;
   headers: Route[];
+  onMatchHeaders: Route[];
   workPath: string;
   beforeFilesRewrites: Route[];
   afterFilesRewrites: Route[];
@@ -190,7 +200,15 @@ export async function serverBuild({
   variantsManifest: VariantsManifest | null;
   experimentalPPRRoutes: ReadonlySet<string>;
   isAppPPREnabled: boolean;
+  files: Files;
+  /**
+   * When this is true, then it means all routes are PPR enabled. PPR is not
+   * enabled in incremental mode and all routes will be prerendered.
+   */
+  isAppFullPPREnabled: boolean;
   isAppClientSegmentCacheEnabled: boolean;
+  isAppClientParamParsingEnabled: boolean;
+  clientParamParsingOrigins: string[] | undefined;
 }): Promise<BuildResult> {
   if (isAppPPREnabled) {
     debug(
@@ -200,6 +218,14 @@ export async function serverBuild({
   }
 
   lambdaPages = Object.assign({}, lambdaPages, lambdaAppPaths);
+
+  // When the entire application has PPR enabled (all the routes) and both
+  // client param parsing and client segment cache are enabled we do not need
+  // the .prefetch.rsc routing.
+  const shouldSkipPrefetchRSCHandling =
+    isAppFullPPREnabled &&
+    isAppClientParamParsingEnabled &&
+    isAppClientSegmentCacheEnabled;
 
   const experimentalAllowBundling = Boolean(
     process.env.NEXT_EXPERIMENTAL_FUNCTION_BUNDLING
@@ -211,7 +237,6 @@ export async function serverBuild({
   const lambdas: { [key: string]: Lambda } = {};
   const prerenders: { [key: string]: Prerender } = {};
   const lambdaPageKeys = Object.keys(lambdaPages);
-  const internalPages = ['_app.js', '_error.js', '_document.js'];
   const pageBuildTraces = await glob('**/*.js.nft.json', pagesDir);
   const isEmptyAllowQueryForPrendered = semver.gte(
     nextVersion,
@@ -275,6 +300,30 @@ export async function serverBuild({
           protocol = 'https://';
         }
 
+        let origin: string | null = null;
+        if (protocol) {
+          const urlWithoutProtocol = rewrite.dest.substring(protocol.length);
+
+          // Find the first occurrence of any URL delimiter
+          const delimiters = ['/', '?', '#'];
+          let endIndex = -1;
+
+          for (const delimiter of delimiters) {
+            const index = urlWithoutProtocol.indexOf(delimiter);
+            if (index !== -1) {
+              endIndex = endIndex === -1 ? index : Math.min(endIndex, index);
+            }
+          }
+
+          if (endIndex === -1) {
+            // No delimiters found, the entire URL is the origin
+            origin = rewrite.dest;
+          } else {
+            // Extract up to the first delimiter
+            origin = protocol + urlWithoutProtocol.substring(0, endIndex);
+          }
+        }
+
         // We only support adding rewrite headers to routes that do not have
         // a protocol, so don't bother trying to parse the pathname if there is
         // a protocol.
@@ -336,95 +385,35 @@ export async function serverBuild({
         const { rewriteHeaders } = routesManifest;
         if (!rewriteHeaders) continue;
 
-        // If the rewrite was external or didn't include a pathname or query,
-        // we don't need to add the rewrite headers.
-        if (protocol || (!pathname && !query)) continue;
+        // Check to see if this is a non-relative rewrite. If it is, we need
+        // to check to see if it's an allowed origin to receive the rewritten
+        // headers.
+        const isAllowedOrigin =
+          origin && clientParamParsingOrigins
+            ? clientParamParsingOrigins.some(allowedOrigin =>
+                new RegExp(allowedOrigin).test(origin!)
+              )
+            : false;
 
-        const missing =
-          'missing' in rewrite && rewrite.missing ? rewrite.missing : [];
+        // If the rewrite was external and the origin is not allowed, or
+        // if there is no rewritten pathname or query, skip adding headers.
+        if ((origin && !isAllowedOrigin) || (!pathname && !query)) continue;
 
-        // Find any rules that could conflict with our new rule.
-        let found = missing.filter(
-          h => h.type === 'header' && h.key.toLowerCase() === rscHeader
-        );
+        (rewrite as RouteWithSrc).headers = {
+          ...(rewrite as RouteWithSrc).headers,
 
-        // If we found a `missing` rule that would conflict with our rule,
-        // skip adding this rewrite.
-        if (
-          found.some(
-            m =>
-              // These are rules that don't have a value check or those that
-              // have their value set to '1'.
-              !m.value || m.value === '1'
-          )
-        ) {
-          continue;
-        }
+          ...(pathname
+            ? {
+                [rewriteHeaders.pathHeader]: pathname,
+              }
+            : {}),
 
-        const has =
-          'has' in rewrite && rewrite.has
-            ? // As we mutate the array below, we need to clone it to avoid
-              // mutating the original
-              [...rewrite.has]
-            : [];
-
-        // Find any rules that could conflict with our new rule.
-        found = has.filter(
-          h => h.type === 'header' && h.key.toLowerCase() === rscHeader
-        );
-
-        // If we found a `has` rule that would conflict with our rule,
-        // skip adding this rewrite.
-        if (
-          found.some(
-            h =>
-              // These are rules that have a value set to anything other than
-              // '1'.
-              h.value && h.value !== '1'
-          )
-        ) {
-          continue;
-        }
-
-        // Remove any existing RSC header rules as we'll add our own.
-        for (const h of found) {
-          has.splice(has.indexOf(h), 1);
-        }
-
-        // Add our new RSC header rule.
-        has.push({ type: 'header', key: rscHeader, value: '1' });
-
-        // Create a new rewrite that adds the rsc header to the rule.
-        const headers: Record<string, string> =
-          'headers' in rewrite && rewrite.headers
-            ? // Clone the existing headers to avoid mutating the original
-              // object.
-              { ...rewrite.headers }
-            : {};
-
-        const updated: Route = {
-          ...rewrite,
-          // We don't want to perform the actual rewrite here, instead we want
-          // to just add the headers associated with the rewrite.
-          dest: undefined,
-          // We don't want to check here, so omit the check property but we do
-          // want to maintain the order of the rewrites, so add the continue
-          // property.
-          check: undefined,
-          continue: true,
-          has,
-          headers,
+          ...(query
+            ? {
+                [rewriteHeaders.queryHeader]: query,
+              }
+            : {}),
         };
-
-        // If the pathname was rewritten, add it to the headers.
-        if (pathname) headers[rewriteHeaders.pathHeader] = pathname;
-
-        // If the query was rewritten, add it to the headers.
-        if (query) headers[rewriteHeaders.queryHeader] = query;
-
-        // Insert the updated rewrite before the original rewrite.
-        rewrites.splice(i, 0, updated);
-        i++;
       }
     };
 
@@ -443,9 +432,17 @@ export async function serverBuild({
   );
   // experimental bundling prevents filtering manifests
   // as we don't know what to filter by at this stage
-  const isCorrectManifests =
-    !experimentalAllowBundling &&
-    semver.gte(nextVersion, CORRECTED_MANIFESTS_VERSION);
+  const mayFilterManifests = !experimentalAllowBundling;
+  const isCorrectManifests = semver.gte(
+    nextVersion,
+    CORRECTED_MANIFESTS_VERSION
+  );
+
+  // When possible, don't embed the static 404 page in lambdas for determinism
+  const shouldUse404Prerender = semver.lt(
+    nextVersion,
+    DYNAMICALLY_RENDER_404_VERSION
+  );
 
   let hasStatic500 = !!staticPages[path.posix.join(entryDirectory, '500')];
 
@@ -492,6 +489,11 @@ export async function serverBuild({
   const lstatResults: { [key: string]: ReturnType<typeof lstat> } = {};
   const nonLambdaSsgPages = new Set<string>();
   const static404Pages = new Set<string>(static404Page ? [static404Page] : []);
+
+  // Only include internal pages that are actually existed
+  const internalPages = [...INTERNAL_PAGES].filter(page => {
+    return lambdaPages[page];
+  });
 
   Object.keys(prerenderManifest.staticRoutes).forEach(route => {
     const result = onPrerenderRouteInitial(
@@ -555,9 +557,10 @@ export async function serverBuild({
     let nextServerBuildTrace;
     let instrumentationHookBuildTrace;
 
-    const useBundledServer =
-      semver.gte(nextVersion, BUNDLED_SERVER_NEXT_VERSION) &&
-      process.env.VERCEL_NEXT_BUNDLED_SERVER === '1';
+    const useBundledServer = semver.gte(
+      nextVersion,
+      BUNDLED_SERVER_NEXT_VERSION
+    );
 
     if (useBundledServer) {
       debug('Using bundled Next.js server');
@@ -620,6 +623,7 @@ export async function serverBuild({
         base: baseDir,
         cache: {},
         processCwd: entryPath,
+        moduleSyncCatchall: true,
         ignore: [
           ...requiredServerFilesManifest.ignore.map(file =>
             path.join(entryPath, file)
@@ -697,7 +701,7 @@ export async function serverBuild({
       }
       const normalizedPathname = normalizePage(pathname);
 
-      if (isDynamicRoute(normalizedPathname)) {
+      if (isDynamicRoute(normalizedPathname, nextVersion)) {
         dynamicPages.push(normalizedPathname);
       }
 
@@ -721,7 +725,7 @@ export async function serverBuild({
       fsPath: nextServerFile,
     });
 
-    if (static404Pages.size > 0) {
+    if (shouldUse404Prerender && static404Pages.size > 0) {
       // If we've generated a static 404 page, it's possible that we also
       // have a static 404 page for each locale.
       if (i18n) {
@@ -833,10 +837,11 @@ export async function serverBuild({
       )
     );
 
-    if (uncompressedInitialSize > MAX_UNCOMPRESSED_LAMBDA_SIZE) {
+    const maxLambdaSize = getMaxUncompressedLambdaSize(nodeVersion.runtime);
+    if (uncompressedInitialSize > maxLambdaSize) {
       console.log(
         `Warning: Max serverless function size of ${prettyBytes(
-          MAX_UNCOMPRESSED_LAMBDA_SIZE
+          maxLambdaSize
         )} uncompressed reached`
       );
 
@@ -848,7 +853,7 @@ export async function serverBuild({
       );
 
       throw new NowBuildError({
-        message: `Required files read using Node.js fs library and node_modules exceed max lambda size of ${MAX_UNCOMPRESSED_LAMBDA_SIZE} bytes`,
+        message: `Required files read using Node.js fs library and node_modules exceed max lambda size of ${maxLambdaSize} bytes`,
         code: 'NEXT_REQUIRED_FILES_LIMIT',
         link: 'https://vercel.com/docs/platform/limits#serverless-function-size',
       });
@@ -956,6 +961,7 @@ export async function serverBuild({
         base: baseDir,
         cache: traceCache,
         processCwd: projectDir,
+        moduleSyncCatchall: true,
       });
       traceResult.esmFileList.forEach(file => traceResult?.fileList.add(file));
       parentFilesMap = getFilesMapFromReasons(
@@ -968,7 +974,7 @@ export async function serverBuild({
     for (const page of mergedPageKeys) {
       const originalPagePath = getOriginalPagePath(page);
       const pageBuildTrace = getBuildTraceFile(originalPagePath);
-      let fileList: string[];
+      let fileList: string[] = [];
       let reasons: NodeFileTraceReasons;
 
       if (pageBuildTrace) {
@@ -999,7 +1005,7 @@ export async function serverBuild({
               await fs.readFile(`${serverComponentFile}.nft.json`, 'utf8')
             );
             scTrace.files.forEach((file: string) => files.push(file));
-          } catch (err) {
+          } catch (_err) {
             /* non-fatal for now */
           }
         }
@@ -1021,17 +1027,10 @@ export async function serverBuild({
         });
         reasons = new Map();
       } else {
+        const lambdaPage = lambdaPages[page];
         fileList = Array.from(
-          parentFilesMap?.get(
-            path.relative(baseDir, lambdaPages[page].fsPath)
-          ) || []
+          parentFilesMap?.get(path.relative(baseDir, lambdaPage.fsPath)) || []
         );
-
-        if (!fileList) {
-          throw new Error(
-            `Invariant: Failed to trace ${page}, missing fileList`
-          );
-        }
         reasons = traceResult?.reasons || new Map();
       }
 
@@ -1079,6 +1078,7 @@ export async function serverBuild({
       initialPseudoLayerUncompressed: uncompressedInitialSize,
       internalPages,
       pageExtensions,
+      nodeVersion,
     });
 
     for (const group of pageLambdaGroups) {
@@ -1101,6 +1101,7 @@ export async function serverBuild({
       internalPages,
       pageExtensions,
       inversedAppPathManifest,
+      nodeVersion,
     });
 
     const appRouteHandlersLambdaGroups = await getPageLambdaGroups({
@@ -1120,6 +1121,7 @@ export async function serverBuild({
       pageExtensions,
       inversedAppPathManifest,
       isRouteHandlers: true,
+      nodeVersion,
     });
 
     const appRouterStreamingActionLambdaGroups: LambdaGroup[] = [];
@@ -1151,6 +1153,7 @@ export async function serverBuild({
       initialPseudoLayerUncompressed: uncompressedInitialSize,
       internalPages,
       pageExtensions,
+      nodeVersion,
     });
 
     for (const group of apiLambdaGroups) {
@@ -1217,7 +1220,11 @@ export async function serverBuild({
       ...appRouteHandlersLambdaGroups,
     ];
 
-    await detectLambdaLimitExceeding(combinedGroups, compressedPages);
+    await detectLambdaLimitExceeding(
+      combinedGroups,
+      compressedPages,
+      nodeVersion.runtime
+    );
 
     const appNotFoundTraces = pageTraces['_not-found.js'];
     const appNotFoundPsuedoLayer =
@@ -1240,68 +1247,110 @@ export async function serverBuild({
       const updatedManifestFiles: { [name: string]: FileBlob } = {};
 
       if (isCorrectManifests) {
-        // filter dynamic routes to only the included dynamic routes
-        // in this specific serverless function so that we don't
-        // accidentally match a dynamic route while resolving that
-        // is not actually in this specific serverless function
         for (const manifest of [
           'routes-manifest.json',
           'server/pages-manifest.json',
-          ...(appPathRoutesManifest ? ['server/app-paths-manifest.json'] : []),
-        ] as const) {
+          ...(mayFilterManifests && appPathRoutesManifest
+            ? ['server/app-paths-manifest.json']
+            : []),
+        ]) {
           const fsPath = path.join(entryPath, outputDirectory, manifest);
 
           const relativePath = path.relative(baseDir, fsPath);
           delete group.pseudoLayer[relativePath];
 
           const manifestData = await fs.readJSON(fsPath);
-          const normalizedPages = new Set(
-            group.pages.map(page => {
-              page = `/${page.replace(/\.js$/, '')}`;
-              if (page === '/index') page = '/';
-              return page;
-            })
-          );
 
-          switch (manifest) {
-            case 'routes-manifest.json': {
-              const filterItem = (item: { page: string }) =>
-                normalizedPages.has(item.page);
-
-              manifestData.dynamicRoutes =
-                manifestData.dynamicRoutes?.filter(filterItem);
-              manifestData.staticRoutes =
-                manifestData.staticRoutes?.filter(filterItem);
-              break;
+          if (manifest === 'routes-manifest.json') {
+            // Filter `headers` and `deploymentId` out of the routes-manifest.json for deterministic
+            // functions. In Next.js minimal mode, they aren't used (the builder reads them and
+            // generates the config.json for Vercel)
+            manifestData.headers = [];
+            manifestData.onMatchHeaders = [];
+            delete manifestData.deploymentId;
+          } else if (
+            manifest === 'server/pages-manifest.json' &&
+            !shouldUse404Prerender
+          ) {
+            // Replace `(/locale)?/404.html`  with `/(404|_error).js` in pages-manifest to avoid
+            // including static (and non-deterministic) 404 page in lambdas.
+            if (manifestData['/404'] === 'pages/404.html') {
+              manifestData['/404'] =
+                lambdaPages['404.js'] && !lambdaAppPaths['404.js']
+                  ? 'pages/404.js'
+                  : 'pages/_error.js';
             }
-            case 'server/pages-manifest.json': {
-              for (const key of Object.keys(manifestData)) {
-                if (isDynamicRoute(key) && !normalizedPages.has(key)) {
-                  delete manifestData[key];
+            if (i18n) {
+              for (const locale of i18n.locales) {
+                const locale404Key = `/${locale}/404`;
+                if (manifestData[locale404Key]?.endsWith('/404.html')) {
+                  // This might be a pages/404.html or pages/en/404.html, but all of them were
+                  // prerendered from the same page
+                  manifestData[locale404Key] =
+                    lambdaPages['404.js'] && !lambdaAppPaths['404.js']
+                      ? 'pages/404.js'
+                      : 'pages/_error.js';
                 }
               }
-              break;
             }
-            case 'server/app-paths-manifest.json': {
-              for (const key of Object.keys(manifestData)) {
-                const normalizedKey =
-                  appPathRoutesManifest?.[key] ||
-                  key.replace(/(^|\/)(page|route)$/, '');
+          }
 
-                if (
-                  isDynamicRoute(normalizedKey) &&
-                  !normalizedPages.has(normalizedKey)
-                ) {
-                  delete manifestData[key];
-                }
+          if (mayFilterManifests) {
+            // filter dynamic routes to only the included dynamic routes
+            // in this specific serverless function so that we don't
+            // accidentally match a dynamic route while resolving that
+            // is not actually in this specific serverless function
+
+            const normalizedPages = new Set(
+              group.pages.map(page => {
+                page = `/${page.replace(/\.js$/, '')}`;
+                if (page === '/index') page = '/';
+                return page;
+              })
+            );
+
+            switch (manifest) {
+              case 'routes-manifest.json': {
+                const filterItem = (item: { page: string }) =>
+                  normalizedPages.has(item.page);
+                manifestData.dynamicRoutes =
+                  manifestData.dynamicRoutes?.filter(filterItem);
+                manifestData.staticRoutes =
+                  manifestData.staticRoutes?.filter(filterItem);
+                break;
               }
-              break;
-            }
-            default: {
-              throw new NowBuildError({
-                message: `Unexpected manifest value ${manifest}, please contact support if this continues`,
-                code: 'NEXT_MANIFEST_INVARIANT',
-              });
+              case 'server/pages-manifest.json': {
+                for (const key of Object.keys(manifestData)) {
+                  if (
+                    isDynamicRoute(key, nextVersion) &&
+                    !normalizedPages.has(key)
+                  ) {
+                    delete manifestData[key];
+                  }
+                }
+                break;
+              }
+              case 'server/app-paths-manifest.json': {
+                for (const key of Object.keys(manifestData)) {
+                  const normalizedKey =
+                    appPathRoutesManifest?.[key] ||
+                    key.replace(/(^|\/)(page|route)$/, '');
+
+                  if (
+                    isDynamicRoute(normalizedKey, nextVersion) &&
+                    !normalizedPages.has(normalizedKey)
+                  ) {
+                    delete manifestData[key];
+                  }
+                }
+                break;
+              }
+              default: {
+                throw new NowBuildError({
+                  message: `Unexpected manifest value ${manifest}, please contact support if this continues`,
+                  code: 'NEXT_MANIFEST_INVARIANT',
+                });
+              }
             }
           }
 
@@ -1379,11 +1428,15 @@ export async function serverBuild({
         ),
         operationType,
         memory: group.memory,
+        regions: group.regions,
+        functionFailoverRegions: group.functionFailoverRegions,
         runtime: nodeVersion.runtime,
         maxDuration: group.maxDuration,
+        supportsCancellation: group.supportsCancellation,
         isStreaming: group.isStreaming,
         nextVersion,
         experimentalAllowBundling,
+        experimentalTriggers: group.experimentalTriggers,
       };
 
       // the app _not-found output should always be included
@@ -1519,6 +1572,104 @@ export async function serverBuild({
     );
   }
 
+  const nodeMiddleware = await getNodeMiddleware({
+    config,
+    baseDir,
+    projectDir,
+    entryPath,
+    nextVersion,
+    nodeVersion: nodeVersion.runtime,
+    lstatSema,
+    lstatResults,
+    pageExtensions: requiredServerFilesManifest.config.pageExtensions,
+    routesManifest,
+    outputDirectory,
+    prerenderBypassToken: prerenderManifest.bypassToken as string,
+    isCorrectMiddlewareOrder,
+    functionsConfigManifest,
+    requiredServerFilesManifest,
+  });
+
+  const middleware = await getMiddlewareBundle({
+    config,
+    entryPath,
+    outputDirectory,
+    routesManifest,
+    isCorrectMiddlewareOrder,
+    prerenderBypassToken: prerenderManifest.bypassToken || '',
+    nextVersion,
+    appPathRoutesManifest: appPathRoutesManifest || {},
+  });
+
+  if (appPathRoutesManifest) {
+    // create .rsc variant for app lambdas and edge functions
+    // to match prerenders so we can route the same when the
+    // RSC header is present
+    const edgeFunctions = middleware.edgeFunctions;
+
+    for (const page of Object.values(appPathRoutesManifest)) {
+      const pathname = path.posix.join(
+        './',
+        entryDirectory,
+        page === '/' ? '/index' : page
+      );
+
+      if (lambdas[pathname]) {
+        lambdas[`${pathname}.rsc`] = lambdas[pathname];
+
+        if (isAppPPREnabled) {
+          lambdas[`${pathname}${RSC_PREFETCH_SUFFIX}`] = lambdas[pathname];
+        }
+      }
+
+      if (edgeFunctions[pathname]) {
+        edgeFunctions[`${pathname}.rsc`] = edgeFunctions[pathname];
+
+        if (isAppPPREnabled) {
+          edgeFunctions[`${pathname}${RSC_PREFETCH_SUFFIX}`] =
+            edgeFunctions[pathname];
+        }
+      }
+    }
+
+    for (const route of routesManifest.dynamicRoutes) {
+      // Skip any routes that don't have the sourcePage property defined. Only
+      // the dynamic routes that are partials will have their sourcePage
+      // defined so we can skip the usual isAppPPREnabled check.
+      if (!('sourcePage' in route)) continue;
+      if (typeof route.sourcePage !== 'string') continue;
+
+      // Skip this addition when the routes are the same, no need to alias them
+      // again!
+      if (route.sourcePage === route.page) continue;
+
+      const sourcePathname = path.posix.join(
+        './',
+        entryDirectory,
+        route.sourcePage === '/' ? '/index' : route.sourcePage
+      );
+
+      const pathname = path.posix.join(
+        './',
+        entryDirectory,
+        route.page === '/' ? '/index' : route.page
+      );
+
+      if (lambdas[sourcePathname]) {
+        lambdas[`${pathname}`] = lambdas[sourcePathname];
+        lambdas[`${pathname}.rsc`] = lambdas[sourcePathname];
+        lambdas[`${pathname}${RSC_PREFETCH_SUFFIX}`] = lambdas[sourcePathname];
+      }
+
+      if (edgeFunctions[sourcePathname]) {
+        edgeFunctions[`${pathname}`] = edgeFunctions[sourcePathname];
+        edgeFunctions[`${pathname}.rsc`] = edgeFunctions[sourcePathname];
+        edgeFunctions[`${pathname}${RSC_PREFETCH_SUFFIX}`] =
+          edgeFunctions[sourcePathname];
+      }
+    }
+  }
+
   const prerenderRoute = onPrerenderRoute({
     appDir,
     pagesDir,
@@ -1540,6 +1691,9 @@ export async function serverBuild({
     isEmptyAllowQueryForPrendered,
     isAppPPREnabled,
     isAppClientSegmentCacheEnabled,
+    isAppClientParamParsingEnabled,
+    appPathnameFilesMap: getAppRouterPathnameFilesMap(files),
+    nextVersion,
   });
 
   await Promise.all(
@@ -1579,7 +1733,7 @@ export async function serverBuild({
       // they are in the prerender manifest since a dynamic
       // route can have some prerendered paths and the rest SSR
       inversedAppPathManifest[route] &&
-      isDynamicRoute(route)
+      isDynamicRoute(route, nextVersion)
     ) {
       return;
     }
@@ -1592,45 +1746,17 @@ export async function serverBuild({
     ];
   });
 
-  const nodeMiddleware = await getNodeMiddleware({
-    config,
-    baseDir,
-    projectDir,
-    entryPath,
-    nextVersion,
-    nodeVersion: nodeVersion.runtime,
-    lstatSema,
-    lstatResults,
-    pageExtensions: requiredServerFilesManifest.config.pageExtensions,
-    routesManifest,
-    outputDirectory,
-    prerenderBypassToken: prerenderManifest.bypassToken as string,
-    isCorrectMiddlewareOrder,
-    functionsConfigManifest,
-    requiredServerFilesManifest,
-  });
-
-  const middleware = await getMiddlewareBundle({
-    config,
-    entryPath,
-    outputDirectory,
-    routesManifest,
-    isCorrectMiddlewareOrder,
-    prerenderBypassToken: prerenderManifest.bypassToken || '',
-    nextVersion,
-    appPathRoutesManifest: appPathRoutesManifest || {},
-  });
+  // Check if the app has Pages Router
+  // Use the appType property from routes manifest if available
+  // Otherwise, assume Pages Router exists (for backward compatibility with older Next.js versions)
+  const hasPagesRouter = routesManifest.appType
+    ? routesManifest.appType === 'pages' || routesManifest.appType === 'hybrid'
+    : true;
 
   const isNextDataServerResolving =
+    hasPagesRouter &&
     (middleware.staticRoutes.length > 0 || nodeMiddleware) &&
     semver.gte(nextVersion, NEXT_DATA_MIDDLEWARE_RESOLVING_VERSION);
-
-  const staticSegmentRoutes = isAppClientSegmentCacheEnabled
-    ? await getStaticSegmentRoutes({
-        entryDirectory,
-        routesManifest,
-      })
-    : [];
 
   const dynamicRoutes = await getDynamicRoutes({
     entryPath,
@@ -1645,6 +1771,8 @@ export async function serverBuild({
     dynamicMiddlewareRouteMap: middleware.dynamicRouteMap,
     isAppPPREnabled,
     isAppClientSegmentCacheEnabled,
+    isAppClientParamParsingEnabled,
+    prerenderManifest,
   }).then(arr =>
     localizeDynamicRoutes(
       arr,
@@ -1672,16 +1800,21 @@ export async function serverBuild({
       outputDirectory,
       `server/pages-manifest.json`
     );
-
     const pagesData = await fs.readJSON(pagesManifest);
     const pagesEntries = Object.keys(pagesData);
 
     for (const page of pagesEntries) {
       const pathName = page.startsWith('/') ? page.slice(1) : page;
-      pagesPlaceholderRscEntries[`${pathName}.rsc`] = new FileBlob({
+      const dummyBlob = new FileBlob({
         data: '{}',
         contentType: 'application/json',
       });
+      pagesPlaceholderRscEntries[`${pathName}.rsc`] = dummyBlob;
+
+      if (isAppClientSegmentCacheEnabled) {
+        pagesPlaceholderRscEntries[`${pathName}.segments/_tree.segment.rsc`] =
+          dummyBlob;
+      }
     }
   }
 
@@ -1803,38 +1936,6 @@ export async function serverBuild({
     });
   }
 
-  if (appPathRoutesManifest) {
-    // create .rsc variant for app lambdas and edge functions
-    // to match prerenders so we can route the same when the
-    // RSC header is present
-    const edgeFunctions = middleware.edgeFunctions;
-
-    for (const route of Object.values(appPathRoutesManifest)) {
-      const pathname = path.posix.join(
-        './',
-        entryDirectory,
-        route === '/' ? '/index' : route
-      );
-
-      if (lambdas[pathname]) {
-        lambdas[`${pathname}.rsc`] = lambdas[pathname];
-
-        if (isAppPPREnabled) {
-          lambdas[`${pathname}${RSC_PREFETCH_SUFFIX}`] = lambdas[pathname];
-        }
-      }
-
-      if (edgeFunctions[pathname]) {
-        edgeFunctions[`${pathname}.rsc`] = edgeFunctions[pathname];
-
-        if (isAppPPREnabled) {
-          edgeFunctions[`${pathname}${RSC_PREFETCH_SUFFIX}`] =
-            edgeFunctions[pathname];
-        }
-      }
-    }
-  }
-
   const prefetchSegmentHeader = routesManifest?.rsc?.prefetchSegmentHeader;
   const prefetchSegmentDirSuffix =
     routesManifest?.rsc?.prefetchSegmentDirSuffix;
@@ -1894,6 +1995,22 @@ export async function serverBuild({
     }
   }
 
+  const shouldHandleSegmentToRsc = Boolean(
+    isAppClientSegmentCacheEnabled &&
+      rscPrefetchHeader &&
+      prefetchSegmentHeader &&
+      prefetchSegmentDirSuffix &&
+      prefetchSegmentSuffix &&
+      // When the entire application has PPR enabled (all the routes) and both
+      // client param parsing and client segment cache are enabled we do not
+      // need the .prefetch.rsc rewrite.
+      !shouldSkipPrefetchRSCHandling
+  );
+
+  const serverActionMetaRoutes = await getServerActionMetaRoutes(
+    path.join(entryPath, outputDirectory)
+  );
+
   return {
     wildcard: wildcardConfig,
     images: getImagesConfig(imagesManifest),
@@ -1915,6 +2032,18 @@ export async function serverBuild({
             __next_data_catchall: nextDataCatchallOutput,
           }
         : {}),
+      // When bots crawl a site, they may render the page after awhile (e.g. re-sync),
+      // and the sub-assets may not be available then. In this case, the link to
+      // static assets could be not found, and return a 404 HTML. This behavior can
+      // bait the bots as if they found 404 pages. In Next.js it is handled on the
+      // server to return a plain text "Not Found". However, as we handle the "_next/static/"
+      // routes in Vercel CLI, the Next.js behavior is overwritten. Therefore, create a
+      // ".txt" file with "Not Found" content and rewrite any not found static assets to it.
+      [path.posix.join('.', entryDirectory, '_next/static/not-found.txt')]:
+        new FileBlob({
+          data: 'Not Found',
+          contentType: 'text/plain',
+        }),
     },
     routes: [
       /*
@@ -1933,6 +2062,57 @@ export async function serverBuild({
       ...trailingSlashRedirects,
 
       ...privateOutputs.routes,
+
+      ...(isNextDataServerResolving
+        ? [
+            // remove x-nextjs-data header for non _next/data requests
+            {
+              src: path.posix.join(
+                '/',
+                entryDirectory,
+                '/(?!_next/data(?:/|$))(.*)'
+              ),
+              has: [
+                {
+                  type: 'header',
+                  key: 'x-nextjs-data',
+                },
+              ],
+              transforms: [
+                {
+                  type: 'request.headers',
+                  op: 'delete',
+                  target: {
+                    key: 'x-nextjs-data',
+                  },
+                },
+              ],
+              continue: true,
+            },
+            // ensure x-nextjs-data header is always present
+            // if we are doing middleware next data resolving
+            {
+              src: path.posix.join('/', entryDirectory, '/_next/data/(.*)'),
+              missing: [
+                {
+                  type: 'header',
+                  key: 'x-nextjs-data',
+                },
+              ],
+              transforms: [
+                {
+                  type: 'request.headers',
+                  op: 'append',
+                  target: {
+                    key: 'x-nextjs-data',
+                  },
+                  args: `1`,
+                },
+              ],
+              continue: true,
+            },
+          ]
+        : []),
 
       // normalize _next/data URL before processing redirects
       ...normalizeNextDataRoute(true),
@@ -2082,6 +2262,8 @@ export async function serverBuild({
 
       ...redirects,
 
+      ...serverActionMetaRoutes,
+
       // middleware comes directly after redirects but before
       // beforeFiles rewrites as middleware is not a "file" route
       ...(routesManifest?.skipMiddlewareUrlNormalize
@@ -2177,7 +2359,11 @@ export async function serverBuild({
             prefetchSegmentSuffix
               ? [
                   {
-                    src: path.posix.join('/', entryDirectory, '/(?<path>.+)$'),
+                    src: path.posix.join(
+                      '/',
+                      entryDirectory,
+                      '/(?<path>.+?)(?:/)?$'
+                    ),
                     dest: path.posix.join(
                       '/',
                       entryDirectory,
@@ -2204,7 +2390,7 @@ export async function serverBuild({
                     override: true,
                   },
                   {
-                    src: path.posix.join('^/', entryDirectory, '$'),
+                    src: path.posix.join('^/', entryDirectory, '/?$'),
                     dest: path.posix.join(
                       '/',
                       entryDirectory,
@@ -2232,7 +2418,9 @@ export async function serverBuild({
                   },
                 ]
               : []),
-            ...(rscPrefetchHeader && isAppPPREnabled
+            ...(rscPrefetchHeader &&
+            isAppPPREnabled &&
+            !shouldSkipPrefetchRSCHandling
               ? [
                   {
                     src: `^${path.posix.join('/', entryDirectory, '/')}$`,
@@ -2240,6 +2428,7 @@ export async function serverBuild({
                       {
                         type: 'header',
                         key: rscPrefetchHeader,
+                        value: '1',
                       },
                     ],
                     dest: path.posix.join(
@@ -2261,6 +2450,7 @@ export async function serverBuild({
                       {
                         type: 'header',
                         key: rscPrefetchHeader,
+                        value: '1',
                       },
                     ],
                     dest: path.posix.join(
@@ -2280,6 +2470,7 @@ export async function serverBuild({
                 {
                   type: 'header',
                   key: rscHeader,
+                  value: '1',
                 },
               ],
               dest: path.posix.join('/', entryDirectory, '/index.rsc'),
@@ -2297,6 +2488,7 @@ export async function serverBuild({
                 {
                   type: 'header',
                   key: rscHeader,
+                  value: '1',
                 },
               ],
               dest: path.posix.join('/', entryDirectory, '/$1.rsc'),
@@ -2326,7 +2518,7 @@ export async function serverBuild({
       // normalize _next/data URL before processing rewrites
       ...normalizeNextDataRoute(),
 
-      ...(!isNextDataServerResolving
+      ...(!isNextDataServerResolving && hasPagesRouter
         ? [
             // No-op _next/data rewrite to trigger handle: 'rewrites' and then 404
             // if no match to prevent rewriting _next/data unexpectedly
@@ -2361,28 +2553,36 @@ export async function serverBuild({
       // ensure non-normalized /.rsc from rewrites is handled
       ...(appPathRoutesManifest
         ? [
-            {
-              src: path.posix.join('/', entryDirectory, '/\\.prefetch\\.rsc$'),
-              dest: path.posix.join(
-                '/',
-                entryDirectory,
-                `/__index${RSC_PREFETCH_SUFFIX}`
-              ),
-              check: true,
-            },
-            {
-              src: path.posix.join(
-                '/',
-                entryDirectory,
-                '(.+)/\\.prefetch\\.rsc$'
-              ),
-              dest: path.posix.join(
-                '/',
-                entryDirectory,
-                `$1${RSC_PREFETCH_SUFFIX}`
-              ),
-              check: true,
-            },
+            ...(shouldSkipPrefetchRSCHandling
+              ? []
+              : [
+                  {
+                    src: path.posix.join(
+                      '/',
+                      entryDirectory,
+                      '/\\.prefetch\\.rsc$'
+                    ),
+                    dest: path.posix.join(
+                      '/',
+                      entryDirectory,
+                      `/__index${RSC_PREFETCH_SUFFIX}`
+                    ),
+                    check: true,
+                  },
+                  {
+                    src: path.posix.join(
+                      '/',
+                      entryDirectory,
+                      '(.+)/\\.prefetch\\.rsc$'
+                    ),
+                    dest: path.posix.join(
+                      '/',
+                      entryDirectory,
+                      `$1${RSC_PREFETCH_SUFFIX}`
+                    ),
+                    check: true,
+                  },
+                ]),
             {
               src: path.posix.join('/', entryDirectory, '/\\.rsc$'),
               dest: path.posix.join('/', entryDirectory, `/index.rsc`),
@@ -2409,14 +2609,17 @@ export async function serverBuild({
       // We need to make sure to 404 for /_next after handle: miss since
       // handle: miss is called before rewrites and to prevent rewriting /_next
       {
-        src: path.posix.join(
-          '/',
-          entryDirectory,
-          '_next/static/(?:[^/]+/pages|pages|chunks|runtime|css|image|media)/.+'
-        ),
+        src: path.posix.join('/', entryDirectory, '_next/static/.+'),
         status: 404,
         check: true,
-        dest: '$0',
+        dest: path.posix.join(
+          '/',
+          entryDirectory,
+          '_next/static/not-found.txt'
+        ),
+        headers: {
+          'content-type': 'text/plain; charset=utf-8',
+        },
       },
 
       // remove locale prefixes to check public files and
@@ -2477,6 +2680,18 @@ export async function serverBuild({
           ]
         : []),
 
+      // If it didn't match any of the static routes or dynamic ones, then we
+      // should fallback to either prefetch or normal RSC request
+      ...(shouldHandleSegmentToRsc
+        ? [
+            {
+              src: '^/(?<path>.+)(?<rscSuffix>\\.segments/.+\\.segment\\.rsc)(?:/)?$',
+              dest: `/$path${isAppPPREnabled ? '.prefetch.rsc' : '.rsc'}`,
+              check: true,
+            },
+          ]
+        : []),
+
       // routes that are called after each rewrite or after routes
       // if there no rewrites
       { handle: 'rewrite' },
@@ -2489,7 +2704,10 @@ export async function serverBuild({
             // filter to only static data routes as dynamic routes will be handled
             // below
             const { pathname } = new URL(route.dest || '/', 'http://n');
-            return !isDynamicRoute(pathname.replace(/(\\)?\.json$/, ''));
+            return !isDynamicRoute(
+              pathname.replace(/(\\)?\.json$/, ''),
+              nextVersion
+            );
           })
         : []),
 
@@ -2532,7 +2750,7 @@ export async function serverBuild({
               if (routesManifest.i18n) {
                 for (const locale of routesManifest.i18n?.locales || []) {
                   const prerenderPathname = pathname.replace(
-                    /^\/\$nextLocale/,
+                    /\/\$nextLocale/,
                     `/${locale}`
                   );
                   if (prerenders[path.join('./', prerenderPathname)]) {
@@ -2560,7 +2778,7 @@ export async function serverBuild({
             .filter(Boolean)
         : dataRoutes),
 
-      ...(!isNextDataServerResolving
+      ...(!isNextDataServerResolving && hasPagesRouter
         ? [
             // ensure we 404 for non-existent _next/data routes before
             // trying page dynamic routes
@@ -2571,8 +2789,6 @@ export async function serverBuild({
             },
           ]
         : []),
-
-      ...staticSegmentRoutes,
 
       // Dynamic routes (must come after dataRoutes as dataRoutes are more
       // specific)
@@ -2609,30 +2825,6 @@ export async function serverBuild({
           ]
         : []),
 
-      // If it didn't match any of the static routes or dynamic ones, then we
-      // should fallback to the regular RSC request.
-      ...(isAppClientSegmentCacheEnabled &&
-      rscPrefetchHeader &&
-      prefetchSegmentHeader &&
-      prefetchSegmentDirSuffix &&
-      prefetchSegmentSuffix
-        ? [
-            {
-              src: path.posix.join(
-                '/',
-                entryDirectory,
-                `/(?<path>.+)${escapeStringRegexp(prefetchSegmentDirSuffix)}/.+${escapeStringRegexp(prefetchSegmentSuffix)}$`
-              ),
-              dest: path.posix.join(
-                '/',
-                entryDirectory,
-                isAppPPREnabled ? '/$path.prefetch.rsc' : '/$path.rsc'
-              ),
-              check: true,
-            },
-          ]
-        : []),
-
       // routes to call after a file has been matched
       { handle: 'hit' },
       // Before we handle static files we need to set proper caching headers
@@ -2652,6 +2844,7 @@ export async function serverBuild({
         continue: true,
         important: true,
       },
+      ...onMatchHeaders,
       {
         src: path.posix.join('/', entryDirectory, '/index(?:/)?'),
         headers: {
@@ -2687,6 +2880,9 @@ export async function serverBuild({
               dest: path.posix.join('/', entryDirectory, '/$nextLocale/404'),
               status: 404,
               caseSensitive: true,
+              headers: {
+                'x-next-error-status': '404',
+              },
             },
             {
               src: path.posix.join('/', entryDirectory, '.*'),
@@ -2696,6 +2892,9 @@ export async function serverBuild({
                 `/${i18n.defaultLocale}/404`
               ),
               status: 404,
+              headers: {
+                'x-next-error-status': '404',
+              },
             },
           ]
         : [
@@ -2722,6 +2921,9 @@ export async function serverBuild({
                     : '/_error'
               ),
               status: 404,
+              headers: {
+                'x-next-error-status': '404',
+              },
             },
           ]),
 
@@ -2739,6 +2941,9 @@ export async function serverBuild({
               dest: path.posix.join('/', entryDirectory, '/$nextLocale/500'),
               status: 500,
               caseSensitive: true,
+              headers: {
+                'x-next-error-status': '500',
+              },
             },
             {
               src: path.posix.join('/', entryDirectory, '.*'),
@@ -2748,6 +2953,9 @@ export async function serverBuild({
                 `/${i18n.defaultLocale}/500`
               ),
               status: 500,
+              headers: {
+                'x-next-error-status': '500',
+              },
             },
           ]
         : [
@@ -2770,10 +2978,13 @@ export async function serverBuild({
                   : '/_error'
               ),
               status: 500,
+              headers: {
+                'x-next-error-status': '500',
+              },
             },
           ]),
     ],
-    framework: { version: nextVersion },
+    framework: { slug: 'nextjs', version: nextVersion },
     flags: variantsManifest || undefined,
   };
 }

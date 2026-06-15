@@ -3,7 +3,14 @@
  * See https://github.com/firebase/superstatic#configuration
  */
 import { parse as parseUrl, format as formatUrl } from 'url';
-import { Route, Redirect, Rewrite, HasField, Header } from './types';
+import {
+  Route,
+  RouteWithSrc,
+  Redirect,
+  Rewrite,
+  HasField,
+  Header,
+} from './types';
 
 /*
   [START] Temporary double-install of path-to-regexp to compare the impact of the update
@@ -149,6 +156,9 @@ export function convertRedirects(
         status,
       };
 
+      if (typeof r.env !== 'undefined') {
+        route.env = r.env;
+      }
       if (r.has) {
         route.has = r.has;
       }
@@ -156,7 +166,7 @@ export function convertRedirects(
         route.missing = r.missing;
       }
       return route;
-    } catch (e) {
+    } catch (_e) {
       throw new Error(`Failed to parse redirect: ${JSON.stringify(r)}`);
     }
   });
@@ -173,15 +183,33 @@ export function convertRewrites(
     normalizeHasKeys(r.missing);
 
     try {
-      const dest = replaceSegments(
-        segments,
-        hasSegments,
-        r.destination,
-        false,
-        internalParamNames
-      );
-      const route: Route = { src, dest, check: true };
+      // Replace `:param` placeholders with `$1`/`$name` backrefs that point at
+      // the source's capture groups.
+      const interpolate = (value: string): string =>
+        replaceSegments(
+          segments,
+          hasSegments,
+          value,
+          false,
+          internalParamNames
+        );
 
+      let route: RouteWithSrc;
+      if (typeof r.destination === 'string') {
+        route = { src, dest: interpolate(r.destination), check: true };
+      } else {
+        // Service destination: a terminal handoff into the target service's
+        // route table. Interpolate `path` like a string `dest`.
+        const destination = { ...r.destination };
+        if (typeof destination.path === 'string') {
+          destination.path = interpolate(destination.path);
+        }
+        route = { src, destination };
+      }
+
+      if (typeof r.env !== 'undefined') {
+        route.env = r.env;
+      }
       if (r.has) {
         route.has = r.has;
       }
@@ -192,7 +220,7 @@ export function convertRewrites(
         route.status = r.statusCode;
       }
       return route;
-    } catch (e) {
+    } catch (_e) {
       throw new Error(`Failed to parse rewrite: ${JSON.stringify(r)}`);
     }
   });
@@ -291,7 +319,9 @@ export function sourceToRegex(source: string): {
   return { src: r.source, segments };
 }
 
-const namedGroupsRegex = /\(\?<([a-zA-Z][a-zA-Z0-9]*)>/g;
+// The ECMA-262 specification explicitly allows for underscores in
+// CaptureGroupName's (see https://tc39.es/ecma262/#prod-GroupName).
+const namedGroupsRegex = /\(\?<([a-zA-Z][a-zA-Z0-9_]*)>/g;
 
 const normalizeHasKeys = (hasItems: HasField = []) => {
   for (const hasItem of hasItems) {
@@ -382,7 +412,6 @@ function replaceSegments(
   delete (parsedDestination as any).path;
   delete (parsedDestination as any).search;
   delete (parsedDestination as any).host;
-  // eslint-disable-next-line prefer-const
   let { pathname, hash, query, hostname, ...rest } = parsedDestination;
   pathname = unescapeSegments(pathname || '');
   hash = unescapeSegments(hash || '');
@@ -476,7 +505,7 @@ function safelyCompile(
       // to safely compiling to handle edge cases if path-to-regexp compile
       // fails
       return compile(value, { validate: false })(indexes);
-    } catch (e) {
+    } catch (_e) {
       // non-fatal, we continue to safely compile
     }
   }

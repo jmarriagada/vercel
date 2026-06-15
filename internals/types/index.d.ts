@@ -26,46 +26,9 @@ export interface JSONObject {
   [key: string]: JSONValue;
 }
 
-interface AuthConfigBase {
-  '// Note'?: string;
-  '// Docs'?: string;
-  token?: string;
-  skipWrite?: boolean;
-}
+export type AuthConfig = import('@vercel/cli-config').AuthConfig;
 
-interface LegacyAuthConfig extends AuthConfigBase {
-  /** An Vercel token retrieved using the legacy authentication flow. */
-  token?: string;
-  type?: 'legacy';
-}
-
-interface OAuthAuthConfig extends AuthConfigBase {
-  /** An `access_token` obtained using the OAuth Device Authorization flow.  */
-  token?: string;
-  /**
-   * The absolute time (seconds) when the {@link OAuthAuthConfig.token} expires.
-   * Used to optimistically check if the token is still valid.
-   */
-  expiresAt?: number;
-  refreshToken?: string;
-  type: 'oauth';
-}
-
-type AuthConfig = LegacyAuthConfig | OAuthAuthConfig;
-
-export interface GlobalConfig {
-  '// Note'?: string;
-  '// Docs'?: string;
-  currentTeam?: string;
-  api?: string;
-
-  telemetry?: {
-    enabled?: boolean;
-  };
-  guidance?: {
-    enabled?: boolean;
-  };
-}
+export type GlobalConfig = import('@vercel/cli-config').GlobalConfig;
 
 type Billing = {
   addons: string[];
@@ -73,6 +36,7 @@ type Billing = {
   period: { start: number; end: number };
   plan: string;
   platform: string;
+  status: 'active' | 'trialing' | 'overdue' | 'canceled' | 'expired';
   trial: { start: number; end: number };
 };
 
@@ -105,6 +69,12 @@ export interface Team {
       state: string;
     };
   };
+  /**
+   * Team-wide policy for enforcing sensitive Environment Variables.
+   * When set to "on", the API silently promotes `encrypted` Production and
+   * Preview Environment Variables to `sensitive` on create.
+   */
+  sensitiveEnvironmentVariablePolicy?: 'default' | 'on' | 'off';
 }
 
 export type Domain = {
@@ -188,6 +158,14 @@ export type Deployment = {
   buildErrorAt?: number;
   buildingAt: number;
   canceledAt?: number;
+  checks?: Record<
+    string,
+    {
+      state: 'pending' | 'succeeded' | 'failed';
+      startedAt?: string;
+      completedAt?: string;
+    }
+  >;
   checksState?: 'completed' | 'registered' | 'running';
   checksConclusion?: 'canceled' | 'failed' | 'skipped' | 'succeeded';
   createdAt: number;
@@ -374,6 +352,25 @@ export interface ProjectLinkData {
   deployHooks?: DeployHook[];
 }
 
+export interface AutomationProtectionBypass {
+  createdAt: number;
+  createdBy: string;
+  scope: 'automation-bypass';
+}
+
+export interface IntegrationAutomationProtectionBypass {
+  createdAt: number;
+  createdBy: string;
+  scope: 'integration-automation-bypass';
+  integrationId: string;
+  configurationId: string;
+}
+
+export type ProjectProtectionBypass = Record<
+  string,
+  AutomationProtectionBypass | IntegrationAutomationProtectionBypass
+>;
+
 export interface Project extends ProjectSettings {
   id: string;
   analytics?: {
@@ -394,6 +391,7 @@ export interface Project extends ProjectSettings {
   };
   customEnvironments?: CustomEnvironment[];
   rollingRelease?: ProjectRollingRelease;
+  protectionBypass?: ProjectProtectionBypass;
 }
 
 export interface Org {
@@ -421,6 +419,10 @@ export interface ProjectLink {
    * to the selected project root directory.
    */
   projectRootDirectory?: string;
+  /**
+   * Name of the Vercel Project.
+   */
+  projectName?: string;
 }
 
 export interface PaginationOptions {
@@ -512,6 +514,7 @@ export interface Token {
 
 export interface GitMetadata {
   commitAuthorName?: string | undefined;
+  commitAuthorEmail?: string | undefined;
   commitMessage?: string | undefined;
   commitRef?: string | undefined;
   commitSha?: string | undefined;

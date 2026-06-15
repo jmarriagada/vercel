@@ -1,15 +1,50 @@
 import assert from 'assert';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import fs from 'fs-extra';
 import path from 'path';
 import pull from '../../../../src/commands/pull';
 import { setupUnitFixture } from '../../../helpers/setup-unit-fixture';
 import { client } from '../../../mocks/client';
 import { defaultProject, useProject } from '../../../mocks/project';
-import { useTeams } from '../../../mocks/team';
+import { useTeams, createTeam } from '../../../mocks/team';
 import { useUser } from '../../../mocks/user';
 
 describe('pull', () => {
+  describe('--non-interactive', () => {
+    it('outputs action_required JSON and exits when not linked and multiple teams (no --scope)', async () => {
+      const cwd = setupUnitFixture('vercel-pull-unlinked');
+      useUser({ version: 'northstar' });
+      useTeams('team_dummy');
+      createTeam();
+      client.cwd = cwd;
+      client.setArgv('pull', '--non-interactive');
+      (client as { nonInteractive: boolean }).nonInteractive = true;
+
+      const exitSpy = vi
+        .spyOn(process, 'exit')
+        .mockImplementation((code?: number) => {
+          throw new Error(`process.exit(${code})`);
+        });
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+      await expect(pull(client)).rejects.toThrow('process.exit(1)');
+
+      expect(logSpy).toHaveBeenCalledTimes(1);
+      const payload = JSON.parse(logSpy.mock.calls[0][0]);
+      expect(payload.status).toBe('action_required');
+      expect(payload.reason).toBe('missing_scope');
+      expect(payload.message).toContain('--scope');
+      expect(payload.message).toContain('non-interactive');
+      expect(Array.isArray(payload.choices)).toBe(true);
+      expect(payload.choices.length).toBeGreaterThanOrEqual(2);
+      expect(exitSpy).toHaveBeenCalledWith(1);
+
+      exitSpy.mockRestore();
+      logSpy.mockRestore();
+      (client as { nonInteractive: boolean }).nonInteractive = false;
+    });
+  });
+
   describe('--help', () => {
     it('tracks telemetry', async () => {
       const command = 'pull';
@@ -60,6 +95,7 @@ describe('pull', () => {
 
   it('should fail with message to pull without a link and without --env', async () => {
     client.stdin.isTTY = false;
+    (client as { nonInteractive: boolean }).nonInteractive = false;
 
     const cwd = setupUnitFixture('vercel-pull-unlinked');
     useUser();
@@ -84,6 +120,7 @@ describe('pull', () => {
 
     useUser();
     useTeams('team_dummy');
+    (client as { nonInteractive: boolean }).nonInteractive = false;
 
     client.setArgv('pull', cwd, '--yes');
     const exitCodePromise = pull(client);
@@ -133,6 +170,7 @@ describe('pull', () => {
         {
           "orgId": "team_dummy",
           "projectId": "vercel-pull-next",
+          "projectName": "vercel-pull-next",
           "settings": {
             "createdAt": 1555413045188,
           },
@@ -383,5 +421,70 @@ describe('pull', () => {
         value: '[REDACTED]',
       },
     ]);
+  });
+
+  describe('--project', () => {
+    it('resolves the project via API in an unlinked directory', async () => {
+      const cwd = setupUnitFixture('vercel-pull-unlinked');
+      useUser();
+      const teams = useTeams('team_dummy');
+      assert(Array.isArray(teams));
+      useProject({
+        ...defaultProject,
+        id: 'prj_via_flag',
+        name: 'project-via-flag',
+        accountId: 'team_dummy',
+      });
+
+      client.setArgv(
+        'pull',
+        '--yes',
+        '--project=project-via-flag',
+        '--environment=production',
+        cwd
+      );
+      const exitCodePromise = pull(client);
+
+      await expect(client.stderr).toOutput(
+        `Downloading \`production\` Environment Variables for ${teams[0].slug}/project-via-flag`
+      );
+      const exitCode = await exitCodePromise;
+      expect(exitCode, 'exit code for "pull"').toEqual(0);
+
+      expect(client.telemetryEventStore).toHaveTelemetryEvents([
+        {
+          key: 'argument:projectPath',
+          value: '[REDACTED]',
+        },
+        {
+          key: 'flag:yes',
+          value: 'TRUE',
+        },
+        {
+          key: 'option:environment',
+          value: 'production',
+        },
+        {
+          key: 'option:project',
+          value: '[REDACTED]',
+        },
+      ]);
+    });
+
+    it('fails fast with a clean error when --project does not resolve', async () => {
+      const cwd = setupUnitFixture('vercel-pull-unlinked');
+      useUser();
+      useTeams('team_dummy');
+      // No useProject() — every GET /v9/projects/* will 404.
+
+      client.setArgv('pull', '--yes', '--project=does-not-exist', cwd);
+      const exitCodePromise = pull(client);
+
+      await expect(client.stderr).toOutput(
+        'Project "does-not-exist" was not found'
+      );
+      const exitCode = await exitCodePromise;
+      expect(exitCode, 'exit code for "pull"').toEqual(1);
+    });
   });
 });

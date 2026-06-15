@@ -5,21 +5,69 @@ import minimatch from 'minimatch';
 import { readlink } from 'fs-extra';
 import { isSymbolicLink, isDirectory } from './fs/download';
 import streamToBuffer from './fs/stream-to-buffer';
-import type { Config, Env, Files, FunctionFramework } from './types';
+import type {
+  Config,
+  Env,
+  Files,
+  FunctionFramework,
+  MaxDuration,
+  TriggerEvent,
+  TriggerEventInput,
+} from './types';
+
+export type { TriggerEvent, TriggerEventInput };
+
+/**
+ * Encodes a function path into a valid consumer name using mnemonic escapes.
+ * For queue/v2beta triggers, the consumer name is derived from the function path.
+ * This encoding is collision-free (bijective/reversible).
+ *
+ * Encoding scheme:
+ * - `_` → `__` (escape character itself)
+ * - `/` → `_S` (slash)
+ * - `.` → `_D` (dot)
+ * - Other invalid chars → `_XX` (hex code)
+ *
+ * @example
+ * sanitizeConsumerName('api/test.js') // => 'api_Stest_Djs'
+ * sanitizeConsumerName('api/users/handler.ts') // => 'api_Susers_Shandler_Dts'
+ * sanitizeConsumerName('my_func.ts') // => 'my__func_Dts'
+ */
+export function sanitizeConsumerName(functionPath: string): string {
+  let result = '';
+  for (const char of functionPath) {
+    if (char === '_') {
+      result += '__';
+    } else if (char === '/') {
+      result += '_S';
+    } else if (char === '.') {
+      result += '_D';
+    } else if (/[A-Za-z0-9-]/.test(char)) {
+      result += char;
+    } else {
+      result +=
+        '_' + char.charCodeAt(0).toString(16).toUpperCase().padStart(2, '0');
+    }
+  }
+  return result;
+}
 
 export type LambdaOptions = LambdaOptionsWithFiles | LambdaOptionsWithZipBuffer;
 
+export type LambdaExecutableRuntimeLanguages = 'rust' | 'go';
 export type LambdaArchitecture = 'x86_64' | 'arm64';
 
 export interface LambdaOptionsBase {
   handler: string;
   runtime: string;
+  runtimeLanguage?: LambdaExecutableRuntimeLanguages;
   architecture?: LambdaArchitecture;
   memory?: number;
-  maxDuration?: number;
+  maxDuration?: MaxDuration;
   environment?: Env;
   allowQuery?: string[];
   regions?: string[];
+  functionFailoverRegions?: string[];
   supportsMultiPayloads?: boolean;
   supportsWrapper?: boolean;
   supportsResponseStreaming?: boolean;
@@ -29,6 +77,32 @@ export interface LambdaOptionsBase {
   experimentalResponseStreaming?: boolean;
   operationType?: string;
   framework?: FunctionFramework;
+  /**
+   * Experimental trigger event definitions that this Lambda can receive.
+   * Defines what types of trigger events this Lambda can handle as an HTTP endpoint.
+   * Currently supports queue triggers for Vercel's queue system.
+   *
+   * The delivery configuration provides HINTS to the system about preferred
+   * execution behavior (concurrency, retries) but these are NOT guarantees.
+   * The system may disregard these hints based on resource constraints.
+   *
+   * IMPORTANT: HTTP request-response semantics remain synchronous regardless
+   * of delivery configuration. Callers receive immediate responses.
+   *
+   * @experimental This feature is experimental and may change.
+   */
+  experimentalTriggers?: TriggerEvent[];
+  /**
+   * Whether this Lambda supports cancellation.
+   * When true, the Lambda runtime can be terminated mid-execution if the request is cancelled.
+   */
+  supportsCancellation?: boolean;
+
+  /**
+   * Whether to disable automatic fetch instrumentation.
+   * When true, the Function runtime will not automatically instrument fetch calls.
+   */
+  shouldDisableAutomaticFetchInstrumentation?: boolean;
 }
 
 export interface LambdaOptionsWithFiles extends LambdaOptionsBase {
@@ -80,12 +154,18 @@ export class Lambda {
   files?: Files;
   handler: string;
   runtime: string;
+  /**
+   * When using a generic runtime such as "executable" or "provided" (custom runtimes),
+   * this field can be used to specify the language the executable was compiled with.
+   */
+  runtimeLanguage?: LambdaExecutableRuntimeLanguages;
   architecture: LambdaArchitecture;
   memory?: number;
-  maxDuration?: number;
+  maxDuration?: MaxDuration;
   environment: Env;
   allowQuery?: string[];
   regions?: string[];
+  functionFailoverRegions?: string[];
   /**
    * @deprecated Use `await lambda.createZip()` instead.
    */
@@ -95,23 +175,54 @@ export class Lambda {
   supportsResponseStreaming?: boolean;
   framework?: FunctionFramework;
   experimentalAllowBundling?: boolean;
+  /**
+   * Experimental trigger event definitions that this Lambda can receive.
+   * Defines what types of trigger events this Lambda can handle as an HTTP endpoint.
+   * Currently supports queue triggers for Vercel's queue system.
+   *
+   * The delivery configuration provides HINTS to the system about preferred
+   * execution behavior (concurrency, retries) but these are NOT guarantees.
+   * The system may disregard these hints based on resource constraints.
+   *
+   * IMPORTANT: HTTP request-response semantics remain synchronous regardless
+   * of delivery configuration. Callers receive immediate responses.
+   *
+   * @experimental This feature is experimental and may change.
+   */
+  experimentalTriggers?: TriggerEvent[];
+  /**
+   * Whether this Lambda supports cancellation.
+   * When true, the Lambda runtime can be terminated mid-execution if the request is cancelled.
+   */
+  supportsCancellation?: boolean;
+
+  /**
+   * Whether to disable automatic fetch instrumentation.
+   * When true, the Function runtime will not automatically instrument fetch calls.
+   */
+  shouldDisableAutomaticFetchInstrumentation?: boolean;
 
   constructor(opts: LambdaOptions) {
     const {
       handler,
       runtime,
+      runtimeLanguage,
       maxDuration,
       architecture,
       memory,
       environment = {},
       allowQuery,
       regions,
+      functionFailoverRegions,
       supportsMultiPayloads,
       supportsWrapper,
       supportsResponseStreaming,
       experimentalResponseStreaming,
       operationType,
       framework,
+      experimentalTriggers,
+      supportsCancellation,
+      shouldDisableAutomaticFetchInstrumentation,
     } = opts;
     if ('files' in opts) {
       assert(typeof opts.files === 'object', '"files" must be an object');
@@ -130,6 +241,13 @@ export class Lambda {
       );
     }
 
+    if (runtimeLanguage !== undefined) {
+      assert(
+        runtimeLanguage === 'rust' || runtimeLanguage === 'go',
+        '"runtimeLanguage" is invalid. Valid options: "rust", "go"'
+      );
+    }
+
     if (
       'experimentalAllowBundling' in opts &&
       opts.experimentalAllowBundling !== undefined
@@ -145,7 +263,10 @@ export class Lambda {
     }
 
     if (maxDuration !== undefined) {
-      assert(typeof maxDuration === 'number', '"maxDuration" is not a number');
+      assert(
+        typeof maxDuration === 'number' || maxDuration === 'max',
+        '"maxDuration" is not a number or "max"'
+      );
     }
 
     if (allowQuery !== undefined) {
@@ -178,6 +299,17 @@ export class Lambda {
       );
     }
 
+    if (functionFailoverRegions !== undefined) {
+      assert(
+        Array.isArray(functionFailoverRegions),
+        '"functionFailoverRegions" is not an Array'
+      );
+      assert(
+        functionFailoverRegions.every(r => typeof r === 'string'),
+        '"functionFailoverRegions" is not a string Array'
+      );
+    }
+
     if (framework !== undefined) {
       assert(typeof framework === 'object', '"framework" is not an object');
       assert(
@@ -192,17 +324,113 @@ export class Lambda {
       }
     }
 
+    if (experimentalTriggers !== undefined) {
+      assert(
+        Array.isArray(experimentalTriggers),
+        '"experimentalTriggers" is not an Array'
+      );
+
+      for (let i = 0; i < experimentalTriggers.length; i++) {
+        const trigger = experimentalTriggers[i];
+        const prefix = `"experimentalTriggers[${i}]"`;
+
+        assert(
+          typeof trigger === 'object' && trigger !== null,
+          `${prefix} is not an object`
+        );
+
+        // Validate required type
+        assert(
+          trigger.type === 'queue/v1beta' || trigger.type === 'queue/v2beta',
+          `${prefix}.type must be "queue/v1beta" or "queue/v2beta"`
+        );
+
+        // Validate required queue fields
+        assert(
+          typeof trigger.topic === 'string',
+          `${prefix}.topic is required and must be a string`
+        );
+        assert(trigger.topic.length > 0, `${prefix}.topic cannot be empty`);
+
+        // Consumer is always required (populated by getLambdaOptionsFromFunction for v2beta)
+        assert(
+          typeof trigger.consumer === 'string',
+          `${prefix}.consumer is required and must be a string`
+        );
+        assert(
+          trigger.consumer.length > 0,
+          `${prefix}.consumer cannot be empty`
+        );
+
+        // Validate optional queue configuration
+        if (trigger.maxDeliveries !== undefined) {
+          assert(
+            typeof trigger.maxDeliveries === 'number',
+            `${prefix}.maxDeliveries must be a number`
+          );
+          assert(
+            Number.isInteger(trigger.maxDeliveries) &&
+              trigger.maxDeliveries >= 1,
+            `${prefix}.maxDeliveries must be at least 1`
+          );
+        }
+
+        if (trigger.retryAfterSeconds !== undefined) {
+          assert(
+            typeof trigger.retryAfterSeconds === 'number',
+            `${prefix}.retryAfterSeconds must be a number`
+          );
+          assert(
+            trigger.retryAfterSeconds > 0,
+            `${prefix}.retryAfterSeconds must be a positive number`
+          );
+        }
+
+        if (trigger.initialDelaySeconds !== undefined) {
+          assert(
+            typeof trigger.initialDelaySeconds === 'number',
+            `${prefix}.initialDelaySeconds must be a number`
+          );
+          assert(
+            trigger.initialDelaySeconds >= 0,
+            `${prefix}.initialDelaySeconds must be a non-negative number`
+          );
+        }
+
+        if (trigger.maxConcurrency !== undefined) {
+          assert(
+            typeof trigger.maxConcurrency === 'number',
+            `${prefix}.maxConcurrency must be a number`
+          );
+          assert(
+            Number.isInteger(trigger.maxConcurrency) &&
+              trigger.maxConcurrency >= 1,
+            `${prefix}.maxConcurrency must be at least 1`
+          );
+        }
+      }
+    }
+
+    if (supportsCancellation !== undefined) {
+      assert(
+        typeof supportsCancellation === 'boolean',
+        '"supportsCancellation" is not a boolean'
+      );
+    }
+
     this.type = 'Lambda';
     this.operationType = operationType;
     this.files = 'files' in opts ? opts.files : undefined;
     this.handler = handler;
     this.runtime = runtime;
+    this.runtimeLanguage = runtimeLanguage;
     this.architecture = getDefaultLambdaArchitecture(architecture);
     this.memory = memory;
     this.maxDuration = maxDuration;
     this.environment = environment;
     this.allowQuery = allowQuery;
     this.regions = regions;
+    this.functionFailoverRegions = functionFailoverRegions;
     this.zipBuffer = 'zipBuffer' in opts ? opts.zipBuffer : undefined;
     this.supportsMultiPayloads = supportsMultiPayloads;
     this.supportsWrapper = supportsWrapper;
@@ -213,6 +441,10 @@ export class Lambda {
       'experimentalAllowBundling' in opts
         ? opts.experimentalAllowBundling
         : undefined;
+    this.experimentalTriggers = experimentalTriggers;
+    this.supportsCancellation = supportsCancellation;
+    this.shouldDisableAutomaticFetchInstrumentation =
+      shouldDisableAutomaticFetchInstrumentation;
   }
 
   async createZip(): Promise<Buffer> {
@@ -297,15 +529,53 @@ export async function getLambdaOptionsFromFunction({
   sourceFile,
   config,
 }: GetLambdaOptionsFromFunctionOptions): Promise<
-  Pick<LambdaOptions, 'architecture' | 'memory' | 'maxDuration'>
+  Pick<
+    LambdaOptions,
+    | 'architecture'
+    | 'memory'
+    | 'maxDuration'
+    | 'regions'
+    | 'functionFailoverRegions'
+    | 'experimentalTriggers'
+    | 'supportsCancellation'
+  >
 > {
   if (config?.functions) {
     for (const [pattern, fn] of Object.entries(config.functions)) {
       if (sourceFile === pattern || minimatch(sourceFile, pattern)) {
+        const experimentalTriggers: TriggerEvent[] | undefined =
+          fn.experimentalTriggers?.map(
+            (trigger: TriggerEventInput): TriggerEvent => {
+              if (trigger.type === 'queue/v2beta') {
+                return {
+                  ...trigger,
+                  consumer: sanitizeConsumerName(pattern),
+                };
+              }
+              return trigger;
+            }
+          );
+
+        // User-configured functions can only have one v2beta trigger.
+        // Services may attach multiple triggers programmatically.
+        if (
+          experimentalTriggers &&
+          experimentalTriggers.length > 1 &&
+          experimentalTriggers.some(t => t.type === 'queue/v2beta')
+        ) {
+          throw new Error(
+            `functions["${pattern}"].experimentalTriggers can only have one item for queue/v2beta`
+          );
+        }
+
         return {
           architecture: fn.architecture,
           memory: fn.memory,
           maxDuration: fn.maxDuration,
+          regions: fn.regions,
+          functionFailoverRegions: fn.functionFailoverRegions,
+          experimentalTriggers,
+          supportsCancellation: fn.supportsCancellation,
         };
       }
     }
