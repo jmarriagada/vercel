@@ -15,3 +15,4 @@ minimumReleaseAgeExclude:
   - 'next'
   - 'sandbox'
   - 'turbo'
+  - 'zod-compiler'
