@@ -2,4 +2,4 @@
 'vercel': patch
 ---
 
-[cli] Make `vercel blob create-store` work non-interactively for agents
+[cli] Make `vercel blob` store commands work non-interactively for agents
