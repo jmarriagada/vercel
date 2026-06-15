@@ -1,5 +1,6 @@
 import { URLSearchParams } from 'url';
 import { z } from 'zod';
+import { compile } from 'zod-compiler';
 import type Client from '../../util/client';
 import { parseArguments } from '../../util/get-args';
 import { getFlagsSpecification } from '../../util/get-flags-specification';
@@ -20,16 +21,18 @@ const SUPPORTED_TLDS_CACHE_TTL_MS = 30 * 60 * 1000;
 
 type SupportedTldsOrder = (typeof ORDERS)[number];
 
-const supportedTldsSchema = z.array(z.string());
-const supportedTldsCacheSchema = z.object({
-  entries: z.record(
-    z.string(),
-    z.object({
-      fetchedAt: z.number(),
-      tlds: supportedTldsSchema,
-    })
-  ),
-});
+export const supportedTldsSchema = compile(z.array(z.string()));
+export const supportedTldsCacheSchema = compile(
+  z.object({
+    entries: z.record(
+      z.string(),
+      z.object({
+        fetchedAt: z.number(),
+        tlds: supportedTldsSchema,
+      })
+    ),
+  })
+);
 
 type DomainCandidate = {
   domain: string;
@@ -39,24 +42,28 @@ type DomainCandidate = {
   years: number | null;
 };
 
-const domainSearchResultSchema = z.discriminatedUnion('available', [
-  z.object({
-    domain: z.string(),
-    available: z.literal(false),
-  }),
-  z.object({
-    domain: z.string(),
-    available: z.literal(true),
-    years: z.number(),
-    price: z.number(),
-    renewalPrice: z.number(),
-    premium: z.boolean(),
-  }),
-]);
+export const domainSearchResultSchema = compile(
+  z.discriminatedUnion('available', [
+    z.object({
+      domain: z.string(),
+      available: z.literal(false),
+    }),
+    z.object({
+      domain: z.string(),
+      available: z.literal(true),
+      years: z.number(),
+      price: z.number(),
+      renewalPrice: z.number(),
+      premium: z.boolean(),
+    }),
+  ])
+);
 
-const domainsSearchResponseSchema = z.object({
-  results: z.array(domainSearchResultSchema),
-});
+export const domainsSearchResponseSchema = compile(
+  z.object({
+    results: z.array(domainSearchResultSchema),
+  })
+);
 
 type ContinuationCursor = {
   query: string;

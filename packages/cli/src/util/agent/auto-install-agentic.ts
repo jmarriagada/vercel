@@ -6,6 +6,7 @@ import { spawn } from 'node:child_process';
 import chalk from 'chalk';
 import { KNOWN_AGENTS } from '@vercel/detect-agent';
 import { z } from 'zod';
+import { compile } from 'zod-compiler';
 import type Client from '../client';
 import output from '../../output-manager';
 
@@ -38,19 +39,17 @@ export function getPluginTargetForAgent(
   return AGENT_TO_TARGET[agentName];
 }
 
-const promptedAtSchema = z.codec(
-  z.union([z.iso.date(), z.iso.datetime()]),
-  z.date(),
-  {
-    decode: value => new Date(value),
-    encode: value => value.toISOString(),
-  }
+export const agentPreferencesSchema = compile(
+  z.object({
+    pluginDeclined: z.boolean().optional(),
+    lastPromptedAt: z.optional(
+      z.codec(z.union([z.iso.date(), z.iso.datetime()]), z.date(), {
+        decode: value => new Date(value),
+        encode: value => value.toISOString(),
+      })
+    ),
+  })
 );
-
-const agentPreferencesSchema = z.object({
-  pluginDeclined: z.boolean().optional(),
-  lastPromptedAt: promptedAtSchema.optional(),
-});
 
 type AgentPreferences = z.output<typeof agentPreferencesSchema>;
 
