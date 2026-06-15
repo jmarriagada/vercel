@@ -1,4 +1,4 @@
-import { describe, beforeEach, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { client } from '../../../mocks/client';
 import domains from '../../../../src/commands/domains';
 import { useUser } from '../../../mocks/user';
@@ -7,39 +7,51 @@ import type { Request } from 'express';
 
 const DOMAIN = 'www.example.com';
 
+function domainConfig(overrides: Record<string, unknown> = {}) {
+  return {
+    configuredBy: 'A',
+    misconfigured: false,
+    serviceType: 'external',
+    nameservers: ['ns1.provider.com', 'ns2.provider.com'],
+    cnames: [],
+    aValues: ['76.76.21.21'],
+    conflicts: [],
+    acceptedChallenges: ['http-01', 'dns-01'],
+    recommendedIPv4: [{ rank: 1, value: ['76.76.21.21'] }],
+    recommendedCNAME: [{ rank: 1, value: 'cname.vercel-dns.com' }],
+    ipStatus: 'no-change',
+    ...overrides,
+  };
+}
+
+function useDomainConfigFor(
+  domain: string,
+  overrides: Record<string, unknown> = {},
+  onRequest?: (req: Request) => void
+) {
+  client.scenario.get(`/v6/domains/${domain}/config`, (req, res) => {
+    onRequest?.(req);
+    res.json(domainConfig(overrides));
+  });
+}
+
 function useDomainConfig(
   overrides: Record<string, unknown> = {},
   onRequest?: (req: Request) => void
 ) {
-  client.scenario.get(`/v6/domains/${DOMAIN}/config`, (req, res) => {
-    onRequest?.(req);
-    res.json({
-      configuredBy: 'A',
-      misconfigured: false,
-      serviceType: 'external',
-      nameservers: ['ns1.provider.com', 'ns2.provider.com'],
-      cnames: [],
-      aValues: ['76.76.21.21'],
-      conflicts: [],
-      acceptedChallenges: ['http-01', 'dns-01'],
-      recommendedIPv4: [{ rank: 1, value: ['76.76.21.21'] }],
-      recommendedCNAME: [{ rank: 1, value: 'cname.vercel-dns.com' }],
-      ipStatus: 'no-change',
-      ...overrides,
-    });
-  });
+  useDomainConfigFor(DOMAIN, overrides, onRequest);
 }
 
-function useOwnedDomainNotFound() {
-  client.scenario.get(`/v4/domains/${DOMAIN}`, (_req, res) => {
+function useOwnedDomainNotFound(domain = DOMAIN) {
+  client.scenario.get(`/v4/domains/${domain}`, (_req, res) => {
     res.status(404).json({
       error: { code: 'not_found', message: 'Domain not found' },
     });
   });
 }
 
-function useNoProjectDomain() {
-  client.scenario.get(`/project-domains/${DOMAIN}`, (_req, res) => {
+function useNoProjectDomain(domain = DOMAIN) {
+  client.scenario.get(`/project-domains/${domain}`, (_req, res) => {
     res.status(404).json({
       error: { code: 'not_found', message: 'Project domain not found' },
     });
@@ -157,16 +169,16 @@ describe('domains verify', () => {
     useNoProjectDomain();
 
     client.setArgv('domains', 'verify', DOMAIN);
-    const exitCodePromise = domains(client);
-    await expect(client.stderr).toOutput('Misconfigured');
-    // The pointing options (A + CNAME) are printed as a single step
-    await expect(client.stderr).toOutput('cname.vercel-dns.com');
-    await expect(client.stderr).toOutput('Remove the conflicting CAA record');
-    await expect(client.stderr).toOutput('Currently resolves to');
-    await expect(client.stderr).toOutput('1.2.3.4');
-    await expect(client.stderr).toOutput('Nameservers');
-    await expect(client.stderr).toOutput('ns1.provider.com');
-    expect(await exitCodePromise).toBe(1);
+    expect(await domains(client)).toBe(1);
+
+    const commandOutput = client.stderr.getFullOutput();
+    expect(commandOutput).toContain('Invalid Configuration');
+    expect(commandOutput).toContain('cname.vercel-dns.com');
+    expect(commandOutput).toContain('Remove the conflicting CAA record');
+    expect(commandOutput).toContain('Currently resolves to');
+    expect(commandOutput).toContain('1.2.3.4');
+    expect(commandOutput).toContain('Nameservers');
+    expect(commandOutput).toContain('ns1.provider.com');
   });
 
   it('shows the TXT challenge when the project domain is unverified', async () => {
@@ -208,7 +220,7 @@ describe('domains verify', () => {
 
     client.setArgv('domains', 'verify', DOMAIN, '--project', 'my-site');
     const exitCodePromise = domains(client);
-    await expect(client.stderr).toOutput('Not verified');
+    await expect(client.stderr).toOutput('Verification Needed');
     // The TXT challenge and the last-attempt error render as a single step
     await expect(client.stderr).toOutput('missing required TXT Record');
     expect(await exitCodePromise).toBe(1);
@@ -326,6 +338,155 @@ describe('domains verify', () => {
     ]);
   });
 
+  it('offers Cloudflare Domain Connect with manual DNS as a fallback', async () => {
+    useDomainConfig({
+      configuredBy: null,
+      misconfigured: true,
+      ipStatus: 'required-change',
+      nameservers: ['alice.ns.cloudflare.com.', 'bob.ns.cloudflare.com.'],
+    });
+    useOwnedDomainNotFound();
+    client.scenario.get(
+      `/v9/projects/my-site/domains/${DOMAIN}`,
+      (_req, res) => {
+        res.json({
+          name: DOMAIN,
+          apexName: 'example.com',
+          projectId: 'prj_123',
+          verified: true,
+        });
+      }
+    );
+
+    client.setArgv('domains', 'verify', DOMAIN, '--project', 'my-site');
+    expect(await domains(client)).toBe(1);
+    const commandOutput = client.stderr.getFullOutput();
+    expect(commandOutput).toContain('Auto configure');
+    expect(commandOutput).toContain('domain-connect/apply');
+    expect(commandOutput).toContain('Proxy: Disabled');
+  });
+
+  describe('--non-interactive', () => {
+    afterEach(() => {
+      client.nonInteractive = false;
+      client.isAgent = false;
+    });
+
+    it('emits structured output without requiring --format json', async () => {
+      useDomainConfig();
+      useOwnedDomainNotFound();
+      client.scenario.get(
+        `/v9/projects/my-site/domains/${DOMAIN}`,
+        (_req, res) => {
+          res.json({
+            name: DOMAIN,
+            apexName: 'example.com',
+            projectId: 'prj_123',
+            verified: true,
+          });
+        }
+      );
+
+      client.nonInteractive = true;
+      client.isAgent = true;
+      client.stdin.isTTY = false;
+      client.stdout.isTTY = false;
+      client.setArgv(
+        'domains',
+        'verify',
+        DOMAIN,
+        '--project',
+        'my-site',
+        '--cwd=/tmp/site'
+      );
+
+      expect(await domains(client)).toBe(0);
+
+      const payload = JSON.parse(client.stdout.getFullOutput());
+      expect(payload).toMatchObject({
+        status: 'ok',
+        reason: 'configured_correctly',
+        domainStatus: 'configured-correctly',
+        ok: true,
+      });
+      expect(payload.recommended.records).toEqual([
+        {
+          type: 'CNAME',
+          name: 'www',
+          value: 'cname.vercel-dns.com',
+        },
+      ]);
+      expect(client.stderr.getFullOutput()).toBe('');
+    });
+
+    it('emits actionable next commands and preserves global context', async () => {
+      useDomainConfig({
+        configuredBy: null,
+        misconfigured: true,
+        aValues: ['1.2.3.4'],
+        ipStatus: 'required-change',
+      });
+      useOwnedDomainNotFound();
+      useNoProjectDomain();
+
+      client.nonInteractive = true;
+      client.stdin.isTTY = false;
+      client.setArgv(
+        'domains',
+        'verify',
+        DOMAIN,
+        '--non-interactive',
+        '--cwd=/tmp/site'
+      );
+
+      expect(await domains(client)).toBe(1);
+
+      const payload = JSON.parse(client.stdout.getFullOutput());
+      expect(payload).toMatchObject({
+        status: 'action_required',
+        reason: 'invalid_configuration',
+        domainStatus: 'invalid-configuration',
+        ok: false,
+        userActionRequired: true,
+      });
+      expect(payload.next).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            command: expect.stringContaining(`domains verify ${DOMAIN}`),
+          }),
+        ])
+      );
+      expect(payload.next[0].command).toContain('--non-interactive');
+      expect(payload.next[0].command).toContain('--cwd=/tmp/site');
+      expect(payload.recommended.records).toContainEqual({
+        type: 'CNAME',
+        name: 'www',
+        value: 'cname.vercel-dns.com',
+      });
+    });
+
+    it('returns missing_arguments with a placeholder command', async () => {
+      client.nonInteractive = true;
+      client.setArgv(
+        'domains',
+        'verify',
+        '--non-interactive',
+        '--cwd=/tmp/site'
+      );
+
+      expect(await domains(client)).toBe(1);
+
+      const payload = JSON.parse(client.stdout.getFullOutput());
+      expect(payload).toMatchObject({
+        status: 'error',
+        reason: 'missing_arguments',
+      });
+      expect(payload.next[0].command).toContain('domains verify <domain>');
+      expect(payload.next[0].command).toContain('--non-interactive');
+      expect(payload.next[0].command).toContain('--cwd=/tmp/site');
+    });
+  });
+
   describe('--format json', () => {
     it('outputs machine-readable JSON when healthy', async () => {
       useDomainConfig();
@@ -355,6 +516,9 @@ describe('domains verify', () => {
 
       const payload = JSON.parse(client.stdout.getFullOutput());
       expect(payload.ok).toBe(true);
+      expect(payload.status).toBe('ok');
+      expect(payload.reason).toBe('configured_correctly');
+      expect(payload.domainStatus).toBe('configured-correctly');
       expect(payload.domain).toBe(DOMAIN);
       expect(payload.misconfigured).toBe(false);
       expect(payload.project).toMatchObject({
@@ -379,6 +543,8 @@ describe('domains verify', () => {
 
       const payload = JSON.parse(client.stdout.getFullOutput());
       expect(payload.ok).toBe(false);
+      expect(payload.status).toBe('action_required');
+      expect(payload.reason).toBe('invalid_configuration');
       expect(payload.misconfigured).toBe(true);
       expect(payload.current.aValues).toEqual(['1.2.3.4']);
       expect(payload.recommended.ipv4).toEqual([
@@ -403,6 +569,8 @@ describe('domains verify', () => {
       expect(await domains(client)).toBe(1);
 
       const payload = JSON.parse(client.stdout.getFullOutput());
+      expect(payload.status).toBe('error');
+      expect(payload.reason).toBe('timeout');
       expect(payload.error).toBe('timeout');
       expect(payload.message).toContain('timed out');
     });

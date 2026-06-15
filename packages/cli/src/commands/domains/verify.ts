@@ -1,67 +1,43 @@
-import chalk from 'chalk';
 import type Client from '../../util/client';
 import output from '../../output-manager';
 import stamp from '../../util/output/stamp';
-import chars from '../../util/output/chars';
-import table from '../../util/output/table';
-import code from '../../util/output/code';
-import getScope from '../../util/get-scope';
-import getDomainByName from '../../util/domains/get-domain-by-name';
-import {
-  getDomainConfigV6,
-  type DomainConfigV6,
-} from '../../util/domains/get-domain-config-v6';
-import {
-  getProjectDomain,
-  getProjectDomainByName,
-  verifyProjectDomain,
-  type ProjectDomain,
-} from '../../util/projects/get-project-domain';
-import getProjectByNameOrId from '../../util/projects/get-project-by-id-or-name';
-import { getLinkedProject } from '../../util/projects/link';
-import { getCommandName } from '../../util/pkg-name';
+import { getCommandName, packageName } from '../../util/pkg-name';
 import { parseArguments } from '../../util/get-args';
 import { getFlagsSpecification } from '../../util/get-flags-specification';
-import { printError } from '../../util/error';
-import {
-  DomainNotFound,
-  DomainPermissionDenied,
-  isAPIError,
-  type APIError,
-} from '../../util/errors-ts';
 import { validateJsonOutput } from '../../util/output-format';
+import {
+  buildCommandWithGlobalFlags,
+  openUrlInBrowserCommand,
+  shouldEmitNonInteractiveCommandError,
+} from '../../util/agent-output';
+import { AGENT_REASON } from '../../util/agent-output-constants';
 import { verifySubcommand } from './command';
 import { DomainsVerifyTelemetryClient } from '../../util/telemetry/commands/domains/verify';
+import {
+  acquireVerificationFacts,
+  type VerificationAcquisitionError,
+} from './verify-acquisition';
+import {
+  diagnoseDomain,
+  type DomainDiagnosisCommands,
+} from './verify-diagnosis';
+import {
+  renderHumanOutput,
+  type HumanVerificationOutput,
+} from './verify-human-output';
+import {
+  renderStructuredError,
+  renderStructuredOutput,
+  type StructuredVerificationError,
+} from './verify-structured-output';
 
-type DomainOwnership = 'current-scope' | 'other-scope' | 'not-found' | null;
-
-type ProjectStatus =
-  | {
-      kind: 'attached';
-      idOrName: string;
-      label: string;
-      domain: ProjectDomain;
-      verificationError: APIError | null;
-    }
-  | { kind: 'missing'; idOrName: string }
-  | { kind: 'forbidden'; idOrName: string }
-  | { kind: 'none' };
+type VerificationOutputMode = 'human' | 'json' | 'non-interactive';
 
 interface VerifyOptions {
   domainName: string;
   project: string | undefined;
   strict: boolean;
-  json: boolean;
-}
-
-interface VerificationReport {
-  domainName: string;
-  contextName: string;
-  ok: boolean;
-  config: DomainConfigV6;
-  ownership: DomainOwnership;
-  intendedNameservers: string[];
-  project: ProjectStatus;
+  outputMode: VerificationOutputMode;
 }
 
 export default async function verify(client: Client, argv: string[]) {
@@ -70,29 +46,66 @@ export default async function verify(client: Client, argv: string[]) {
       store: client.telemetryEventStore,
     },
   });
+  const flagsSpecification = getFlagsSpecification(verifySubcommand.options);
 
   let parsedArgs;
-  const flagsSpecification = getFlagsSpecification(verifySubcommand.options);
   try {
     parsedArgs = parseArguments(argv, flagsSpecification);
   } catch (error) {
-    printError(error);
-    return 1;
-  }
-
-  const formatResult = validateJsonOutput(parsedArgs.flags);
-  if (!formatResult.valid) {
-    output.error(formatResult.error);
-    return 1;
+    return writeCommandError(client, getOutputMode(client, false), {
+      reason: AGENT_REASON.INVALID_ARGUMENTS,
+      code: 'invalid_arguments',
+      message: errorMessage(error),
+      next: [
+        {
+          command: buildCommandWithGlobalFlags(
+            client.argv,
+            'domains verify --help'
+          ),
+          when: 'See valid arguments and flags',
+        },
+      ],
+    });
   }
 
   const { args, flags } = parsedArgs;
   const [domainName] = args;
   if (!domainName || args.length !== 1) {
-    output.error(
-      `${getCommandName('domains verify <domain>')} expects one argument`
-    );
-    return 1;
+    return writeCommandError(client, getOutputMode(client, false), {
+      reason: AGENT_REASON.MISSING_ARGUMENTS,
+      code: 'missing_arguments',
+      message: 'A single domain is required.',
+      next: [
+        {
+          command: buildCommandWithGlobalFlags(
+            client.argv,
+            'domains verify <domain>'
+          ),
+          when: 'Replace <domain> with the domain to check',
+        },
+      ],
+      humanMessage: `${getCommandName(
+        'domains verify <domain>'
+      )} expects one argument`,
+    });
+  }
+
+  const formatResult = validateJsonOutput(flags);
+  if (!formatResult.valid) {
+    return writeCommandError(client, getOutputMode(client, false), {
+      reason: AGENT_REASON.INVALID_ARGUMENTS,
+      code: 'invalid_arguments',
+      message: formatResult.error,
+      next: [
+        {
+          command: buildCommandWithGlobalFlags(
+            client.argv,
+            `domains verify ${shellQuoteCommandArg(domainName)} --format=json`
+          ),
+          when: 'Retry with the supported JSON format',
+        },
+      ],
+    });
   }
 
   telemetry.trackCliArgumentDomain(domainName);
@@ -100,579 +113,226 @@ export default async function verify(client: Client, argv: string[]) {
   telemetry.trackCliFlagStrict(flags['--strict']);
   telemetry.trackCliOptionFormat(flags['--format']);
 
+  const options: VerifyOptions = {
+    domainName,
+    project: flags['--project'],
+    strict: Boolean(flags['--strict']),
+    outputMode: getOutputMode(client, formatResult.jsonOutput),
+  };
+
   try {
-    return await run(client, {
-      domainName,
-      project: flags['--project'],
-      strict: Boolean(flags['--strict']),
-      json: formatResult.jsonOutput,
-    });
+    return await run(client, options);
   } catch (error) {
-    printError(error);
+    output.stopSpinner();
+    if (isStructuredOutput(options.outputMode)) {
+      return writeCommandError(client, options.outputMode, {
+        reason: AGENT_REASON.API_ERROR,
+        code: 'api_error',
+        message: errorMessage(error),
+        next: [
+          {
+            command: buildVerifyCommand(client, options),
+            when: 'Retry the domain check',
+          },
+        ],
+      });
+    }
+    output.prettyError(error);
     return 1;
   }
 }
 
 async function run(client: Client, options: VerifyOptions): Promise<number> {
-  const { domainName, json } = options;
   const elapsed = stamp();
-  const { contextName } = await getScope(client);
-
-  output.spinner(
-    `Checking DNS configuration for ${domainName} under ${chalk.bold(
-      contextName
-    )}`
-  );
-
-  const [config, resolvedProject, owned] = await Promise.all([
-    getDomainConfigV6(client, domainName, {
-      projectIdOrName: options.project,
-      strict: options.strict,
-    }),
-    resolveProject(client, domainName, options.project),
-    lookupOwnership(client, contextName, domainName),
-  ]);
-
-  if (isAPIError(config)) {
-    return reportError(
-      client,
-      json,
-      config.code || 'api_error',
-      configErrorMessage(config, domainName)
-    );
+  if (options.outputMode === 'human') {
+    output.spinner(`Checking DNS configuration for ${options.domainName}`);
   }
 
-  if (resolvedProject.kind === 'forbidden') {
-    return reportError(
-      client,
-      json,
-      'forbidden',
-      `You don't have access to the project ${resolvedProject.idOrName} under ${contextName}.`
-    );
-  }
-
-  const project = await triggerVerification(
-    client,
-    resolvedProject,
-    domainName
-  );
-  const report: VerificationReport = {
-    domainName,
-    contextName,
-    config,
-    ownership: owned.ownership,
-    intendedNameservers: owned.intendedNameservers,
-    project,
-    ok: !config.misconfigured && isProjectOk(project),
-  };
-
+  const acquisition = await acquireVerificationFacts(client, options);
   output.stopSpinner();
-  return json ? renderJson(client, report) : renderHuman(report, elapsed);
-}
 
-function isProjectOk(project: ProjectStatus): boolean {
-  switch (project.kind) {
-    case 'attached':
-      return project.domain.verified;
-    case 'missing':
-      return false;
-    default:
-      return true;
-  }
-}
-
-async function resolveProject(
-  client: Client,
-  domainName: string,
-  requestedProject: string | undefined
-): Promise<ProjectStatus> {
-  if (requestedProject) {
-    return resolveRequestedProject(client, domainName, requestedProject);
-  }
-  return (
-    (await findLinkedProjectDomain(client, domainName)) ??
-    (await findProjectDomainByName(client, domainName))
-  );
-}
-
-async function resolveRequestedProject(
-  client: Client,
-  domainName: string,
-  idOrName: string
-): Promise<ProjectStatus> {
-  const result = await getProjectDomain(client, idOrName, domainName);
-  if (!isAPIError(result)) {
-    return attachedProject(idOrName, idOrName, result);
-  }
-  return result.status === 403
-    ? { kind: 'forbidden', idOrName }
-    : { kind: 'missing', idOrName };
-}
-
-async function findLinkedProjectDomain(
-  client: Client,
-  domainName: string
-): Promise<ProjectStatus | null> {
-  const link = await getLinkedProject(client);
-  if (link.status !== 'linked') {
-    return null;
-  }
-  const result = await getProjectDomain(client, link.project.id, domainName);
-  return isAPIError(result)
-    ? null
-    : attachedProject(link.project.id, link.project.name, result);
-}
-
-async function findProjectDomainByName(
-  client: Client,
-  domainName: string
-): Promise<ProjectStatus> {
-  const result = await getProjectDomainByName(client, domainName);
-  if (isAPIError(result)) {
-    return { kind: 'none' };
-  }
-  const label = await getProjectLabel(client, result.projectId);
-  return attachedProject(result.projectId, label, result);
-}
-
-function attachedProject(
-  idOrName: string,
-  label: string,
-  domain: ProjectDomain
-): ProjectStatus {
-  return { kind: 'attached', idOrName, label, domain, verificationError: null };
-}
-
-async function getProjectLabel(
-  client: Client,
-  projectId: string
-): Promise<string> {
-  try {
-    const project = await getProjectByNameOrId(client, projectId);
-    return project instanceof Error ? projectId : project.name;
-  } catch {
-    return projectId;
-  }
-}
-
-async function lookupOwnership(
-  client: Client,
-  contextName: string,
-  domainName: string
-): Promise<{ ownership: DomainOwnership; intendedNameservers: string[] }> {
-  try {
-    const domain = await getDomainByName(client, contextName, domainName, {
-      ignoreWait: true,
-    });
-    if (domain instanceof DomainPermissionDenied) {
-      return { ownership: 'other-scope', intendedNameservers: [] };
-    }
-    if (domain instanceof DomainNotFound) {
-      return { ownership: 'not-found', intendedNameservers: [] };
-    }
-    return {
-      ownership: 'current-scope',
-      intendedNameservers: domain.intendedNameservers,
-    };
-  } catch {
-    return { ownership: null, intendedNameservers: [] };
-  }
-}
-
-async function triggerVerification(
-  client: Client,
-  project: ProjectStatus,
-  domainName: string
-): Promise<ProjectStatus> {
-  if (project.kind !== 'attached' || project.domain.verified) {
-    return project;
-  }
-  const result = await verifyProjectDomain(
-    client,
-    project.idOrName,
-    domainName
-  );
-  return isAPIError(result)
-    ? { ...project, verificationError: result }
-    : { ...project, domain: result };
-}
-
-function renderJson(client: Client, report: VerificationReport): number {
-  const { config } = report;
-  const payload = {
-    domain: report.domainName,
-    ok: report.ok,
-    misconfigured: config.misconfigured,
-    configuredBy: config.configuredBy,
-    serviceType: config.serviceType,
-    ipStatus: config.ipStatus ?? null,
-    dnssecEnabled: config.dnssecEnabled ?? null,
-    acceptedChallenges: config.acceptedChallenges ?? [],
-    current: {
-      nameservers: config.nameservers ?? [],
-      cnames: config.cnames ?? [],
-      aValues: config.aValues ?? [],
-    },
-    recommended: {
-      ipv4: config.recommendedIPv4 ?? [],
-      cname: config.recommendedCNAME ?? [],
-    },
-    conflicts: config.conflicts ?? [],
-    domainOwnership: report.ownership,
-    project: serializeProject(report.project),
-  };
-  client.stdout.write(`${JSON.stringify(payload, null, 2)}\n`);
-  return report.ok ? 0 : 1;
-}
-
-function serializeProject(project: ProjectStatus) {
-  switch (project.kind) {
-    case 'none':
-      return null;
-    case 'attached':
-      return {
-        idOrName: project.label,
-        attached: true,
-        verified: project.domain.verified,
-        verification: project.domain.verification ?? [],
-        verificationError: project.verificationError
-          ? {
-              code: project.verificationError.code || 'verification_failed',
-              message:
-                project.verificationError.serverMessage ||
-                project.verificationError.message,
-            }
-          : null,
-      };
-    default:
-      return { idOrName: project.idOrName, attached: false };
-  }
-}
-
-function renderHuman(
-  report: VerificationReport,
-  elapsed: () => string
-): number {
-  if (report.ok) {
-    output.success(`${successMessage(report)} ${chalk.gray(elapsed())}`);
-    return 0;
-  }
-
-  output.log(
-    `Checked ${report.domainName} under ${chalk.bold(
-      report.contextName
-    )} ${chalk.gray(elapsed())}`
-  );
-  printStatus(report);
-  printFixes(report);
-  printResolvedValues(report.config);
-  printNameservers(report.config);
-  return 1;
-}
-
-function successMessage(report: VerificationReport): string {
-  const configuredBy = describeConfiguredBy(report.config.configuredBy);
-  const suffix =
-    report.project.kind === 'attached'
-      ? ` and verified for project ${chalk.bold(report.project.label)}`
-      : '';
-  return `${report.domainName} is configured${
-    configuredBy ? ` (${configuredBy})` : ''
-  }${suffix}`;
-}
-
-function describeConfiguredBy(
-  configuredBy: DomainConfigV6['configuredBy']
-): string | null {
-  switch (configuredBy) {
-    case 'A':
-      return 'A record';
-    case 'CNAME':
-      return 'CNAME record';
-    case 'http':
-      return 'HTTP resolution, possibly behind a proxy';
-    case 'dns-01':
-      return 'DNS-01 challenge only, not yet resolving to Vercel';
-    default:
-      return null;
-  }
-}
-
-const good = (text: string) => `${chalk.green(chars.tick)} ${text}`;
-const bad = (text: string) => `${chalk.red(chars.cross)} ${text}`;
-
-function printStatus(report: VerificationReport) {
-  const rows = [
-    [chalk.cyan('DNS Configuration'), dnsStatus(report.config)],
-    [chalk.cyan('Project'), projectStatus(report.project, report.contextName)],
-  ];
-  if (report.ownership === 'other-scope') {
-    rows.push([
-      chalk.cyan('Ownership'),
-      bad(`Not accessible under ${chalk.bold(report.contextName)}`),
-    ]);
-  }
-  if (report.config.dnssecEnabled) {
-    rows.push([chalk.cyan('DNSSEC'), chalk.yellow('Enabled')]);
-  }
-
-  output.print('\n');
-  output.print(chalk.bold('  Status\n\n'));
-  output.print(`${indent(table(rows, { hsep: 4 }))}\n`);
-  output.print('\n');
-}
-
-function dnsStatus(config: DomainConfigV6): string {
-  if (config.misconfigured) {
-    return bad('Misconfigured');
-  }
-  const configuredBy = describeConfiguredBy(config.configuredBy);
-  return good(`Configured${configuredBy ? ` (${configuredBy})` : ''}`);
-}
-
-function projectStatus(project: ProjectStatus, contextName: string): string {
-  switch (project.kind) {
-    case 'attached':
-      return project.domain.verified
-        ? good(`Verified for ${chalk.bold(project.label)}`)
-        : bad(`Not verified for ${chalk.bold(project.label)}`);
-    case 'missing':
-      return bad(`Not attached to project ${chalk.bold(project.idOrName)}`);
-    default:
-      return chalk.gray(`Not attached to any project under ${contextName}`);
-  }
-}
-
-function printFixes(report: VerificationReport) {
-  const steps = [
-    scopeHintStep(report),
-    pointingStep(report),
-    dnssecStep(report.config),
-    ...conflictSteps(report.config),
-    ...verificationSteps(report.project),
-    attachProjectStep(report),
-  ].filter((step): step is string => step !== null);
-
-  if (!steps.length) {
-    return;
-  }
-
-  output.print(chalk.bold('  What to fix\n\n'));
-  steps.forEach((step, index) => {
-    const text = `    ${chalk.grey(`${index + 1}.`)} ${step}`.replace(
-      /[ \t]+$/gm,
-      ''
+  if (!acquisition.ok) {
+    return writeCommandError(
+      client,
+      options.outputMode,
+      commandErrorForAcquisition(client, options, acquisition.error)
     );
-    output.print(`${text}\n${index < steps.length - 1 ? '\n' : ''}`);
-  });
-  output.print('\n');
-}
-
-function scopeHintStep(report: VerificationReport): string | null {
-  if (
-    report.ownership !== 'other-scope' ||
-    report.project.kind === 'attached'
-  ) {
-    return null;
-  }
-  return `${report.domainName} exists on Vercel but is not accessible under ${chalk.bold(
-    report.contextName
-  )}. If it belongs to another team you are a member of, re-run this command with ${code(
-    '--scope <team>'
-  )} (list your teams with ${code(getCommandName('teams ls'))}).`;
-}
-
-function pointingStep(report: VerificationReport): string | null {
-  const { config, domainName } = report;
-  const needsPointing =
-    config.misconfigured &&
-    (config.configuredBy === null || config.ipStatus === 'required-change');
-  if (!needsPointing) {
-    return null;
   }
 
-  const options = buildPointingOptions(
-    domainName,
-    config,
-    report.intendedNameservers
+  const diagnosis = diagnoseDomain(
+    acquisition.facts,
+    buildDiagnosisCommands(client, options)
   );
-  if (!options.length) {
-    return 'Point the domain to Vercel by setting the recommended DNS records for your project.';
-  }
-
-  const lines = [
-    `Point ${domainName} to Vercel with one of the following options:`,
-  ];
-  options.forEach((option, index) => {
-    const letter = String.fromCharCode(97 + index);
-    lines.push('', `${chalk.grey(`${letter})`)} ${option.title}`);
-    for (const record of option.records) {
-      lines.push(`   ${chalk.cyan(record)}`);
-    }
-  });
-  return lines.join('\n       ');
-}
-
-interface PointingOption {
-  title: string;
-  records: string[];
-}
-
-function buildPointingOptions(
-  domainName: string,
-  config: DomainConfigV6,
-  intendedNameservers: string[]
-): PointingOption[] {
-  const options: PointingOption[] = [];
-
-  const recommendedA =
-    config.recommendedIPv4?.find(record => record.rank === 1)?.value ?? [];
-  if (recommendedA.length) {
-    options.push({
-      title: recommendedA.length === 1 ? 'Add an A record:' : 'Add A records:',
-      records: recommendedA.map(ip => `A      ${domainName}  ${ip}`),
-    });
-  }
-
-  const recommendedCNAME = config.recommendedCNAME?.find(
-    record => record.rank === 1
-  )?.value;
-  if (recommendedCNAME) {
-    options.push({
-      title: 'Add a CNAME record:',
-      records: [`CNAME  ${domainName}  ${recommendedCNAME}`],
-    });
-  }
-
-  if (intendedNameservers.length) {
-    options.push({
-      title: 'Switch to the Vercel nameservers:',
-      records: [...intendedNameservers],
-    });
-  }
-
-  return options;
-}
-
-function dnssecStep(config: DomainConfigV6): string | null {
-  if (!config.dnssecEnabled) {
-    return null;
-  }
-  return 'Disable DNSSEC on your DNS provider, or make sure the DS records match your DNS provider keys. Misconfigured DNSSEC prevents the domain from resolving.';
-}
-
-function conflictSteps(config: DomainConfigV6): string[] {
-  return (config.conflicts ?? []).map(conflict => {
-    const caaHint =
-      conflict.type === 'CAA'
-        ? ' (it prevents Vercel from issuing TLS certificates)'
-        : '';
-    return `Remove the conflicting ${conflict.type} record ${code(
-      `${conflict.type} ${conflict.name} ${conflict.value}`
-    )}${caaHint}.`;
-  });
-}
-
-function verificationSteps(project: ProjectStatus): string[] {
-  if (project.kind !== 'attached' || project.domain.verified) {
-    return [];
-  }
-
-  const steps = (project.domain.verification ?? []).map(
-    challenge =>
-      `Verify domain ownership by adding the following record to your DNS provider:\n       ${code(
-        `${challenge.type} ${challenge.domain} "${challenge.value}"`
-      )}`
-  );
-
-  if (project.verificationError) {
-    const message = `Last attempt: ${
-      project.verificationError.serverMessage ||
-      project.verificationError.message
-    }`;
-    if (steps.length) {
-      steps[steps.length - 1] += `\n       ${chalk.gray(message)}`;
-    } else {
-      steps.push(message);
-    }
-  }
-
-  return steps;
-}
-
-function attachProjectStep(report: VerificationReport): string | null {
-  if (report.project.kind !== 'missing') {
-    return null;
-  }
-  return `Add the domain to the project by running ${code(
-    getCommandName(
-      `domains add ${report.domainName} ${report.project.idOrName}`
-    )
-  )}.`;
-}
-
-function printResolvedValues(config: DomainConfigV6) {
-  const rows = [
-    ...(config.aValues ?? []).map(value => ['A', value]),
-    ...(config.cnames ?? []).map(value => ['CNAME', value]),
-  ];
-  if (!rows.length) {
-    return;
-  }
-
-  output.print(chalk.bold('  Currently resolves to\n\n'));
-  output.print(
-    `${indent(
-      table([[chalk.gray('Type'), chalk.gray('Value')], ...rows], { hsep: 4 })
-    )}\n`
-  );
-  output.print('\n');
-}
-
-function printNameservers(config: DomainConfigV6) {
-  const nameservers = config.nameservers ?? [];
-  if (!nameservers.length) {
-    return;
-  }
-
-  output.print(chalk.bold('  Nameservers\n\n'));
-  output.print(`${indent(nameservers.join('\n'))}\n`);
-  output.print('\n');
-}
-
-function indent(block: string): string {
-  return block
-    .split('\n')
-    .map(line => `    ${line}`)
-    .join('\n');
-}
-
-function configErrorMessage(err: APIError, domainName: string): string {
-  switch (err.code) {
-    case 'invalid_name':
-      return `${domainName} is not a valid domain name.`;
-    case 'timeout':
-      return `Resolving the DNS configuration for ${domainName} timed out. This is usually transient — try again in a few seconds.`;
-    case 'unexpected_dns_response':
-      return `The nameservers for ${domainName} returned an unexpected response while checking its DNS configuration.`;
-    default:
-      return err.serverMessage || `API error (${err.status})`;
-  }
-}
-
-function reportError(
-  client: Client,
-  json: boolean,
-  errorCode: string,
-  message: string
-): number {
-  output.stopSpinner();
-  if (json) {
-    client.stdout.write(
-      `${JSON.stringify({ error: errorCode, message }, null, 2)}\n`
-    );
+  if (isStructuredOutput(options.outputMode)) {
+    client.stdout.write(renderStructuredOutput(diagnosis));
   } else {
-    output.error(message);
+    writeHumanOutput(renderHumanOutput(diagnosis, elapsed()));
+  }
+  return diagnosis.exitCode;
+}
+
+function getOutputMode(
+  client: Client,
+  jsonOutput: boolean
+): VerificationOutputMode {
+  if (jsonOutput) {
+    return 'json';
+  }
+  return shouldEmitNonInteractiveCommandError(client)
+    ? 'non-interactive'
+    : 'human';
+}
+
+function isStructuredOutput(mode: VerificationOutputMode): boolean {
+  return mode !== 'human';
+}
+
+function buildDiagnosisCommands(
+  client: Client,
+  options: VerifyOptions
+): DomainDiagnosisCommands {
+  return {
+    teamsList: buildTeamsListCommand(client),
+    verify: scopeOverride => buildVerifyCommand(client, options, scopeOverride),
+    attachProject: projectIdOrName =>
+      buildCommandWithGlobalFlags(
+        client.argv,
+        `domains add ${shellQuoteCommandArg(
+          options.domainName
+        )} ${shellQuoteCommandArg(projectIdOrName)}`
+      ),
+    openUrl: openUrlInBrowserCommand,
+  };
+}
+
+function commandErrorForAcquisition(
+  client: Client,
+  options: VerifyOptions,
+  error: VerificationAcquisitionError
+): CommandError {
+  const next =
+    error.kind === 'permission-denied'
+      ? [
+          {
+            command: buildTeamsListCommand(client),
+            when: 'List teams to find the scope that owns the project',
+          },
+          {
+            command: buildVerifyCommand(client, options, '<team>'),
+            when: 'Replace <team> with the owning team and retry',
+          },
+        ]
+      : [
+          {
+            command:
+              error.kind === 'invalid-domain'
+                ? buildCommandWithGlobalFlags(
+                    client.argv,
+                    'domains verify <domain>'
+                  )
+                : buildVerifyCommand(client, options),
+            when:
+              error.kind === 'invalid-domain'
+                ? 'Replace <domain> with a valid domain name'
+                : 'Retry the domain check',
+          },
+        ];
+
+  return {
+    reason: reasonForAcquisitionError(error),
+    code: error.code,
+    message: error.message,
+    next,
+  };
+}
+
+function reasonForAcquisitionError(
+  error: VerificationAcquisitionError
+): string {
+  switch (error.kind) {
+    case 'invalid-domain':
+      return AGENT_REASON.INVALID_DOMAIN;
+    case 'permission-denied':
+      return AGENT_REASON.PERMISSION_DENIED;
+    case 'timeout':
+      return 'timeout';
+    case 'unexpected-dns-response':
+      return 'unexpected_dns_response';
+    case 'api-error':
+      return AGENT_REASON.API_ERROR;
+  }
+}
+
+function buildVerifyCommand(
+  client: Client,
+  options: VerifyOptions,
+  scopeOverride?: string
+): string {
+  const parts = ['domains', 'verify', shellQuoteCommandArg(options.domainName)];
+  if (options.project) {
+    parts.push('--project', shellQuoteCommandArg(options.project));
+  }
+  if (options.strict) {
+    parts.push('--strict');
+  }
+  if (options.outputMode === 'json') {
+    parts.push('--format=json');
+  }
+  if (scopeOverride) {
+    parts.push('--scope', scopeOverride);
+  }
+  return buildCommandWithGlobalFlags(
+    client.argv,
+    parts.join(' '),
+    packageName,
+    scopeOverride
+      ? { excludeFlags: ['--scope', '--team', '-S', '-T'] }
+      : undefined
+  );
+}
+
+function buildTeamsListCommand(client: Client): string {
+  return buildCommandWithGlobalFlags(client.argv, 'teams ls', packageName, {
+    excludeFlags: ['--scope', '--team', '-S', '-T'],
+  });
+}
+
+function shellQuoteCommandArg(value: string): string {
+  if (/^[a-zA-Z0-9_./:@%+,=-]+$/.test(value)) {
+    return value;
+  }
+  return `"${value.replace(/(["\\$`])/g, '\\$1')}"`;
+}
+
+interface CommandError extends StructuredVerificationError {
+  humanMessage?: string;
+}
+
+function writeCommandError(
+  client: Client,
+  outputMode: VerificationOutputMode,
+  error: CommandError
+): number {
+  output.stopSpinner();
+  if (isStructuredOutput(outputMode)) {
+    client.stdout.write(renderStructuredError(error));
+  } else {
+    output.error(error.humanMessage ?? error.message);
   }
   return 1;
+}
+
+function writeHumanOutput(result: HumanVerificationOutput): void {
+  if (result.lead.kind === 'success') {
+    output.success(result.lead.message);
+  } else {
+    output.log(result.lead.message);
+  }
+  for (const section of result.sections) {
+    output.print(section);
+  }
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }

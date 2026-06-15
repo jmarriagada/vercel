@@ -1,0 +1,256 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { acquireVerificationFacts } from '../../../../src/commands/domains/verify-acquisition';
+import { client } from '../../../mocks/client';
+import { useUser } from '../../../mocks/user';
+
+const DOMAIN = 'www.example.com';
+
+function useDomainConfig() {
+  client.scenario.get(`/v6/domains/${DOMAIN}/config`, (_req, res) => {
+    res.json({
+      configuredBy: 'A',
+      misconfigured: false,
+      serviceType: 'external',
+      nameservers: ['ns1.provider.com', 'ns2.provider.com'],
+      cnames: [],
+      aValues: ['76.76.21.21'],
+      conflicts: [],
+      acceptedChallenges: ['http-01', 'dns-01'],
+      recommendedIPv4: [{ rank: 1, value: ['76.76.21.21'] }],
+      recommendedCNAME: [{ rank: 1, value: 'cname.vercel-dns.com' }],
+      ipStatus: 'no-change',
+    });
+  });
+}
+
+function useOwnedDomainNotFound() {
+  client.scenario.get(`/v4/domains/${DOMAIN}`, (_req, res) => {
+    res.status(404).json({
+      error: { code: 'not_found', message: 'Domain not found' },
+    });
+  });
+}
+
+function acquire(project = 'my-site') {
+  return acquireVerificationFacts(client, {
+    domainName: DOMAIN,
+    project,
+    strict: false,
+  });
+}
+
+describe('domains verify acquisition', () => {
+  beforeEach(() => {
+    useUser();
+    useDomainConfig();
+    useOwnedDomainNotFound();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('classifies a 404 as a missing project attachment', async () => {
+    client.scenario.get(
+      `/v9/projects/my-site/domains/${DOMAIN}`,
+      (_req, res) => {
+        res.status(404).json({
+          error: { code: 'not_found', message: 'Domain not found' },
+        });
+      }
+    );
+
+    const result = await acquire();
+
+    expect(result).toMatchObject({
+      ok: true,
+      facts: {
+        project: { kind: 'missing', idOrName: 'my-site' },
+      },
+    });
+  });
+
+  it('keeps permission failures distinct from missing attachments', async () => {
+    client.scenario.get(
+      `/v9/projects/my-site/domains/${DOMAIN}`,
+      (_req, res) => {
+        res.status(403).json({
+          error: { code: 'forbidden', message: 'Project access denied' },
+        });
+      }
+    );
+
+    const result = await acquire();
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: {
+        kind: 'permission-denied',
+        code: 'forbidden',
+      },
+    });
+  });
+
+  it('returns rate limits without retrying or treating them as missing', async () => {
+    let requests = 0;
+    client.scenario.get(
+      `/v9/projects/my-site/domains/${DOMAIN}`,
+      (_req, res) => {
+        requests++;
+        res.status(429).json({
+          error: { code: 'rate_limited', message: 'Too many requests' },
+        });
+      }
+    );
+
+    const result = await acquire();
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: {
+        kind: 'api-error',
+        code: 'rate_limited',
+        message: 'Too many requests',
+      },
+    });
+    expect(requests).toBe(1);
+  });
+
+  it('does not retry a rate-limited ownership lookup', async () => {
+    client.reset();
+    useUser();
+    useDomainConfig();
+    const fetchSpy = vi.spyOn(client, 'fetch');
+    let ownershipRequests = 0;
+    client.scenario.get(`/v4/domains/${DOMAIN}`, (_req, res) => {
+      ownershipRequests++;
+      res.set('Retry-After', '0');
+      res.status(429).json({
+        error: { code: 'rate_limited', message: 'Too many requests' },
+      });
+    });
+    client.scenario.get(
+      `/v9/projects/my-site/domains/${DOMAIN}`,
+      (_req, res) => {
+        res.status(404).json({
+          error: { code: 'not_found', message: 'Domain not found' },
+        });
+      }
+    );
+
+    const result = await acquire();
+
+    expect(result).toMatchObject({
+      ok: true,
+      facts: {
+        ownership: null,
+        project: { kind: 'missing' },
+      },
+    });
+    expect(ownershipRequests).toBe(1);
+    expect(fetchSpy).toHaveBeenCalledWith(
+      `/v4/domains/${DOMAIN}`,
+      expect.objectContaining({ bailOn429: true })
+    );
+  });
+
+  it('refreshes an unverified project domain', async () => {
+    client.scenario.get(
+      `/v9/projects/my-site/domains/${DOMAIN}`,
+      (_req, res) => {
+        res.json({
+          name: DOMAIN,
+          apexName: 'example.com',
+          projectId: 'prj_123',
+          verified: false,
+        });
+      }
+    );
+    client.scenario.post(
+      `/v9/projects/my-site/domains/${DOMAIN}/verify`,
+      (_req, res) => {
+        res.json({
+          name: DOMAIN,
+          apexName: 'example.com',
+          projectId: 'prj_123',
+          verified: true,
+        });
+      }
+    );
+
+    const result = await acquire();
+
+    expect(result).toMatchObject({
+      ok: true,
+      facts: {
+        project: {
+          kind: 'attached',
+          domain: { verified: true },
+          verificationError: null,
+        },
+      },
+    });
+  });
+
+  it('lets server failures escape without waiting for optional lookups', async () => {
+    client.reset();
+    useUser();
+    useDomainConfig();
+
+    let markOwnershipStarted = () => {};
+    const ownershipStarted = new Promise<void>(resolve => {
+      markOwnershipStarted = resolve;
+    });
+    let releaseOwnership = () => {};
+    const ownershipReleased = new Promise<void>(resolve => {
+      releaseOwnership = resolve;
+    });
+    let markOwnershipFinished = () => {};
+    const ownershipFinished = new Promise<void>(resolve => {
+      markOwnershipFinished = resolve;
+    });
+    client.scenario.get(`/v4/domains/${DOMAIN}`, async (_req, res) => {
+      markOwnershipStarted();
+      await ownershipReleased;
+      res.status(404).json({
+        error: { code: 'not_found', message: 'Domain not found' },
+      });
+      markOwnershipFinished();
+    });
+    client.scenario.get(
+      `/v9/projects/my-site/domains/${DOMAIN}`,
+      (_req, res) => {
+        res.status(500).json({
+          error: { code: 'internal_error', message: 'Project lookup failed' },
+        });
+      }
+    );
+
+    const acquisition = acquire().then(
+      () => ({ kind: 'resolved' as const }),
+      error => ({ kind: 'rejected' as const, error })
+    );
+    await ownershipStarted;
+
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<{ kind: 'timeout' }>(resolve => {
+      timeoutId = setTimeout(() => resolve({ kind: 'timeout' }), 1000);
+    });
+    const outcome = await Promise.race([acquisition, timeout]);
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+
+    releaseOwnership();
+    await ownershipFinished;
+    await acquisition;
+
+    expect(outcome).toMatchObject({
+      kind: 'rejected',
+      error: {
+        status: 500,
+        code: 'internal_error',
+      },
+    });
+  });
+});

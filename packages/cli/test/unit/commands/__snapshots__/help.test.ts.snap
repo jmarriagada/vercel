@@ -2589,6 +2589,10 @@ exports[`help command > domains help output snapshots > domains verify help outp
 
     $ vercel domains verify example.com --format json
 
+  - Agent-friendly output with status, reason, and suggested next commands
+
+    $ vercel domains verify example.com --non-interactive
+
 "
 `;
 

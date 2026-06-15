@@ -319,6 +319,10 @@ export const verifySubcommand = {
       name: 'JSON output (the exit code is non-zero when the domain is misconfigured or unverified)',
       value: `${packageName} domains verify example.com --format json`,
     },
+    {
+      name: 'Agent-friendly output with status, reason, and suggested next commands',
+      value: `${packageName} domains verify example.com --non-interactive`,
+    },
   ],
 } as const;
 

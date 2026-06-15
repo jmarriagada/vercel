@@ -18,43 +18,52 @@ export interface ProjectDomain {
   verification?: ProjectDomainVerification[];
 }
 
+interface ProjectDomainFetchOptions {
+  bailOn429?: boolean;
+}
+
 export function getProjectDomain(
   client: Client,
   projectIdOrName: string,
-  domainName: string
+  domainName: string,
+  options: ProjectDomainFetchOptions = {}
 ): Promise<ProjectDomain | APIError> {
   return fetchProjectDomain(
     client,
-    `/v9/projects/${encodeURIComponent(projectIdOrName)}/domains/${encodeURIComponent(domainName)}`
+    `/v9/projects/${encodeURIComponent(projectIdOrName)}/domains/${encodeURIComponent(domainName)}`,
+    options
   );
 }
 
 export function getProjectDomainByName(
   client: Client,
-  domainName: string
+  domainName: string,
+  options: ProjectDomainFetchOptions = {}
 ): Promise<ProjectDomain | APIError> {
   return fetchProjectDomain(
     client,
-    `/project-domains/${encodeURIComponent(domainName)}`
+    `/project-domains/${encodeURIComponent(domainName)}`,
+    options
   );
 }
 
 export function verifyProjectDomain(
   client: Client,
   projectIdOrName: string,
-  domainName: string
+  domainName: string,
+  options: ProjectDomainFetchOptions = {}
 ): Promise<ProjectDomain | APIError> {
   return fetchProjectDomain(
     client,
     `/v9/projects/${encodeURIComponent(projectIdOrName)}/domains/${encodeURIComponent(domainName)}/verify`,
-    { method: 'POST' }
+    { ...options, method: 'POST' }
   );
 }
 
 async function fetchProjectDomain(
   client: Client,
   url: string,
-  init?: { method: string }
+  init?: ProjectDomainFetchOptions & { method?: string }
 ): Promise<ProjectDomain | APIError> {
   try {
     return await client.fetch<ProjectDomain>(url, init);

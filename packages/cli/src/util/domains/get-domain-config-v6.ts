@@ -25,7 +25,11 @@ export interface DomainConfigV6 {
 export async function getDomainConfigV6(
   client: Client,
   domainName: string,
-  options: { projectIdOrName?: string; strict?: boolean } = {}
+  options: {
+    projectIdOrName?: string;
+    strict?: boolean;
+    bailOn429?: boolean;
+  } = {}
 ): Promise<DomainConfigV6 | APIError> {
   const query = new URLSearchParams();
   if (options.projectIdOrName) {
@@ -40,7 +44,8 @@ export async function getDomainConfigV6(
     return await client.fetch<DomainConfigV6>(
       `/v6/domains/${encodeURIComponent(domainName)}/config${
         queryString ? `?${queryString}` : ''
-      }`
+      }`,
+      { bailOn429: options.bailOn429 }
     );
   } catch (err: unknown) {
     if (isAPIError(err) && err.status < 500) {
