@@ -112,11 +112,11 @@ function normalizeUnit(unit: string): string {
 /**
  * An aggregation may carry a dimension qualifier (e.g. `unique/visitor_id`),
  * where the part before the `/` is the aggregation and the rest is the
- * dimension it operates over. Returns the base aggregation name.
+ * dimension it operates over.
  */
-function getBaseAggregation(aggregation: Aggregation): string {
-  const [base] = aggregation.split('/');
-  return base;
+function isAggregationWithDimension(aggregation: Aggregation): boolean {
+  const [, dimension] = aggregation.split('/');
+  return Boolean(dimension);
 }
 
 /** Builds an internal map key from grouped dimension values. */
@@ -848,18 +848,20 @@ export function formatSparklineSection(
 /**
  * Computes the display unit and measure type based on the base unit and
  * aggregation. Certain aggregations transform the output semantics:
+ * - an aggregation with a dimension (e.g. `unique/visitor_id`) → values are
+ *   distinct counts, unit is hidden
  * - `percent` → values are 0-100 percentages regardless of base unit
  * - `persecond` → values are rates in base unit per second
- * - `unique` → values are distinct counts, unit is hidden
  * - all others → values stay in the original unit
  */
 export function getEffectiveDisplay(
   baseUnit: string | undefined,
   aggregation: Aggregation
 ): { displayUnit: string | undefined; measureType: MeasureType } {
-  switch (getBaseAggregation(aggregation)) {
-    case 'unique':
-      return { displayUnit: undefined, measureType: 'count' };
+  if (isAggregationWithDimension(aggregation)) {
+    return { displayUnit: undefined, measureType: 'count' };
+  }
+  switch (aggregation) {
     case 'percent':
       return { displayUnit: '%', measureType: 'ratio' };
     case 'persecond': {
@@ -907,7 +909,7 @@ export function formatText(
   // line cannot represent.
   let periodUnique: number | undefined;
   if (
-    getBaseAggregation(opts.aggregation) === 'unique' &&
+    isAggregationWithDimension(opts.aggregation) &&
     opts.groupBy.length === 0
   ) {
     const summaryValue = toNumericValue(response.summary?.[0]?.[rollupColumn]);
