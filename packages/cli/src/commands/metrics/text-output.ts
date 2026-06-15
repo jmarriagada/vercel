@@ -112,11 +112,11 @@ function normalizeUnit(unit: string): string {
 /**
  * An aggregation may carry a dimension qualifier (e.g. `unique/visitor_id`),
  * where the part before the `/` is the aggregation and the rest is the
- * dimension it operates over.
+ * dimension it operates over. Returns the base aggregation name.
  */
-function isAggregationWithDimension(aggregation: Aggregation): boolean {
-  const [, dimension] = aggregation.split('/');
-  return Boolean(dimension);
+function getBaseAggregation(aggregation: Aggregation): string {
+  const [base] = aggregation.split('/');
+  return base;
 }
 
 /** Builds an internal map key from grouped dimension values. */
@@ -857,10 +857,9 @@ export function getEffectiveDisplay(
   baseUnit: string | undefined,
   aggregation: Aggregation
 ): { displayUnit: string | undefined; measureType: MeasureType } {
-  if (isAggregationWithDimension(aggregation)) {
-    return { displayUnit: undefined, measureType: 'count' };
-  }
-  switch (aggregation) {
+  switch (getBaseAggregation(aggregation)) {
+    case 'unique':
+      return { displayUnit: undefined, measureType: 'count' };
     case 'percent':
       return { displayUnit: '%', measureType: 'ratio' };
     case 'persecond': {
@@ -908,7 +907,7 @@ export function formatText(
   // line cannot represent.
   let periodUnique: number | undefined;
   if (
-    isAggregationWithDimension(opts.aggregation) &&
+    getBaseAggregation(opts.aggregation) === 'unique' &&
     opts.groupBy.length === 0
   ) {
     const summaryValue = toNumericValue(response.summary?.[0]?.[rollupColumn]);
