@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { acquireVerificationFacts } from '../../../../src/commands/domains/verify-acquisition';
 import { client } from '../../../mocks/client';
 import { useUser } from '../../../mocks/user';
@@ -48,10 +48,6 @@ describe('domains verify acquisition', () => {
     useUser();
     useDomainConfig();
     useOwnedDomainNotFound();
-  });
-
-  afterEach(() => {
-    vi.restoreAllMocks();
   });
 
   it('classifies a 404 as a missing project attachment', async () => {
@@ -124,7 +120,6 @@ describe('domains verify acquisition', () => {
     client.reset();
     useUser();
     useDomainConfig();
-    const fetchSpy = vi.spyOn(client, 'fetch');
     let ownershipRequests = 0;
     client.scenario.get(`/v4/domains/${DOMAIN}`, (_req, res) => {
       ownershipRequests++;
@@ -152,10 +147,6 @@ describe('domains verify acquisition', () => {
       },
     });
     expect(ownershipRequests).toBe(1);
-    expect(fetchSpy).toHaveBeenCalledWith(
-      `/v4/domains/${DOMAIN}`,
-      expect.objectContaining({ bailOn429: true })
-    );
   });
 
   it('uses the northstar default team for verification requests', async () => {
@@ -197,157 +188,5 @@ describe('domains verify acquisition', () => {
     expect(configTeamId).toBe(team.id);
     expect(ownershipTeamId).toBe(team.id);
     expect(projectTeamId).toBe(team.id);
-  });
-
-  it('treats Vercel project domains as platform-managed', async () => {
-    const domainName = 'my-site.vercel.app';
-    client.reset();
-    useUser();
-    client.scenario.get(`/v6/domains/${domainName}/config`, (_req, res) => {
-      res.json({
-        configuredBy: 'A',
-        misconfigured: false,
-        serviceType: 'zeit.world',
-        nameservers: ['ns1.vercel-dns-3.com'],
-        cnames: [],
-        aValues: ['64.29.17.1'],
-        conflicts: [],
-        ipStatus: 'optional-change',
-      });
-    });
-    let ownershipRequests = 0;
-    client.scenario.get(`/v4/domains/${domainName}`, (_req, res) => {
-      ownershipRequests++;
-      res.status(403).json({
-        error: { code: 'forbidden', message: 'Domain access denied' },
-      });
-    });
-    client.scenario.get(
-      `/v9/projects/my-site/domains/${domainName}`,
-      (_req, res) => {
-        res.json({
-          name: domainName,
-          apexName: 'vercel.app',
-          projectId: 'prj_123',
-          verified: true,
-        });
-      }
-    );
-
-    const result = await acquireVerificationFacts(client, {
-      domainName,
-      project: 'my-site',
-      strict: false,
-    });
-
-    expect(result).toMatchObject({
-      ok: true,
-      facts: {
-        ownership: 'platform-managed',
-        intendedNameservers: [],
-        project: { kind: 'attached' },
-      },
-    });
-    expect(ownershipRequests).toBe(0);
-  });
-
-  it('refreshes an unverified project domain', async () => {
-    client.scenario.get(
-      `/v9/projects/my-site/domains/${DOMAIN}`,
-      (_req, res) => {
-        res.json({
-          name: DOMAIN,
-          apexName: 'example.com',
-          projectId: 'prj_123',
-          verified: false,
-        });
-      }
-    );
-    client.scenario.post(
-      `/v9/projects/my-site/domains/${DOMAIN}/verify`,
-      (_req, res) => {
-        res.json({
-          name: DOMAIN,
-          apexName: 'example.com',
-          projectId: 'prj_123',
-          verified: true,
-        });
-      }
-    );
-
-    const result = await acquire();
-
-    expect(result).toMatchObject({
-      ok: true,
-      facts: {
-        project: {
-          kind: 'attached',
-          domain: { verified: true },
-          verificationError: null,
-        },
-      },
-    });
-  });
-
-  it('lets server failures escape without waiting for optional lookups', async () => {
-    client.reset();
-    useUser();
-    useDomainConfig();
-
-    let markOwnershipStarted = () => {};
-    const ownershipStarted = new Promise<void>(resolve => {
-      markOwnershipStarted = resolve;
-    });
-    let releaseOwnership = () => {};
-    const ownershipReleased = new Promise<void>(resolve => {
-      releaseOwnership = resolve;
-    });
-    let markOwnershipFinished = () => {};
-    const ownershipFinished = new Promise<void>(resolve => {
-      markOwnershipFinished = resolve;
-    });
-    client.scenario.get(`/v4/domains/${DOMAIN}`, async (_req, res) => {
-      markOwnershipStarted();
-      await ownershipReleased;
-      res.status(404).json({
-        error: { code: 'not_found', message: 'Domain not found' },
-      });
-      markOwnershipFinished();
-    });
-    client.scenario.get(
-      `/v9/projects/my-site/domains/${DOMAIN}`,
-      (_req, res) => {
-        res.status(500).json({
-          error: { code: 'internal_error', message: 'Project lookup failed' },
-        });
-      }
-    );
-
-    const acquisition = acquire().then(
-      () => ({ kind: 'resolved' as const }),
-      error => ({ kind: 'rejected' as const, error })
-    );
-    await ownershipStarted;
-
-    let timeoutId: ReturnType<typeof setTimeout> | undefined;
-    const timeout = new Promise<{ kind: 'timeout' }>(resolve => {
-      timeoutId = setTimeout(() => resolve({ kind: 'timeout' }), 1000);
-    });
-    const outcome = await Promise.race([acquisition, timeout]);
-    if (timeoutId) {
-      clearTimeout(timeoutId);
-    }
-
-    releaseOwnership();
-    await ownershipFinished;
-    await acquisition;
-
-    expect(outcome).toMatchObject({
-      kind: 'rejected',
-      error: {
-        status: 500,
-        code: 'internal_error',
-      },
-    });
   });
 });

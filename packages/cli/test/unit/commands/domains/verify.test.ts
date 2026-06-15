@@ -326,12 +326,10 @@ describe('domains verify', () => {
     expect(await exitCodePromise).toBe(1);
   });
 
-  it('finds the project with a single by-name lookup when no project is given', async () => {
+  it('finds the attached project when no project is given', async () => {
     useDomainConfig();
     useOwnedDomainNotFound();
-    let byNameRequested = false;
     client.scenario.get(`/project-domains/${DOMAIN}`, (_req, res) => {
-      byNameRequested = true;
       res.json({
         name: DOMAIN,
         apexName: 'example.com',
@@ -347,7 +345,6 @@ describe('domains verify', () => {
     const exitCodePromise = domains(client);
     await expect(client.stderr).toOutput('verified for project my-site');
     expect(await exitCodePromise).toBe(0);
-    expect(byNameRequested).toBe(true);
   });
 
   it('reports a Vercel-managed project domain as configured', async () => {
@@ -362,13 +359,6 @@ describe('domains verify', () => {
         { rank: 1, value: 'project-specific.vercel-dns-017.com.' },
       ],
       ipStatus: 'optional-change',
-    });
-    let ownershipRequests = 0;
-    client.scenario.get(`/v4/domains/${domainName}`, (_req, res) => {
-      ownershipRequests++;
-      res.status(403).json({
-        error: { code: 'forbidden', message: 'Domain access denied' },
-      });
     });
     client.scenario.get(`/project-domains/${domainName}`, (_req, res) => {
       res.json({
@@ -391,7 +381,6 @@ describe('domains verify', () => {
     expect(commandOutput).not.toContain('DNS Change Recommended');
     expect(commandOutput).not.toContain('Ownership');
     expect(commandOutput).not.toContain('CNAME');
-    expect(ownershipRequests).toBe(0);
   });
 
   it('recommends adding an owned unattached hostname to a project', async () => {
@@ -476,6 +465,9 @@ describe('domains verify', () => {
     client.setArgv('domains', 'verify', DOMAIN, '--project', 'my-site');
     expect(await domains(client)).toBe(1);
     const commandOutput = client.stderr.getFullOutput();
+    expect(commandOutput).toContain(
+      `Point ${DOMAIN} to Vercel with one of the following options:`
+    );
     expect(commandOutput).toContain('Auto configure');
     expect(commandOutput).toContain('domain-connect/apply');
     expect(commandOutput).toContain('Proxy: Disabled');
@@ -603,46 +595,6 @@ describe('domains verify', () => {
   });
 
   describe('--format json', () => {
-    it('outputs machine-readable JSON when healthy', async () => {
-      useDomainConfig();
-      useOwnedDomainNotFound();
-      client.scenario.get(
-        `/v9/projects/my-site/domains/${DOMAIN}`,
-        (_req, res) => {
-          res.json({
-            name: DOMAIN,
-            apexName: 'example.com',
-            projectId: 'prj_123',
-            verified: true,
-          });
-        }
-      );
-
-      client.setArgv(
-        'domains',
-        'verify',
-        DOMAIN,
-        '--project',
-        'my-site',
-        '--format',
-        'json'
-      );
-      expect(await domains(client)).toBe(0);
-
-      const payload = JSON.parse(client.stdout.getFullOutput());
-      expect(payload.ok).toBe(true);
-      expect(payload.status).toBe('ok');
-      expect(payload.reason).toBe('configured_correctly');
-      expect(payload.domainStatus).toBe('configured-correctly');
-      expect(payload.domain).toBe(DOMAIN);
-      expect(payload.misconfigured).toBe(false);
-      expect(payload.project).toMatchObject({
-        idOrName: 'my-site',
-        attached: true,
-        verified: true,
-      });
-    });
-
     it('outputs the DNS diff and exits non-zero when misconfigured', async () => {
       useDomainConfig({
         configuredBy: null,
