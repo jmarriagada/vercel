@@ -192,6 +192,35 @@ describe('domains verify', () => {
     expect(commandOutput).toContain('ns1.provider.com');
   });
 
+  it('requires project attachment before DNS changes for a new unattached domain', async () => {
+    const domainName = 'example.com';
+    useDomainConfigFor(domainName, {
+      configuredBy: null,
+      misconfigured: true,
+      aValues: ['1.2.3.4'],
+      ipStatus: 'required-change',
+    });
+    useOwnedDomainNotFound(domainName);
+    useNoProjectDomain(domainName);
+
+    client.setArgv('domains', 'verify', domainName);
+    expect(await domains(client)).toBe(1);
+
+    const commandOutput = client.stderr.getFullOutput();
+    const attachIndex = commandOutput.indexOf(
+      `Attach ${domainName} to the project that should serve it`
+    );
+    const dnsIndex = commandOutput.indexOf(
+      `Then point ${domainName} to Vercel with the following option:`
+    );
+    expect(attachIndex).toBeGreaterThanOrEqual(0);
+    expect(dnsIndex).toBeGreaterThan(attachIndex);
+    expect(commandOutput).toContain(
+      `vercel domains add ${domainName} <project>`
+    );
+    expect(commandOutput).toContain('A      @  76.76.21.21');
+  });
+
   it('shows the TXT challenge when the project domain is unverified', async () => {
     useDomainConfig();
     useOwnedDomainNotFound();

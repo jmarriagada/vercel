@@ -7,7 +7,9 @@ import type {
 } from '../../../../src/commands/domains/verify-acquisition';
 import {
   diagnoseDomain,
+  type DomainDiagnosis,
   type DomainDiagnosisCommands,
+  type RemediationStep,
 } from '../../../../src/commands/domains/verify-diagnosis';
 
 const DOMAIN = 'www.example.com';
@@ -81,6 +83,15 @@ function commandsFor(domainName: string): DomainDiagnosisCommands {
 
 function diagnose(facts: VerificationFacts) {
   return diagnoseDomain(facts, commandsFor(facts.domainName));
+}
+
+function getStep<K extends RemediationStep['kind']>(
+  diagnosis: DomainDiagnosis,
+  kind: K
+): Extract<RemediationStep, { kind: K }> | undefined {
+  return diagnosis.steps.find(step => step.kind === kind) as
+    | Extract<RemediationStep, { kind: K }>
+    | undefined;
 }
 
 describe('domains verify diagnosis', () => {
@@ -209,14 +220,23 @@ describe('domains verify diagnosis', () => {
         disableProxy: true,
       },
     ]);
-    expect(diagnosis.remediation.domainConnect).toEqual({
-      protocol: 'domain-connect',
-      providerId: 'cloudflare.com',
-      providerName: 'Cloudflare',
-      applyUrl:
-        `https://vercel.com/api/v9/projects/prj_123/domains/${DOMAIN}` +
-        '/domain-connect/apply?teamId=team_123',
+    const configureDns = getStep(diagnosis, 'configure-dns');
+    expect(configureDns?.methods).toContainEqual({
+      kind: 'domain-connect',
+      configuration: {
+        protocol: 'domain-connect',
+        providerId: 'cloudflare.com',
+        providerName: 'Cloudflare',
+        applyUrl:
+          `https://vercel.com/api/v9/projects/prj_123/domains/${DOMAIN}` +
+          '/domain-connect/apply?teamId=team_123',
+      },
     });
+    expect(configureDns?.methods).toContainEqual({
+      kind: 'cname-records',
+      records: diagnosis.recommendedDnsRecords,
+    });
+    expect(configureDns?.methods).toHaveLength(2);
     expect(diagnosis.next).toEqual([
       expect.objectContaining({ command: expect.stringContaining("open '") }),
       expect.objectContaining({
@@ -269,11 +289,14 @@ describe('domains verify diagnosis', () => {
     });
 
     const diagnosis = diagnose(facts);
+    const configureDns = getStep(diagnosis, 'configure-dns');
 
     expect(diagnosis.recommendedDnsRecords).toContainEqual(
       expect.objectContaining({ name: '*' })
     );
-    expect(diagnosis.remediation.domainConnect).toBeNull();
+    expect(
+      configureDns?.methods.find(method => method.kind === 'domain-connect')
+    ).toBeUndefined();
   });
 
   it('does not treat mixed nameservers as Cloudflare DNS', () => {
@@ -288,8 +311,11 @@ describe('domains verify diagnosis', () => {
     });
 
     const diagnosis = diagnose(facts);
+    const configureDns = getStep(diagnosis, 'configure-dns');
 
-    expect(diagnosis.remediation.domainConnect).toBeNull();
+    expect(
+      configureDns?.methods.find(method => method.kind === 'domain-connect')
+    ).toBeUndefined();
     expect(diagnosis.recommendedDnsRecords).not.toContainEqual(
       expect.objectContaining({ disableProxy: true })
     );
@@ -319,19 +345,82 @@ describe('domains verify diagnosis', () => {
       details: {
         reason: 'project_attachment_recommended',
       },
-      remediation: {
-        pointing: null,
-        attachProject: {
+      steps: [
+        {
+          kind: 'attach-project',
+          mode: 'recommended',
           project: '<project>',
           command: `vercel domains add ${domainName} <project>`,
         },
-      },
+      ],
     });
     expect(diagnosis.recommendedDnsRecords).toEqual([]);
     expect(diagnosis.next).toEqual([
       {
         command: `vercel domains add ${domainName} <project>`,
         when: 'Replace <project> with the project that should serve the domain',
+      },
+    ]);
+  });
+
+  it('requires project attachment and DNS changes for a new misconfigured domain', () => {
+    const domainName = 'example.com';
+    const facts = verificationFacts({
+      domainName,
+      ownership: 'not-found',
+      config: {
+        configuredBy: null,
+        misconfigured: true,
+        aValues: ['1.2.3.4'],
+        ipStatus: 'required-change',
+      },
+    });
+
+    const diagnosis = diagnose(facts);
+
+    expect(diagnosis).toMatchObject({
+      status: 'invalid-configuration',
+      configurationStatus: 'invalid-configuration',
+      exitCode: 1,
+      details: {
+        reason: 'invalid_configuration',
+        message:
+          'example.com is not attached to a project and has an invalid DNS configuration. Attach it to a project and apply the recommended DNS changes, then retry verification.',
+        userActionRequired: true,
+      },
+      steps: [
+        {
+          kind: 'attach-project',
+          mode: 'required',
+          project: '<project>',
+          command: 'vercel domains add example.com <project>',
+        },
+        {
+          kind: 'configure-dns',
+          change: 'point-domain',
+          methods: [
+            {
+              kind: 'a-records',
+              records: [
+                {
+                  type: 'A',
+                  name: '@',
+                  value: '76.76.21.21',
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+    expect(diagnosis.next).toEqual([
+      {
+        command: 'vercel domains add example.com <project>',
+        when: 'Replace <project> with the project that should serve the domain',
+      },
+      {
+        command: 'vercel domains verify example.com',
+        when: 'Re-check after completing the required changes',
       },
     ]);
   });
@@ -366,9 +455,7 @@ describe('domains verify diagnosis', () => {
       details: {
         reason: 'configured_correctly',
       },
-      remediation: {
-        pointing: null,
-      },
+      steps: [],
       next: [],
     });
     expect(diagnosis.recommendedDnsRecords).toEqual([]);
@@ -398,14 +485,14 @@ describe('domains verify diagnosis', () => {
         reason: 'scope_not_accessible',
         userActionRequired: true,
       },
-      remediation: {
-        domainConnect: null,
-        pointing: null,
-        disableDnssec: false,
-        conflicts: [],
-        verification: null,
-        attachProject: null,
-      },
+      steps: [
+        {
+          kind: 'resolve-scope',
+          contextName: 'my-team',
+          teamsCommand: 'vercel teams ls',
+          verifyCommand: `vercel domains verify ${domainName} --scope <team>`,
+        },
+      ],
     });
     expect(diagnosis.issues.map(issue => issue.domainStatus)).toEqual([
       'scope-resolution-required',
@@ -431,7 +518,7 @@ describe('domains verify diagnosis', () => {
         when: 'Replace <team> with the owning team and retry',
       },
     ]);
-    expect(diagnosis.remediation.attachProject).toBeNull();
+    expect(getStep(diagnosis, 'attach-project')).toBeUndefined();
   });
 
   it('collects conflicts, nameserver alternatives, and verification facts', () => {
@@ -462,12 +549,16 @@ describe('domains verify diagnosis', () => {
     });
 
     const diagnosis = diagnose(facts);
+    const configureDns = getStep(diagnosis, 'configure-dns');
+    const verification = getStep(diagnosis, 'verify-ownership');
 
-    expect(diagnosis.remediation.conflicts).toHaveLength(1);
-    expect(diagnosis.remediation.pointing?.options).toContainEqual({
+    expect(
+      diagnosis.steps.filter(step => step.kind === 'remove-conflict')
+    ).toHaveLength(1);
+    expect(configureDns?.methods).toContainEqual({
       kind: 'nameservers',
       nameservers: ['ns1.vercel-dns.com', 'ns2.vercel-dns.com'],
     });
-    expect(diagnosis.remediation.verification?.challenges).toHaveLength(1);
+    expect(verification?.challenges).toHaveLength(1);
   });
 });

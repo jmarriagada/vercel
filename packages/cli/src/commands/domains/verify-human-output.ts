@@ -4,9 +4,10 @@ import chars from '../../util/output/chars';
 import code from '../../util/output/code';
 import table from '../../util/output/table';
 import type {
+  DnsMethod,
   DomainDiagnosis,
-  PointingOption,
   RecommendedDnsRecord,
+  RemediationStep,
 } from './verify-diagnosis';
 
 export interface HumanVerificationOutput {
@@ -21,7 +22,10 @@ export function renderHumanOutput(
   diagnosis: DomainDiagnosis,
   elapsed: string
 ): HumanVerificationOutput {
-  if (diagnosis.status === 'configured-correctly') {
+  if (
+    diagnosis.status === 'configured-correctly' &&
+    diagnosis.steps.length === 0
+  ) {
     return {
       lead: {
         kind: 'success',
@@ -151,24 +155,15 @@ function projectStatus(diagnosis: DomainDiagnosis): string {
 }
 
 function renderFixes(diagnosis: DomainDiagnosis): string | null {
-  const steps = [
-    scopeStep(diagnosis),
-    domainConnectStep(diagnosis),
-    pointingStep(diagnosis),
-    dnssecStep(diagnosis),
-    ...conflictSteps(diagnosis),
-    ...verificationSteps(diagnosis),
-    attachProjectStep(diagnosis),
-  ].filter((step): step is string => step !== null);
-
-  if (!steps.length) {
+  if (!diagnosis.steps.length) {
     return null;
   }
 
   const heading = diagnosis.ok ? '  Recommended change' : '  What to fix';
-  const body = steps
+  const body = diagnosis.steps
     .map((step, index) => {
-      const text = `    ${chalk.grey(`${index + 1}.`)} ${step}`.replace(
+      const rendered = renderStep(diagnosis, step, index);
+      const text = `    ${chalk.grey(`${index + 1}.`)} ${rendered}`.replace(
         /[ \t]+$/gm,
         ''
       );
@@ -179,67 +174,78 @@ function renderFixes(diagnosis: DomainDiagnosis): string | null {
   return `${chalk.bold(heading)}\n\n${body}\n`;
 }
 
-function scopeStep(diagnosis: DomainDiagnosis): string | null {
-  const scope = diagnosis.remediation.scope;
-  if (!scope) {
-    return null;
+function renderStep(
+  diagnosis: DomainDiagnosis,
+  step: RemediationStep,
+  index: number
+): string {
+  switch (step.kind) {
+    case 'resolve-scope':
+      return scopeStep(diagnosis, step);
+    case 'attach-project':
+      return attachProjectStep(diagnosis, step);
+    case 'configure-dns':
+      return configureDnsStep(diagnosis, step, index);
+    case 'disable-dnssec':
+      return "Disable DNSSEC with your domain registrar. The domain's nameservers point to Vercel, but DNSSEC prevents them from resolving globally.";
+    case 'remove-conflict':
+      return conflictStep(step);
+    case 'verify-ownership':
+      return verificationStep(step);
   }
+}
+
+function scopeStep(
+  diagnosis: DomainDiagnosis,
+  step: Extract<RemediationStep, { kind: 'resolve-scope' }>
+): string {
   return `${diagnosis.facts.domainName} exists on Vercel but is not accessible under ${chalk.bold(
-    scope.contextName
+    step.contextName
   )}. If it belongs to another team you are a member of, list your teams with ${code(
-    scope.teamsCommand
-  )}, then retry with ${code(scope.verifyCommand)}.`;
+    step.teamsCommand
+  )}, then retry with ${code(step.verifyCommand)}.`;
 }
 
-function domainConnectStep(diagnosis: DomainDiagnosis): string | null {
-  const domainConnect = diagnosis.remediation.domainConnect;
-  if (!domainConnect) {
-    return null;
-  }
-  const applyUrl = output.link(domainConnect.applyUrl, domainConnect.applyUrl, {
-    fallback: false,
-  });
-  return `Auto configure the DNS records with Cloudflare using Domain Connect:\n       ${applyUrl}\n\n       Open the URL to review and approve the DNS changes in Cloudflare.`;
-}
-
-function pointingStep(diagnosis: DomainDiagnosis): string | null {
-  const pointing = diagnosis.remediation.pointing;
-  if (!pointing) {
-    return null;
-  }
-  if (!pointing.options.length) {
-    return 'Point the domain to Vercel by setting the recommended DNS records for your project.';
+function configureDnsStep(
+  diagnosis: DomainDiagnosis,
+  step: Extract<RemediationStep, { kind: 'configure-dns' }>,
+  index: number
+): string {
+  if (!step.methods.length) {
+    const prefix = index > 0 ? 'Then point' : 'Point';
+    return `${prefix} the domain to Vercel by setting the recommended DNS records for your project.`;
   }
 
   const optionPhrase =
-    pointing.options.length === 1
+    step.methods.length === 1
       ? 'the following option'
       : 'one of the following options';
   const intro =
-    pointing.kind === 'point-domain'
-      ? `Point ${diagnosis.facts.domainName} to Vercel with ${optionPhrase}:`
-      : pointing.kind === 'recommended-change'
-        ? diagnosis.facts.ownership === 'current-scope' &&
-          diagnosis.facts.project.kind === 'none'
-          ? `No action is needed for an unused hostname. If ${diagnosis.facts.domainName} is intentionally in use, update its DNS records with ${optionPhrase}:`
-          : `Vercel recommends updating the DNS records for ${diagnosis.facts.domainName} with ${optionPhrase}:`
+    step.change === 'point-domain'
+      ? `${index > 0 ? 'Then point' : 'Point'} ${
+          diagnosis.facts.domainName
+        } to Vercel with ${optionPhrase}:`
+      : step.change === 'recommended-change'
+        ? `Vercel recommends updating the DNS records for ${diagnosis.facts.domainName} with ${optionPhrase}:`
         : `To avoid downtime, update the DNS records for ${diagnosis.facts.domainName} with ${optionPhrase}:`;
   const lines = [intro];
-  pointing.options.forEach((option, index) => {
-    const letter = String.fromCharCode(97 + index);
-    const title = pointingOptionTitle(option);
+  step.methods.forEach((method, methodIndex) => {
+    const letter = String.fromCharCode(97 + methodIndex);
+    const title = dnsMethodTitle(method);
     lines.push('', `${chalk.grey(`${letter})`)} ${title}`);
-    for (const record of pointingOptionRecords(option)) {
-      lines.push(`   ${chalk.cyan(record)}`);
+    for (const detail of dnsMethodDetails(method)) {
+      lines.push(`   ${detail}`);
     }
   });
   return lines.join('\n       ');
 }
 
-function pointingOptionTitle(option: PointingOption): string {
-  switch (option.kind) {
+function dnsMethodTitle(method: DnsMethod): string {
+  switch (method.kind) {
+    case 'domain-connect':
+      return `Auto configure with ${method.configuration.providerName} using Domain Connect:`;
     case 'a-records':
-      return option.records.length === 1
+      return method.records.length === 1
         ? 'Add an A record:'
         : 'Add A records:';
     case 'cname-records':
@@ -249,10 +255,27 @@ function pointingOptionTitle(option: PointingOption): string {
   }
 }
 
-function pointingOptionRecords(option: PointingOption): string[] {
-  return option.kind === 'nameservers'
-    ? option.nameservers
-    : option.records.map(formatDnsRecord);
+function dnsMethodDetails(method: DnsMethod): string[] {
+  switch (method.kind) {
+    case 'domain-connect': {
+      const applyUrl = output.link(
+        method.configuration.applyUrl,
+        method.configuration.applyUrl,
+        { fallback: false }
+      );
+      return [
+        applyUrl,
+        chalk.gray(
+          `Open the URL to review and approve the DNS changes in ${method.configuration.providerName}.`
+        ),
+      ];
+    }
+    case 'nameservers':
+      return method.nameservers.map(nameserver => chalk.cyan(nameserver));
+    case 'a-records':
+    case 'cname-records':
+      return method.records.map(record => chalk.cyan(formatDnsRecord(record)));
+  }
 }
 
 function formatDnsRecord(record: RecommendedDnsRecord): string {
@@ -263,59 +286,69 @@ function formatDnsRecord(record: RecommendedDnsRecord): string {
   return record.disableProxy ? `${columns}  (Proxy: Disabled)` : columns;
 }
 
-function dnssecStep(diagnosis: DomainDiagnosis): string | null {
-  return diagnosis.remediation.disableDnssec
-    ? "Disable DNSSEC with your domain registrar. The domain's nameservers point to Vercel, but DNSSEC prevents them from resolving globally."
-    : null;
+function conflictStep(
+  step: Extract<RemediationStep, { kind: 'remove-conflict' }>
+): string {
+  const { conflict } = step;
+  const caaHint =
+    conflict.type === 'CAA'
+      ? ' (it prevents Vercel from issuing TLS certificates)'
+      : '';
+  return `Remove the conflicting ${conflict.type} record ${code(
+    `${conflict.type} ${conflict.name} ${conflict.value}`
+  )}${caaHint}.`;
 }
 
-function conflictSteps(diagnosis: DomainDiagnosis): string[] {
-  return diagnosis.remediation.conflicts.map(conflict => {
-    const caaHint =
-      conflict.type === 'CAA'
-        ? ' (it prevents Vercel from issuing TLS certificates)'
-        : '';
-    return `Remove the conflicting ${conflict.type} record ${code(
-      `${conflict.type} ${conflict.name} ${conflict.value}`
-    )}${caaHint}.`;
-  });
-}
-
-function verificationSteps(diagnosis: DomainDiagnosis): string[] {
-  const verification = diagnosis.remediation.verification;
-  if (!verification) {
-    return [];
+function verificationStep(
+  step: Extract<RemediationStep, { kind: 'verify-ownership' }>
+): string {
+  if (!step.challenges.length) {
+    return step.errorMessage
+      ? `Retry domain ownership verification. ${chalk.gray(
+          `Last attempt: ${step.errorMessage}`
+        )}`
+      : 'Retry domain ownership verification for the project.';
   }
 
-  const steps = verification.challenges.map(
-    challenge =>
-      `Verify domain ownership by adding the following record to your DNS provider. You can remove it after verification is complete:\n       ${code(
-        `${challenge.type} ${challenge.domain} "${challenge.value}"`
-      )}`
-  );
-
-  if (verification.errorMessage) {
-    const message = `Last attempt: ${verification.errorMessage}`;
-    if (steps.length) {
-      steps[steps.length - 1] += `\n       ${chalk.gray(message)}`;
+  const lines = [
+    step.challenges.length === 1
+      ? 'Verify domain ownership by adding the following record to your DNS provider. You can remove it after verification is complete:'
+      : 'Verify domain ownership by adding one of the following records to your DNS provider. You can remove it after verification is complete:',
+  ];
+  for (const [index, challenge] of step.challenges.entries()) {
+    const record = code(
+      `${challenge.type} ${challenge.domain} "${challenge.value}"`
+    );
+    if (step.challenges.length === 1) {
+      lines.push(record);
     } else {
-      steps.push(message);
+      const letter = String.fromCharCode(97 + index);
+      lines.push('', `${chalk.grey(`${letter})`)} ${record}`);
     }
   }
-
-  return steps;
+  if (step.errorMessage) {
+    lines.push('', chalk.gray(`Last attempt: ${step.errorMessage}`));
+  }
+  return lines.join('\n       ');
 }
 
-function attachProjectStep(diagnosis: DomainDiagnosis): string | null {
-  const attachProject = diagnosis.remediation.attachProject;
-  if (attachProject && diagnosis.status === 'project-attachment-recommended') {
+function attachProjectStep(
+  diagnosis: DomainDiagnosis,
+  step: Extract<RemediationStep, { kind: 'attach-project' }>
+): string {
+  if (step.mode === 'recommended') {
     return `To use ${diagnosis.facts.domainName}, attach it to a project by running ${code(
-      attachProject.command
+      step.command
     )}.`;
   }
-  return attachProject
-    ? `Add the domain to the project by running ${code(attachProject.command)}.`
-    : null;
+  if (step.project === '<project>') {
+    return `Attach ${
+      diagnosis.facts.domainName
+    } to the project that should serve it by running ${code(
+      step.command
+    )}, replacing ${code('<project>')} with the target project.`;
+  }
+  return `Add the domain to the project by running ${code(step.command)}.`;
 }
 
 function renderResolvedValues(diagnosis: DomainDiagnosis): string | null {

@@ -53,39 +53,42 @@ export interface DomainIssue extends StatusDetails {
   domainStatus: Exclude<DomainStatus, 'configured-correctly'>;
 }
 
-export type PointingOption =
+export type DnsMethod =
+  | {
+      kind: 'domain-connect';
+      configuration: DomainConnectConfiguration;
+    }
   | {
       kind: 'a-records' | 'cname-records';
       records: RecommendedDnsRecord[];
     }
   | { kind: 'nameservers'; nameservers: string[] };
 
-export interface PointingRemediation {
-  kind: 'point-domain' | 'required-change' | 'recommended-change';
-  options: PointingOption[];
-}
-
-export interface VerificationRemediation {
-  challenges: ProjectDomainVerification[];
-  errorMessage: string | null;
-}
-
-export interface DomainRemediation {
-  scope: {
-    contextName: string;
-    teamsCommand: string;
-    verifyCommand: string;
-  } | null;
-  domainConnect: DomainConnectConfiguration | null;
-  pointing: PointingRemediation | null;
-  disableDnssec: boolean;
-  conflicts: DomainConfigConflict[];
-  verification: VerificationRemediation | null;
-  attachProject: {
-    project: string;
-    command: string;
-  } | null;
-}
+export type RemediationStep =
+  | {
+      kind: 'resolve-scope';
+      contextName: string;
+      teamsCommand: string;
+      verifyCommand: string;
+    }
+  | {
+      kind: 'attach-project';
+      mode: 'required' | 'recommended';
+      project: string;
+      command: string;
+    }
+  | {
+      kind: 'configure-dns';
+      change: 'point-domain' | 'required-change' | 'recommended-change';
+      methods: DnsMethod[];
+    }
+  | { kind: 'disable-dnssec' }
+  | { kind: 'remove-conflict'; conflict: DomainConfigConflict }
+  | {
+      kind: 'verify-ownership';
+      challenges: ProjectDomainVerification[];
+      errorMessage: string | null;
+    };
 
 export interface DomainDiagnosis {
   facts: VerificationFacts;
@@ -96,7 +99,7 @@ export interface DomainDiagnosis {
   details: StatusDetails;
   issues: DomainIssue[];
   recommendedDnsRecords: RecommendedDnsRecord[];
-  remediation: DomainRemediation;
+  steps: RemediationStep[];
   next: NextStep[];
 }
 
@@ -125,20 +128,15 @@ export function diagnoseDomain(
     shouldRecommendProjectAttachment(facts)
       ? null
       : getDomainConnectConfiguration(facts);
-  const remediation = buildRemediation(
+  const steps = buildSteps(
     facts,
     commands,
     recommendedDnsRecords,
     domainConnect
   );
-  const details = statusDetails(facts, status, domainConnect);
-  const issues = getDomainIssues(
-    facts,
-    status,
-    configurationStatus,
-    domainConnect
-  );
-  const next = buildNextSteps(facts, commands, status, domainConnect);
+  const details = statusDetails(facts, status, steps);
+  const issues = getDomainIssues(facts, status, configurationStatus, steps);
+  const next = buildNextSteps(steps, commands, status);
   const ok = isOkStatus(status);
 
   return {
@@ -150,7 +148,7 @@ export function diagnoseDomain(
     details,
     issues,
     recommendedDnsRecords,
-    remediation,
+    steps,
     next,
   };
 }
@@ -214,7 +212,7 @@ function getDomainIssues(
   facts: VerificationFacts,
   status: DomainStatus,
   configurationStatus: ConfigurationStatus,
-  domainConnect: DomainConnectConfiguration | null
+  steps: RemediationStep[]
 ): DomainIssue[] {
   const statuses: Array<Exclude<DomainStatus, 'configured-correctly'>> = [];
   const addStatus = (candidate: DomainStatus) => {
@@ -238,16 +236,18 @@ function getDomainIssues(
 
   return statuses.map(domainStatus => ({
     domainStatus,
-    ...statusDetails(facts, domainStatus, domainConnect),
+    ...statusDetails(facts, domainStatus, steps),
   }));
 }
 
 function statusDetails(
   facts: VerificationFacts,
   status: DomainStatus,
-  domainConnect: DomainConnectConfiguration | null
+  steps: RemediationStep[]
 ): StatusDetails {
   const { domainName, project } = facts;
+  const domainConnect = getDomainConnect(steps);
+  const attachProject = steps.find(step => step.kind === 'attach-project');
   switch (status) {
     case 'configured-correctly':
       return {
@@ -278,6 +278,25 @@ function statusDetails(
           message: `${domainName} has an invalid Vercel-managed DNS configuration.`,
           userActionRequired: true,
           hint: 'No DNS changes are required from you. Retry the check, then contact Vercel Support if the configuration remains invalid.',
+        };
+      }
+      if (attachProject?.kind === 'attach-project') {
+        const target =
+          attachProject.project === '<project>'
+            ? 'a project'
+            : `project ${attachProject.project}`;
+        const attachInstruction =
+          attachProject.project === '<project>'
+            ? 'Attach it to a project'
+            : 'Attach it';
+        return {
+          reason: AGENT_REASON.INVALID_CONFIGURATION,
+          message: `${domainName} is not attached to ${target} and has an invalid DNS configuration. ${attachInstruction} and apply the recommended DNS changes, then retry verification.`,
+          userActionRequired: true,
+          hint:
+            attachProject.project === '<project>'
+              ? 'Replace <project> in next[] with the project that should serve the domain, attach it, apply the recommended records or nameservers at the DNS provider, then run the suggested verify command.'
+              : 'Run the domains add command in next[], apply the recommended records or nameservers at the DNS provider, then run the suggested verify command.',
         };
       }
       return {
@@ -359,49 +378,61 @@ function dnsActionHint(
     : manualHint;
 }
 
-function buildRemediation(
+function buildSteps(
   facts: VerificationFacts,
   commands: DomainDiagnosisCommands,
   recommendedDnsRecords: RecommendedDnsRecord[],
   domainConnect: DomainConnectConfiguration | null
-): DomainRemediation {
+): RemediationStep[] {
   const scope = requiresScopeResolution(facts)
     ? {
+        kind: 'resolve-scope' as const,
         contextName: facts.contextName,
         teamsCommand: commands.teamsList,
         verifyCommand: commands.verify('<team>'),
       }
     : null;
   if (scope) {
-    return {
-      scope,
-      domainConnect: null,
-      pointing: null,
-      disableDnssec: false,
-      conflicts: [],
-      verification: null,
-      attachProject: null,
-    };
+    return [scope];
   }
+
+  const attachProject = buildAttachProjectStep(facts, commands);
   if (shouldRecommendProjectAttachment(facts)) {
-    const project = '<project>';
-    return {
-      scope: null,
-      domainConnect: null,
-      pointing: null,
-      disableDnssec: false,
-      conflicts: [],
-      verification: null,
-      attachProject: {
-        project,
-        command: commands.attachProject(project),
-      },
-    };
+    return attachProject ? [attachProject] : [];
   }
-  const pointing = buildPointingRemediation(facts, recommendedDnsRecords);
+
+  const steps: RemediationStep[] = [];
+  if (attachProject) {
+    steps.push(attachProject);
+  }
+
+  const configureDns = buildConfigureDnsStep(
+    facts,
+    recommendedDnsRecords,
+    domainConnect
+  );
+  if (configureDns) {
+    steps.push(configureDns);
+  }
+
+  if (
+    !isPlatformManagedDomain(facts) &&
+    facts.config.serviceType === 'zeit.world' &&
+    facts.config.dnssecEnabled
+  ) {
+    steps.push({ kind: 'disable-dnssec' });
+  }
+
+  if (!isPlatformManagedDomain(facts)) {
+    for (const conflict of facts.config.conflicts ?? []) {
+      steps.push({ kind: 'remove-conflict', conflict });
+    }
+  }
+
   const verification =
     facts.project.kind === 'attached' && !facts.project.domain.verified
       ? {
+          kind: 'verify-ownership' as const,
           challenges: facts.project.domain.verification ?? [],
           errorMessage: facts.project.verificationError
             ? facts.project.verificationError.serverMessage ||
@@ -409,34 +440,39 @@ function buildRemediation(
             : null,
         }
       : null;
-  const attachProject =
-    !scope && facts.project.kind === 'missing'
+  if (verification) {
+    steps.push(verification);
+  }
+
+  return steps;
+}
+
+function buildAttachProjectStep(
+  facts: VerificationFacts,
+  commands: DomainDiagnosisCommands
+): Extract<RemediationStep, { kind: 'attach-project' }> | null {
+  return needsProjectAttachment(facts)
+    ? {
+        kind: 'attach-project',
+        mode: facts.config.misconfigured ? 'required' : 'recommended',
+        project: '<project>',
+        command: commands.attachProject('<project>'),
+      }
+    : facts.project.kind === 'missing'
       ? {
+          kind: 'attach-project',
+          mode: 'required',
           project: facts.project.idOrName,
           command: commands.attachProject(facts.project.idOrName),
         }
       : null;
-
-  return {
-    scope,
-    domainConnect,
-    pointing,
-    disableDnssec:
-      !isPlatformManagedDomain(facts) &&
-      facts.config.serviceType === 'zeit.world' &&
-      Boolean(facts.config.dnssecEnabled),
-    conflicts: isPlatformManagedDomain(facts)
-      ? []
-      : (facts.config.conflicts ?? []),
-    verification,
-    attachProject,
-  };
 }
 
-function buildPointingRemediation(
+function buildConfigureDnsStep(
   facts: VerificationFacts,
-  recommendedDnsRecords: RecommendedDnsRecord[]
-): PointingRemediation | null {
+  recommendedDnsRecords: RecommendedDnsRecord[],
+  domainConnect: DomainConnectConfiguration | null
+): Extract<RemediationStep, { kind: 'configure-dns' }> | null {
   if (
     requiresScopeResolution(facts) ||
     isPlatformManagedDomain(facts) ||
@@ -446,80 +482,98 @@ function buildPointingRemediation(
     return null;
   }
 
-  const options: PointingOption[] = [];
+  const methods: DnsMethod[] = [];
+  if (domainConnect) {
+    methods.push({ kind: 'domain-connect', configuration: domainConnect });
+  }
   const aRecords = recommendedDnsRecords.filter(record => record.type === 'A');
   const cnameRecords = recommendedDnsRecords.filter(
     record => record.type === 'CNAME'
   );
   if (aRecords.length) {
-    options.push({ kind: 'a-records', records: aRecords });
+    methods.push({ kind: 'a-records', records: aRecords });
   }
   if (cnameRecords.length) {
-    options.push({ kind: 'cname-records', records: cnameRecords });
+    methods.push({ kind: 'cname-records', records: cnameRecords });
   }
   if (
     facts.intendedNameservers.length &&
     !nameserversMatch(facts.config.nameservers, facts.intendedNameservers)
   ) {
-    options.push({
+    methods.push({
       kind: 'nameservers',
       nameservers: [...facts.intendedNameservers],
     });
   }
 
   return {
-    kind:
+    kind: 'configure-dns',
+    change:
       facts.config.misconfigured && facts.config.configuredBy === null
         ? 'point-domain'
         : facts.config.ipStatus === 'optional-change' ||
             isOwnedUnattachedHostname(facts)
           ? 'recommended-change'
           : 'required-change',
-    options,
+    methods,
   };
 }
 
 function buildNextSteps(
-  facts: VerificationFacts,
+  steps: RemediationStep[],
   commands: DomainDiagnosisCommands,
-  status: DomainStatus,
-  domainConnect: DomainConnectConfiguration | null
+  status: DomainStatus
 ): NextStep[] {
-  if (requiresScopeResolution(facts)) {
-    return [
-      {
-        command: commands.teamsList,
-        when: 'List teams to find the scope that owns the domain',
-      },
-      {
-        command: commands.verify('<team>'),
-        when: 'Replace <team> with the owning team and retry',
-      },
-    ];
-  }
-  if (shouldRecommendProjectAttachment(facts)) {
-    return [
-      {
-        command: commands.attachProject('<project>'),
-        when: 'Replace <project> with the project that should serve the domain',
-      },
-    ];
+  const next: NextStep[] = [];
+  for (const step of steps) {
+    switch (step.kind) {
+      case 'resolve-scope':
+        next.push(
+          {
+            command: step.teamsCommand,
+            when: 'List teams to find the scope that owns the domain',
+          },
+          {
+            command: step.verifyCommand,
+            when: 'Replace <team> with the owning team and retry',
+          }
+        );
+        break;
+      case 'attach-project':
+        next.push({
+          command: step.command,
+          when:
+            step.project === '<project>'
+              ? 'Replace <project> with the project that should serve the domain'
+              : 'Attach the domain to the requested project',
+        });
+        break;
+      case 'configure-dns': {
+        const domainConnectMethod = step.methods.find(
+          method => method.kind === 'domain-connect'
+        );
+        if (domainConnectMethod?.kind === 'domain-connect') {
+          next.push({
+            command: commands.openUrl(
+              domainConnectMethod.configuration.applyUrl
+            ),
+            when: 'Open Cloudflare to review and apply the DNS changes automatically with Domain Connect',
+          });
+        }
+        break;
+      }
+      case 'disable-dnssec':
+      case 'remove-conflict':
+      case 'verify-ownership':
+        break;
+    }
   }
 
-  const next: NextStep[] = [];
-  if (facts.project.kind === 'missing') {
-    next.push({
-      command: commands.attachProject(facts.project.idOrName),
-      when: 'Attach the domain to the requested project',
-    });
-  }
-  if (domainConnect) {
-    next.push({
-      command: commands.openUrl(domainConnect.applyUrl),
-      when: 'Open Cloudflare to review and apply the DNS changes automatically with Domain Connect',
-    });
-  }
-  if (status !== 'configured-correctly') {
+  if (
+    !steps.some(step => step.kind === 'resolve-scope') &&
+    status !== 'configured-correctly' &&
+    status !== 'project-attachment-recommended'
+  ) {
     next.push({
       command: commands.verify(),
       when:
@@ -529,6 +583,23 @@ function buildNextSteps(
     });
   }
   return next;
+}
+
+function getDomainConnect(
+  steps: RemediationStep[]
+): DomainConnectConfiguration | null {
+  for (const step of steps) {
+    if (step.kind !== 'configure-dns') {
+      continue;
+    }
+    const method = step.methods.find(
+      candidate => candidate.kind === 'domain-connect'
+    );
+    if (method?.kind === 'domain-connect') {
+      return method.configuration;
+    }
+  }
+  return null;
 }
 
 function getRecommendedDnsRecords(
@@ -645,6 +716,13 @@ function isWildcardDomain(domainName: string): boolean {
 
 function isOwnedUnattachedHostname(facts: VerificationFacts): boolean {
   return facts.ownership === 'current-scope' && facts.project.kind === 'none';
+}
+
+function needsProjectAttachment(facts: VerificationFacts): boolean {
+  return (
+    facts.project.kind === 'none' &&
+    (facts.ownership === 'current-scope' || facts.ownership === 'not-found')
+  );
 }
 
 function shouldRecommendProjectAttachment(facts: VerificationFacts): boolean {

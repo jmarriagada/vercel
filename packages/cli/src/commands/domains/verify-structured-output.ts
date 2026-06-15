@@ -1,6 +1,6 @@
 import { AGENT_STATUS } from '../../util/agent-output-constants';
 import type { ProjectStatus } from './verify-acquisition';
-import type { DomainDiagnosis, NextStep } from './verify-diagnosis';
+import type { DnsMethod, DomainDiagnosis, NextStep } from './verify-diagnosis';
 
 export interface StructuredVerificationError {
   reason: string;
@@ -12,6 +12,14 @@ export interface StructuredVerificationError {
 export function renderStructuredOutput(diagnosis: DomainDiagnosis): string {
   const { facts } = diagnosis;
   const { config } = facts;
+  const dnsMethods = getDnsMethods(diagnosis);
+  const domainConnectMethod = dnsMethods.find(
+    method => method.kind === 'domain-connect'
+  );
+  const domainConnect =
+    domainConnectMethod?.kind === 'domain-connect'
+      ? domainConnectMethod.configuration
+      : null;
   const canRecommendDns =
     diagnosis.configurationStatus !== 'scope-resolution-required' &&
     diagnosis.configurationStatus !== 'project-attachment-recommended' &&
@@ -20,9 +28,7 @@ export function renderStructuredOutput(diagnosis: DomainDiagnosis): string {
     status: diagnosis.ok ? AGENT_STATUS.OK : AGENT_STATUS.ACTION_REQUIRED,
     ...diagnosis.details,
     ...(diagnosis.next.length ? { next: diagnosis.next } : {}),
-    ...(diagnosis.remediation.domainConnect
-      ? { domainConnect: diagnosis.remediation.domainConnect }
-      : {}),
+    ...(domainConnect ? { domainConnect } : {}),
     domain: facts.domainName,
     domainStatus: diagnosis.status,
     configurationStatus: diagnosis.configurationStatus,
@@ -43,9 +49,11 @@ export function renderStructuredOutput(diagnosis: DomainDiagnosis): string {
       ipv4: canRecommendDns ? (config.recommendedIPv4 ?? []) : [],
       cname: canRecommendDns ? (config.recommendedCNAME ?? []) : [],
       records: diagnosis.recommendedDnsRecords,
-      nameservers: getRecommendedNameservers(diagnosis),
+      nameservers: getRecommendedNameservers(dnsMethods),
     },
-    conflicts: diagnosis.remediation.conflicts,
+    conflicts: diagnosis.steps.flatMap(step =>
+      step.kind === 'remove-conflict' ? [step.conflict] : []
+    ),
     domainOwnership: facts.ownership,
     project: serializeProject(facts.project),
   };
@@ -68,13 +76,16 @@ export function renderStructuredError(
   )}\n`;
 }
 
-function getRecommendedNameservers(diagnosis: DomainDiagnosis): string[] {
-  const nameserverOption = diagnosis.remediation.pointing?.options.find(
-    option => option.kind === 'nameservers'
+function getDnsMethods(diagnosis: DomainDiagnosis): DnsMethod[] {
+  const step = diagnosis.steps.find(
+    candidate => candidate.kind === 'configure-dns'
   );
-  return nameserverOption?.kind === 'nameservers'
-    ? nameserverOption.nameservers
-    : [];
+  return step?.kind === 'configure-dns' ? step.methods : [];
+}
+
+function getRecommendedNameservers(methods: DnsMethod[]): string[] {
+  const method = methods.find(candidate => candidate.kind === 'nameservers');
+  return method?.kind === 'nameservers' ? method.nameservers : [];
 }
 
 function serializeProject(project: ProjectStatus) {

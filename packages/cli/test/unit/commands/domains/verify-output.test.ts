@@ -128,8 +128,13 @@ describe('domains verify output adapters', () => {
       disableProxy: true,
     });
     expect(humanText).toContain('Invalid Configuration');
-    expect(humanText).toContain('Auto configure');
+    expect(humanText).toContain(
+      'Point www.example.com to Vercel with one of the following options:'
+    );
+    expect(humanText).toContain('a) Auto configure with Cloudflare');
+    expect(humanText).toContain('b) Add a CNAME record');
     expect(humanText).toContain('cname.vercel-dns.com');
+    expect(humanText).toContain('2. Remove the conflicting CAA record');
     expect(humanText).toContain('Remove the conflicting CAA record');
     expect(diagnosis.exitCode).toBe(1);
   });
@@ -196,6 +201,116 @@ describe('domains verify output adapters', () => {
     expect(humanText).not.toContain('cname.vercel-dns.com');
     expect(humanText).not.toContain('Switch to the Vercel nameservers');
     expect(diagnosis.exitCode).toBe(0);
+  });
+
+  it('renders remediation steps for a configured domain without a project', () => {
+    const domainName = 'example.com';
+    const facts: VerificationFacts = {
+      domainName,
+      contextName: 'my-team',
+      teamId: 'team_123',
+      config: {
+        configuredBy: 'A',
+        misconfigured: false,
+        serviceType: 'external',
+        nameservers: ['ns1.provider.com', 'ns2.provider.com'],
+        cnames: [],
+        aValues: ['76.76.21.21'],
+        conflicts: [],
+        recommendedIPv4: [{ rank: 1, value: ['76.76.21.21'] }],
+        recommendedCNAME: [{ rank: 1, value: 'cname.vercel-dns.com' }],
+        ipStatus: 'no-change',
+      },
+      ownership: 'not-found',
+      intendedNameservers: [],
+      project: { kind: 'none' },
+    };
+    const diagnosis = diagnoseDomain(facts, {
+      teamsList: 'vercel teams ls',
+      verify: () => `vercel domains verify ${domainName}`,
+      attachProject: project => `vercel domains add ${domainName} ${project}`,
+      openUrl: url => `open '${url}'`,
+    });
+
+    const human = renderHumanOutput(diagnosis, '[10ms]');
+    const humanText = [human.lead.message, ...human.sections].join('\n');
+
+    expect(diagnosis.status).toBe('configured-correctly');
+    expect(human.lead.kind).toBe('log');
+    expect(humanText).toContain('Recommended change');
+    expect(humanText).toContain('To use example.com, attach it to a project');
+  });
+
+  it('orders project attachment before DNS changes for a new misconfigured domain', () => {
+    const domainName = 'example.com';
+    const facts: VerificationFacts = {
+      domainName,
+      contextName: 'my-team',
+      teamId: 'team_123',
+      config: {
+        configuredBy: null,
+        misconfigured: true,
+        serviceType: 'external',
+        nameservers: ['ns1.provider.com', 'ns2.provider.com'],
+        cnames: [],
+        aValues: ['1.2.3.4'],
+        conflicts: [],
+        recommendedIPv4: [{ rank: 1, value: ['76.76.21.21'] }],
+        recommendedCNAME: [{ rank: 1, value: 'cname.vercel-dns.com' }],
+        ipStatus: 'required-change',
+      },
+      ownership: 'not-found',
+      intendedNameservers: [],
+      project: { kind: 'none' },
+    };
+    const diagnosis = diagnoseDomain(facts, {
+      teamsList: 'vercel teams ls',
+      verify: () => `vercel domains verify ${domainName}`,
+      attachProject: project => `vercel domains add ${domainName} ${project}`,
+      openUrl: url => `open '${url}'`,
+    });
+
+    const structured = JSON.parse(renderStructuredOutput(diagnosis));
+    const human = renderHumanOutput(diagnosis, '[10ms]');
+    const humanText = [human.lead.message, ...human.sections].join('\n');
+    const attachIndex = humanText.indexOf(
+      `Attach ${domainName} to the project that should serve it`
+    );
+    const dnsIndex = humanText.indexOf(
+      `Then point ${domainName} to Vercel with the following option:`
+    );
+
+    expect(structured).toMatchObject({
+      status: 'action_required',
+      reason: 'invalid_configuration',
+      message:
+        'example.com is not attached to a project and has an invalid DNS configuration. Attach it to a project and apply the recommended DNS changes, then retry verification.',
+      domainStatus: 'invalid-configuration',
+      ok: false,
+      project: null,
+      next: [
+        {
+          command: 'vercel domains add example.com <project>',
+          when: 'Replace <project> with the project that should serve the domain',
+        },
+        {
+          command: 'vercel domains verify example.com',
+          when: 'Re-check after completing the required changes',
+        },
+      ],
+    });
+    expect(structured.recommended.records).toEqual([
+      {
+        type: 'A',
+        name: '@',
+        value: '76.76.21.21',
+      },
+    ]);
+    expect(attachIndex).toBeGreaterThanOrEqual(0);
+    expect(dnsIndex).toBeGreaterThan(attachIndex);
+    expect(humanText).toContain('vercel domains add example.com <project>');
+    expect(humanText).toContain('A      @  76.76.21.21');
+    expect(diagnosis.exitCode).toBe(1);
   });
 
   it('only asks for the owning scope when the domain is inaccessible', () => {
