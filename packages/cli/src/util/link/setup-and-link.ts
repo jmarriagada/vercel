@@ -804,8 +804,11 @@ export default async function setupAndLink(
       settings.rootDirectory = rootDirectory;
     }
 
+    // Strip `runtime` until the Vercel API accepts it.
+    const { runtime: _runtime, ...settingsForApi } = settings;
+
     const project = await createProject(client, {
-      ...settings,
+      ...settingsForApi,
       name: newProjectName,
       vercelAuth: vercelAuthSetting,
       v0,
