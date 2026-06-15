@@ -211,15 +211,19 @@ function pointingStep(diagnosis: DomainDiagnosis): string | null {
     return 'Point the domain to Vercel by setting the recommended DNS records for your project.';
   }
 
+  const optionPhrase =
+    pointing.options.length === 1
+      ? 'the following option'
+      : 'one of the following options';
   const intro =
     pointing.kind === 'point-domain'
-      ? `Point ${diagnosis.facts.domainName} to Vercel with one of the following options:`
+      ? `Point ${diagnosis.facts.domainName} to Vercel with ${optionPhrase}:`
       : pointing.kind === 'recommended-change'
         ? diagnosis.facts.ownership === 'current-scope' &&
           diagnosis.facts.project.kind === 'none'
-          ? `No action is needed for an unused hostname. If ${diagnosis.facts.domainName} is intentionally in use, update its DNS records with one of the following options:`
-          : `Vercel recommends updating the DNS records for ${diagnosis.facts.domainName} with one of the following options:`
-        : `To avoid downtime, update the DNS records for ${diagnosis.facts.domainName} with one of the following options:`;
+          ? `No action is needed for an unused hostname. If ${diagnosis.facts.domainName} is intentionally in use, update its DNS records with ${optionPhrase}:`
+          : `Vercel recommends updating the DNS records for ${diagnosis.facts.domainName} with ${optionPhrase}:`
+        : `To avoid downtime, update the DNS records for ${diagnosis.facts.domainName} with ${optionPhrase}:`;
   const lines = [intro];
   pointing.options.forEach((option, index) => {
     const letter = String.fromCharCode(97 + index);

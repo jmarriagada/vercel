@@ -5,6 +5,64 @@ import { renderHumanOutput } from '../../../../src/commands/domains/verify-human
 import { renderStructuredOutput } from '../../../../src/commands/domains/verify-structured-output';
 
 describe('domains verify output adapters', () => {
+  it('matches DNS option wording to the number of choices', () => {
+    const facts: VerificationFacts = {
+      domainName: 'example.com',
+      contextName: 'my-team',
+      teamId: 'team_123',
+      config: {
+        configuredBy: null,
+        misconfigured: true,
+        serviceType: 'external',
+        nameservers: ['ns1.provider.com', 'ns2.provider.com'],
+        cnames: [],
+        aValues: ['1.2.3.4'],
+        conflicts: [],
+        recommendedIPv4: [{ rank: 1, value: ['76.76.21.21'] }],
+        recommendedCNAME: [{ rank: 1, value: 'cname.vercel-dns.com' }],
+        ipStatus: 'required-change',
+      },
+      ownership: 'current-scope',
+      intendedNameservers: [],
+      project: {
+        kind: 'attached',
+        idOrName: 'my-site',
+        label: 'my-site',
+        domain: {
+          name: 'example.com',
+          apexName: 'example.com',
+          projectId: 'prj_123',
+          verified: true,
+        },
+        verificationError: null,
+      },
+    };
+    const render = (intendedNameservers: string[]) => {
+      const diagnosis = diagnoseDomain(
+        { ...facts, intendedNameservers },
+        {
+          teamsList: 'vercel teams ls',
+          verify: () => 'vercel domains verify example.com',
+          attachProject: project => `vercel domains add example.com ${project}`,
+          openUrl: url => `open '${url}'`,
+        }
+      );
+      const human = renderHumanOutput(diagnosis, '[10ms]');
+      return [human.lead.message, ...human.sections].join('\n');
+    };
+
+    const singular = render([]);
+    const plural = render(['ns1.vercel-dns.com', 'ns2.vercel-dns.com']);
+
+    expect(singular).toContain(
+      'Point example.com to Vercel with the following option:'
+    );
+    expect(singular).not.toContain('one of the following options');
+    expect(plural).toContain(
+      'Point example.com to Vercel with one of the following options:'
+    );
+  });
+
   it('formats the same diagnosis and remediation for humans and scripts', () => {
     const facts: VerificationFacts = {
       domainName: 'www.example.com',
