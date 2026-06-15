@@ -295,7 +295,7 @@ describe('domains verify diagnosis', () => {
     );
   });
 
-  it('recommends an IP migration for an owned hostname without a project', () => {
+  it('recommends project attachment for an owned hostname without a project', () => {
     const domainName = 'unused.example.com';
     const facts = verificationFacts({
       domainName,
@@ -313,25 +313,25 @@ describe('domains verify diagnosis', () => {
     const diagnosis = diagnose(facts);
 
     expect(diagnosis).toMatchObject({
-      status: 'dns-change-recommended',
-      configurationStatus: 'dns-change-recommended',
+      status: 'project-attachment-recommended',
+      configurationStatus: 'project-attachment-recommended',
       exitCode: 0,
+      details: {
+        reason: 'project_attachment_recommended',
+      },
       remediation: {
-        pointing: {
-          kind: 'recommended-change',
+        pointing: null,
+        attachProject: {
+          project: '<project>',
+          command: `vercel domains add ${domainName} <project>`,
         },
       },
     });
-    expect(diagnosis.remediation.pointing?.options).toEqual([
+    expect(diagnosis.recommendedDnsRecords).toEqual([]);
+    expect(diagnosis.next).toEqual([
       {
-        kind: 'cname-records',
-        records: [
-          {
-            type: 'CNAME',
-            name: 'unused',
-            value: 'cname.vercel-dns.com',
-          },
-        ],
+        command: `vercel domains add ${domainName} <project>`,
+        when: 'Replace <project> with the project that should serve the domain',
       },
     ]);
   });

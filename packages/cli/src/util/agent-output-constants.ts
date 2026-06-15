@@ -57,6 +57,7 @@ export const AGENT_REASON = {
   DNS_CHANGE_REQUIRED: 'dns_change_required',
   DNS_CHANGE_RECOMMENDED: 'dns_change_recommended',
   DNSSEC_NEEDS_TO_BE_DISABLED: 'dnssec_needs_to_be_disabled',
+  PROJECT_ATTACHMENT_RECOMMENDED: 'project_attachment_recommended',
   PROJECT_DOMAIN_MISSING: 'project_domain_missing',
   /** User must accept marketplace integration terms in the browser before install can continue. */
   INTEGRATION_TERMS_ACCEPTANCE_REQUIRED:

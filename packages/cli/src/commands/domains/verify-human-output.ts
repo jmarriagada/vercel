@@ -116,6 +116,8 @@ function dnsStatus(diagnosis: DomainDiagnosis): string {
       return bad('DNSSEC Needs to be Disabled');
     case 'dns-change-recommended':
       return warning('DNS Change Recommended');
+    case 'project-attachment-recommended':
+      return chalk.gray('Not assessed without a project');
     case 'scope-resolution-required':
       return chalk.gray('Not assessed in this scope');
     case 'configured-correctly':
@@ -302,6 +304,11 @@ function verificationSteps(diagnosis: DomainDiagnosis): string[] {
 
 function attachProjectStep(diagnosis: DomainDiagnosis): string | null {
   const attachProject = diagnosis.remediation.attachProject;
+  if (attachProject && diagnosis.status === 'project-attachment-recommended') {
+    return `No action is needed for an unused hostname. To use ${diagnosis.facts.domainName}, replace ${code(
+      '<project>'
+    )} with the target project and run ${code(attachProject.command)}.`;
+  }
   return attachProject
     ? `Add the domain to the project by running ${code(attachProject.command)}.`
     : null;

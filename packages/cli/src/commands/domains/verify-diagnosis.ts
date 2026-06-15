@@ -14,6 +14,7 @@ export type DomainStatus =
   | 'dnssec-needs-to-be-disabled'
   | 'dns-change-required'
   | 'dns-change-recommended'
+  | 'project-attachment-recommended'
   | 'scope-resolution-required'
   | 'project-domain-missing';
 
@@ -114,12 +115,14 @@ export function diagnoseDomain(
   const status = getDomainStatus(configurationStatus, facts.project);
   const recommendedDnsRecords =
     configurationStatus === 'scope-resolution-required' ||
-    isPlatformManagedDomain(facts)
+    isPlatformManagedDomain(facts) ||
+    shouldRecommendProjectAttachment(facts)
       ? []
       : getRecommendedDnsRecords(facts);
   const domainConnect =
     configurationStatus === 'scope-resolution-required' ||
-    isPlatformManagedDomain(facts)
+    isPlatformManagedDomain(facts) ||
+    shouldRecommendProjectAttachment(facts)
       ? null
       : getDomainConnectConfiguration(facts);
   const remediation = buildRemediation(
@@ -161,6 +164,9 @@ function getConfigurationStatus(facts: VerificationFacts): ConfigurationStatus {
     return config.misconfigured
       ? 'invalid-configuration'
       : 'configured-correctly';
+  }
+  if (shouldRecommendProjectAttachment(facts)) {
+    return 'project-attachment-recommended';
   }
   if (config.serviceType === 'zeit.world' && config.dnssecEnabled) {
     return 'dnssec-needs-to-be-disabled';
@@ -303,13 +309,6 @@ function statusDetails(
         ),
       };
     case 'dns-change-recommended':
-      if (isOwnedUnattachedHostname(facts)) {
-        return {
-          reason: AGENT_REASON.DNS_CHANGE_RECOMMENDED,
-          message: `${domainName} is not attached to a project. If the hostname is intentionally in use, Vercel recommends updating its DNS records.`,
-          hint: 'No action is needed for an unused hostname. If it is in use, apply the recommended DNS update, then re-check.',
-        };
-      }
       return {
         reason: AGENT_REASON.DNS_CHANGE_RECOMMENDED,
         message: `${domainName} has a valid configuration, but Vercel recommends updating its DNS records.`,
@@ -318,6 +317,12 @@ function statusDetails(
           domainConnect,
           'The domain is working. Apply the recommended DNS update when convenient, then re-check.'
         ),
+      };
+    case 'project-attachment-recommended':
+      return {
+        reason: AGENT_REASON.PROJECT_ATTACHMENT_RECOMMENDED,
+        message: `${domainName} is owned by ${facts.contextName} but is not attached to a project.`,
+        hint: 'No action is needed for an unused hostname. To use it, replace <project> in next[] with the project that should serve the domain.',
       };
     case 'scope-resolution-required':
       return {
@@ -378,6 +383,21 @@ function buildRemediation(
       attachProject: null,
     };
   }
+  if (shouldRecommendProjectAttachment(facts)) {
+    const project = '<project>';
+    return {
+      scope: null,
+      domainConnect: null,
+      pointing: null,
+      disableDnssec: false,
+      conflicts: [],
+      verification: null,
+      attachProject: {
+        project,
+        command: commands.attachProject(project),
+      },
+    };
+  }
   const pointing = buildPointingRemediation(facts, recommendedDnsRecords);
   const verification =
     facts.project.kind === 'attached' && !facts.project.domain.verified
@@ -420,6 +440,7 @@ function buildPointingRemediation(
   if (
     requiresScopeResolution(facts) ||
     isPlatformManagedDomain(facts) ||
+    shouldRecommendProjectAttachment(facts) ||
     !needsDnsRecordChange(facts.config)
   ) {
     return null;
@@ -473,6 +494,14 @@ function buildNextSteps(
       {
         command: commands.verify('<team>'),
         when: 'Replace <team> with the owning team and retry',
+      },
+    ];
+  }
+  if (shouldRecommendProjectAttachment(facts)) {
+    return [
+      {
+        command: commands.attachProject('<project>'),
+        when: 'Replace <project> with the project that should serve the domain',
       },
     ];
   }
@@ -595,7 +624,9 @@ function needsDnsRecordChange(config: DomainConfigV6): boolean {
 
 function isOkStatus(status: DomainStatus): boolean {
   return (
-    status === 'configured-correctly' || status === 'dns-change-recommended'
+    status === 'configured-correctly' ||
+    status === 'dns-change-recommended' ||
+    status === 'project-attachment-recommended'
   );
 }
 
@@ -614,6 +645,14 @@ function isWildcardDomain(domainName: string): boolean {
 
 function isOwnedUnattachedHostname(facts: VerificationFacts): boolean {
   return facts.ownership === 'current-scope' && facts.project.kind === 'none';
+}
+
+function shouldRecommendProjectAttachment(facts: VerificationFacts): boolean {
+  return (
+    isOwnedUnattachedHostname(facts) &&
+    !facts.config.misconfigured &&
+    !(facts.config.serviceType === 'zeit.world' && facts.config.dnssecEnabled)
+  );
 }
 
 function requiresScopeResolution(facts: VerificationFacts): boolean {

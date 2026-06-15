@@ -50,6 +50,17 @@ function useOwnedDomainNotFound(domain = DOMAIN) {
   });
 }
 
+function useOwnedDomain(domain = DOMAIN) {
+  client.scenario.get(`/v4/domains/${domain}`, (_req, res) => {
+    res.json({
+      domain: {
+        name: domain,
+        intendedNameservers: ['ns1.vercel-dns.com', 'ns2.vercel-dns.com'],
+      },
+    });
+  });
+}
+
 function useNoProjectDomain(domain = DOMAIN) {
   client.scenario.get(`/project-domains/${domain}`, (_req, res) => {
     res.status(404).json({
@@ -352,6 +363,34 @@ describe('domains verify', () => {
     expect(commandOutput).not.toContain('Ownership');
     expect(commandOutput).not.toContain('CNAME');
     expect(ownershipRequests).toBe(0);
+  });
+
+  it('recommends adding an owned unattached hostname to a project', async () => {
+    const domainName = 'unused.example.com';
+    useDomainConfigFor(domainName, {
+      configuredBy: 'http',
+      serviceType: 'zeit.world',
+      nameservers: ['ns2.vercel-dns.com', 'ns1.vercel-dns.com'],
+      aValues: ['64.29.17.1', '216.198.79.1'],
+      ipStatus: 'required-change',
+    });
+    useOwnedDomain(domainName);
+    useNoProjectDomain(domainName);
+
+    client.setArgv('domains', 'verify', domainName);
+    expect(await domains(client)).toBe(0);
+
+    const commandOutput = client.stderr.getFullOutput();
+    expect(commandOutput).toContain('Not assessed without a project');
+    expect(commandOutput).toContain(
+      `vercel domains add ${domainName} <project>`
+    );
+    expect(commandOutput).toContain(
+      'No action is needed for an unused hostname'
+    );
+    expect(commandOutput).not.toContain('DNS Change Recommended');
+    expect(commandOutput).not.toContain('Add a CNAME record');
+    expect(commandOutput).not.toContain('cname.vercel-dns.com');
   });
 
   it('passes --strict to the config endpoint', async () => {

@@ -14,6 +14,7 @@ export function renderStructuredOutput(diagnosis: DomainDiagnosis): string {
   const { config } = facts;
   const canRecommendDns =
     diagnosis.configurationStatus !== 'scope-resolution-required' &&
+    diagnosis.configurationStatus !== 'project-attachment-recommended' &&
     facts.ownership !== 'platform-managed';
   const payload = {
     status: diagnosis.ok ? AGENT_STATUS.OK : AGENT_STATUS.ACTION_REQUIRED,

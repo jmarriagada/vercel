@@ -76,7 +76,7 @@ describe('domains verify output adapters', () => {
     expect(diagnosis.exitCode).toBe(1);
   });
 
-  it('does not require DNS changes for an unused owned hostname', () => {
+  it('recommends project attachment for an unused owned hostname', () => {
     const facts: VerificationFacts = {
       domainName: 'unused.example.com',
       contextName: 'my-team',
@@ -111,17 +111,26 @@ describe('domains verify output adapters', () => {
 
     expect(structured).toMatchObject({
       status: 'ok',
-      reason: 'dns_change_recommended',
-      domainStatus: 'dns-change-recommended',
-      configurationStatus: 'dns-change-recommended',
+      reason: 'project_attachment_recommended',
+      domainStatus: 'project-attachment-recommended',
+      configurationStatus: 'project-attachment-recommended',
       ok: true,
       recommended: {
+        ipv4: [],
+        cname: [],
+        records: [],
         nameservers: [],
       },
     });
-    expect(humanText).toContain('DNS Change Recommended');
+    expect(humanText).toContain('Not assessed without a project');
     expect(humanText).toContain('No action is needed for an unused hostname');
+    expect(humanText).toContain(
+      'vercel domains add unused.example.com <project>'
+    );
+    expect(humanText).not.toContain('DNS Change Recommended');
     expect(humanText).not.toContain('avoid downtime');
+    expect(humanText).not.toContain('Add a CNAME record');
+    expect(humanText).not.toContain('cname.vercel-dns.com');
     expect(humanText).not.toContain('Switch to the Vercel nameservers');
     expect(diagnosis.exitCode).toBe(0);
   });

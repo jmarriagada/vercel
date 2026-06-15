@@ -194,13 +194,18 @@ function buildDiagnosisCommands(
   return {
     teamsList: buildTeamsListCommand(client),
     verify: scopeOverride => buildVerifyCommand(client, options, scopeOverride),
-    attachProject: projectIdOrName =>
-      buildCommandWithGlobalFlags(
+    attachProject: projectIdOrName => {
+      const projectArgument =
+        projectIdOrName === '<project>'
+          ? projectIdOrName
+          : shellQuoteCommandArg(projectIdOrName);
+      return buildCommandWithGlobalFlags(
         client.argv,
         `domains add ${shellQuoteCommandArg(
           options.domainName
-        )} ${shellQuoteCommandArg(projectIdOrName)}`
-      ),
+        )} ${projectArgument}`
+      );
+    },
     openUrl: openUrlInBrowserCommand,
   };
 }
