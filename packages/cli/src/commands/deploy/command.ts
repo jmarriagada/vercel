@@ -263,6 +263,14 @@ export const deployCommand = {
       description: "Don't wait for the deployment to finish",
     },
     {
+      name: 'dry-run',
+      shorthand: null,
+      type: Boolean,
+      deprecated: false,
+      description:
+        'Show the source files that would be included without uploading or creating a deployment',
+    },
+    {
       name: 'skip-domain',
       shorthand: null,
       type: Boolean,
