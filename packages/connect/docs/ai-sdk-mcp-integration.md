@@ -236,7 +236,7 @@ durable store. So there is no long-lived function-timeout exposure.
 },
 "peerDependencies": {
   "@ai-sdk/mcp": "^1 || ^2",   // OAuthClientProvider interface is identical across 1.x/2.x
-  "ai": "^6 || ^7"             // works with both major lines
+  "ai": "^6 || ^7.0.0-0"       // works with 6.x, stable 7.x, and 7.0 prereleases
 },
 "peerDependenciesMeta": {
   "@ai-sdk/mcp": { "optional": true },
