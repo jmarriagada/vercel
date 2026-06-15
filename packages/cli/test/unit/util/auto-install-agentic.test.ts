@@ -262,7 +262,7 @@ describe('buildClaudePromptCopy', () => {
 });
 
 describe('autoInstallVercelPlugin', () => {
-  let fetchSpy: ReturnType<typeof vi.spyOn>;
+  let fetchSpy: { mockRestore(): void };
 
   beforeEach(() => {
     fetchSpy = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('no'));
