@@ -537,6 +537,51 @@ describe('deploy', () => {
     ]);
   });
 
+  it('should not send the legacy `public` field when `--public` is used', async () => {
+    const user = useUser();
+    useTeams('team_dummy');
+    useProject({
+      ...defaultProject,
+      name: 'static',
+      id: 'static',
+    });
+
+    let body: any;
+    client.scenario.post(`/v13/deployments`, (req, res) => {
+      body = req.body;
+      res.json({
+        creator: {
+          uid: user.id,
+          username: user.username,
+        },
+        id: 'dpl_public_test',
+      });
+    });
+    client.scenario.get(`/v13/deployments/dpl_public_test`, (req, res) => {
+      res.json({
+        creator: {
+          uid: user.id,
+          username: user.username,
+        },
+        id: 'dpl_public_test',
+        readyState: 'READY',
+        aliasAssigned: true,
+        alias: [],
+      });
+    });
+
+    client.cwd = setupUnitFixture('commands/deploy/static');
+    client.setArgv('deploy', '--public');
+    const exitCode = await deploy(client);
+    expect(exitCode).toEqual(0);
+    expect(body).not.toHaveProperty('public');
+    expect(client.telemetryEventStore).toHaveTelemetryEvents([
+      { key: 'flag:public', value: 'TRUE' },
+      { key: 'target_environment', value: 'preview' },
+      { key: 'output:deployment-id', value: 'dpl_public_test' },
+    ]);
+  });
+
   it('should upload missing files', async () => {
     const cwd = setupUnitFixture('commands/deploy/static');
     client.cwd = cwd;

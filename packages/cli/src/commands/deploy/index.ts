@@ -447,9 +447,6 @@ async function handleInitDeployment(
       vercelOutputDir: undefined,
       rootDirectory,
       quiet,
-      wantsPublic: Boolean(
-        parsedArguments.flags['--public'] || localConfig.public
-      ),
       nowConfig: {
         ...localConfig,
         images: undefined,
@@ -1364,9 +1361,6 @@ async function handleDefaultDeploy(
       vercelOutputDir,
       rootDirectory,
       quiet,
-      wantsPublic: Boolean(
-        parsedArguments.flags['--public'] || localConfig.public
-      ),
       nowConfig: {
         ...localConfig,
         images: undefined,

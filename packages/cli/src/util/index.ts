@@ -33,7 +33,6 @@ export interface CreateOptions {
   // Latest
   name: string;
   project?: string;
-  wantsPublic: boolean;
   prebuilt?: boolean;
   vercelOutputDir?: string;
   rootDirectory?: string | null;
@@ -115,7 +114,6 @@ export default class Now {
       prebuilt = false,
       vercelOutputDir,
       rootDirectory,
-      wantsPublic,
       meta,
       gitMetadata,
       regions,
@@ -141,11 +139,13 @@ export default class Now {
   ) {
     const hashes: any = {};
 
+    const config = { ...nowConfig };
+    delete config.public;
+
     const requestBody = {
-      ...nowConfig,
+      ...config,
       env,
       build,
-      public: wantsPublic || nowConfig.public,
       name,
       project,
       meta,
