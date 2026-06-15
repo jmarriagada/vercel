@@ -1,5 +1,44 @@
 # @vercel/python
 
+## 6.45.0
+
+### Minor Changes
+
+- d712d41: Override uv's exclude-newer when install vercel-runtime/vercel-workers
+- dbb31fc: Override uv's exclude-newer when installing vercel-runtime/vercel-workers for dev server
+
+### Patch Changes
+
+- f7f0003: Refactor dev server dep injection to not be so duplicated
+
+## 6.44.1
+
+### Patch Changes
+
+- 4637f0a: Force Python bytecode precompilation to rewrite existing `.pyc` files with unchecked-hash invalidation.
+- c5d53d7: Use the in-repo `python/vercel-runtime` and `python/vercel-workers` source as the install target during monorepo `vercel build` runs (mirroring the existing dev-server behavior). This prevents CLI unit tests from depending on a PyPI release of a version that has not been published yet — the case that breaks Version Packages PRs that bump these packages.
+
+## 6.44.0
+
+### Minor Changes
+
+- 4f782b1: Support bytecode compilation for hive deployment path.
+
+## 6.43.3
+
+### Patch Changes
+
+- 0e04bc5: Reduce lambda threshold bytes when VERCEL_DEPLOYMENT_HAS_OTEL_LAYER is set.
+
+  When the deployments use the otel collector it can push the deployment over the limit since we don't account
+  for the size overhead added by this layer. Reduce the total uncompressed size for these types of deployments.
+
+## 6.43.2
+
+### Patch Changes
+
+- 1318682: minor performance improvements
+
 ## 6.43.1
 
 ### Patch Changes

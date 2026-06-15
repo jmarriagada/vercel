@@ -6,7 +6,9 @@ import {
   BuildResultV2Typical,
   debug,
   execCommand,
+  generateProjectManifest,
   getEnvForPackageManager,
+  getReportedServiceType,
   getNodeVersion,
   glob,
   runNpmInstall,
@@ -19,11 +21,14 @@ import {
 import {
   findPrerenderedHtmlFile,
   getPathFromRoute,
+  getPrerenderDocumentRewrite,
+  getReactRouterCatchAllDest,
   getReactRouterDataPaths,
   getRegExpFromPath,
   getPackageVersion,
   hasScript,
   logNftWarnings,
+  shouldRegisterSsrForPrerenderedRoute,
 } from './utils';
 import type { BuildV2, Files, NodeVersion } from '@vercel/build-utils';
 
@@ -285,6 +290,7 @@ export const build: BuildV2 = async ({
   repoRootPath,
   config,
   meta = {},
+  service,
 }) => {
   const { installCommand, buildCommand } = config;
   const mountpoint = dirname(entrypoint);
@@ -305,6 +311,7 @@ export const build: BuildV2 = async ({
 
   const {
     cliType,
+    lockfilePath,
     lockfileVersion,
     packageJson,
     packageJsonPackageManager,
@@ -337,6 +344,22 @@ export const build: BuildV2 = async ({
       { env: spawnEnv },
       meta,
       config.projectSettings?.createdAt
+    );
+  }
+
+  try {
+    await generateProjectManifest({
+      workPath: entrypointFsDirname,
+      nodeVersion,
+      cliType,
+      lockfilePath,
+      lockfileVersion,
+      framework: config.framework ?? undefined,
+      serviceType: service ? getReportedServiceType(service) : undefined,
+    });
+  } catch (err) {
+    debug(
+      `Failed to write remix manifest: ${err instanceof Error ? err.message : String(err)}`
     );
   }
 
@@ -523,6 +546,7 @@ export const build: BuildV2 = async ({
   const prerenderRewrites: { src: string; dest: string }[] = [];
 
   const routes: any[] = [];
+  let hasReactRouterIndexFunction = false;
 
   for (const [id, functionId] of Object.entries(
     buildManifest.routeIdToServerBundleId ?? {}
@@ -542,19 +566,24 @@ export const build: BuildV2 = async ({
     // but we skip the per-route overrides that would shadow the prerender
     // artifacts. `<path>.data` files are emitted as-is by RR and already
     // present in `output` from the static glob, so they resolve naturally.
+    //
+    // The index route is special: even when prerendered, we still register
+    // its SSR function so the catch-all can handle internal runtime routes
+    // like `/__manifest` (which return JSON, not prerendered HTML). A
+    // pre-filesystem rewrite maps `/` to `/index.html` so document requests
+    // still serve the prerender artifact instead of invoking the function.
     if (isReactRouter) {
       const htmlFile = findPrerenderedHtmlFile(path, staticFileKeys);
       if (htmlFile) {
-        if (path !== 'index') {
-          // BOA's filesystem handle matches keys exactly, so requests for
-          // `/about` won't auto-resolve `about.html`. Add an explicit
-          // rewrite that runs before the filesystem handle.
-          prerenderRewrites.push({
-            src: `^/${path}/?$`,
-            dest: `/${htmlFile}`,
-          });
+        // BOA's filesystem handle matches keys exactly, so requests for
+        // `/about` won't auto-resolve `about.html`. Add an explicit rewrite
+        // that runs before the filesystem handle. The root route needs the
+        // same treatment: without it, the catch-all `/(.*) -> index` would
+        // serve the prerendered homepage for runtime-only paths.
+        prerenderRewrites.push(getPrerenderDocumentRewrite(path, htmlFile));
+        if (!shouldRegisterSsrForPrerenderedRoute(path)) {
+          continue;
         }
-        continue;
       }
     }
 
@@ -565,11 +594,17 @@ export const build: BuildV2 = async ({
 
     output[path] = func;
     if (isReactRouter) {
+      if (path === 'index') {
+        hasReactRouterIndexFunction = true;
+      }
       // Emit parallel entries so the filesystem handle resolves the
       // single-fetch URL(s) for this route to the same bundle. Note that
       // the root index route uses `/_root.data` rather than `/index.data`.
+      // Skip keys that already have prerendered static artifacts.
       for (const dataPath of getReactRouterDataPaths(path)) {
-        output[dataPath] = func;
+        if (!staticFileKeys.has(dataPath)) {
+          output[dataPath] = func;
+        }
       }
     }
 
@@ -603,9 +638,16 @@ export const build: BuildV2 = async ({
 
   // For the 404 case, invoke the Function (or serve the static file
   // for `ssr: false` mode) at the `/` path. Remix will serve its 404 route.
+  // React Router SSR builds use the `index` output key (not `/`) so
+  // runtime-only paths like `/__manifest` reach the SSR handler instead of a
+  // prerendered `index.html`. SPA builds do not emit that function, so their
+  // catch-all must continue to resolve through `/` and serve `index.html`.
   routes.push({
     src: '/(.*)',
-    dest: '/',
+    dest:
+      isReactRouter && hasReactRouterIndexFunction
+        ? getReactRouterCatchAllDest()
+        : '/',
   });
 
   // Routes to call after a file has been matched.

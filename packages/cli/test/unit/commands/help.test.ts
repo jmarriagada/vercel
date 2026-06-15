@@ -271,10 +271,30 @@ describe('help command', () => {
         ).toMatchSnapshot();
       });
     });
+    describe('domains check help output snapshots', () => {
+      it('domains check help column width 120', () => {
+        expect(
+          help(domains.checkSubcommand, {
+            columns: 120,
+            parent: domains.domainsCommand,
+          })
+        ).toMatchSnapshot();
+      });
+    });
     describe('domains price help output snapshots', () => {
       it('domains price help column width 120', () => {
         expect(
           help(domains.priceSubcommand, {
+            columns: 120,
+            parent: domains.domainsCommand,
+          })
+        ).toMatchSnapshot();
+      });
+    });
+    describe('domains search help output snapshots', () => {
+      it('domains search help column width 120', () => {
+        expect(
+          help(domains.searchSubcommand, {
             columns: 120,
             parent: domains.domainsCommand,
           })
@@ -548,6 +568,16 @@ describe('help command', () => {
         ).toMatchSnapshot();
       });
     });
+    describe('integration categories subcommand', () => {
+      it('integration categories subcommand help column width 120', () => {
+        expect(
+          help(integration.categoriesSubcommand, {
+            columns: 120,
+            parent: integration.integrationCommand,
+          })
+        ).toMatchSnapshot();
+      });
+    });
     describe('integration guide subcommand', () => {
       it('integration guide subcommand help column width 120', () => {
         expect(
@@ -809,7 +839,10 @@ describe('help command', () => {
     describe('rollback status help output snapshots', () => {
       it('rollback status help column width 120', () => {
         expect(
-          help(rollback.rollbackCommand, { columns: 120 })
+          help(rollback.statusSubcommand, {
+            columns: 120,
+            parent: rollback.rollbackCommand,
+          })
         ).toMatchSnapshot();
       });
     });

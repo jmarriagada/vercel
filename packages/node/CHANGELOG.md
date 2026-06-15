@@ -1,5 +1,103 @@
 # @vercel/node
 
+## 5.8.17
+
+### Patch Changes
+
+- Updated dependencies [01e18e8]
+  - @vercel/build-utils@13.30.0
+
+## 5.8.16
+
+### Patch Changes
+
+- Updated dependencies [32a730e]
+  - @vercel/build-utils@13.29.1
+
+## 5.8.15
+
+### Patch Changes
+
+- Updated dependencies [8d8e871]
+  - @vercel/build-utils@13.29.0
+
+## 5.8.14
+
+### Patch Changes
+
+- Updated dependencies [4e849dd]
+  - @vercel/build-utils@13.28.0
+
+## 5.8.13
+
+### Patch Changes
+
+- Updated dependencies [c5eeb30]
+- Updated dependencies [09c39af]
+  - @vercel/build-utils@13.27.2
+
+## 5.8.12
+
+### Patch Changes
+
+- Updated dependencies [0a170fd]
+  - @vercel/build-utils@13.27.1
+
+## 5.8.11
+
+### Patch Changes
+
+- Updated dependencies [338cc35]
+  - @vercel/build-utils@13.27.0
+
+## 5.8.10
+
+### Patch Changes
+
+- Updated dependencies [3019788]
+- Updated dependencies [fe893ec]
+- Updated dependencies [fddeb55]
+  - @vercel/build-utils@13.26.6
+  - @vercel/error-utils@2.2.0
+
+## 5.8.9
+
+### Patch Changes
+
+- Updated dependencies [1180675]
+  - @vercel/build-utils@13.26.5
+
+## 5.8.8
+
+### Patch Changes
+
+- ab0e5aa: Bump @vercel/nft to 1.10.0 and enable moduleSyncCatchall tracing in node, backends, and next builders.
+
+## 5.8.7
+
+### Patch Changes
+
+- Updated dependencies [6495585]
+  - @vercel/build-utils@13.26.4
+
+## 5.8.6
+
+### Patch Changes
+
+- eecd10d: Allow opting into the Web API handler interface (`Request` → `Response`) from the static `config` export of a Node.js Serverless Function by setting `useWebApi: true`.
+- Updated dependencies [b66bd3e]
+- Updated dependencies [eecd10d]
+  - @vercel/build-utils@13.26.3
+  - @vercel/static-config@3.4.0
+
+## 5.8.5
+
+### Patch Changes
+
+- ecf5033: Pass service type and framework to node manifest.
+- Updated dependencies [647c1e8]
+  - @vercel/build-utils@13.26.2
+
 ## 5.8.4
 
 ### Patch Changes

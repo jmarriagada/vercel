@@ -1,5 +1,17 @@
 # vercel-runtime
 
+## 0.14.2
+
+### Patch Changes
+
+- 76aeb97: Decode `Transfer-Encoding: chunked` WSGI request bodies that arrive without a `Content-Length`, and strip the hop-by-hop framing header from the WSGI environ (PEP 3333).
+
+## 0.14.1
+
+### Patch Changes
+
+- 1318682: minor performance improvements
+
 ## 0.14.0
 
 ### Minor Changes

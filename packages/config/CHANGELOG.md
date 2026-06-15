@@ -1,5 +1,18 @@
 # @vercel/router-sdk
 
+## 0.5.2
+
+### Patch Changes
+
+- Updated dependencies [90a7cc1]
+  - @vercel/routing-utils@6.3.0
+
+## 0.5.1
+
+### Patch Changes
+
+- 6495585: [services] drop top-level `env` support for the new `service-ref` shape for services.
+
 ## 0.5.0
 
 ### Minor Changes

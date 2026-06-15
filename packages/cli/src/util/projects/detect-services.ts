@@ -41,9 +41,10 @@ async function hasExperimentalServicesConfig(cwd: string): Promise<boolean> {
     );
     if (!config || config instanceof Error) return false;
     return (
-      (config.services != null && typeof config.services === 'object') ||
       (config.experimentalServices != null &&
-        typeof config.experimentalServices === 'object')
+        typeof config.experimentalServices === 'object') ||
+      (config.experimentalServicesV2 != null &&
+        typeof config.experimentalServicesV2 === 'object')
     );
   } catch {
     return false;
@@ -75,7 +76,7 @@ export async function tryDetectServices(
 
   // No services configured
   const hasNoServicesError = result.errors.some(
-    e => e.code === 'NO_SERVICES_CONFIGURED'
+    e => e.code === 'NO_EXPERIMENTAL_SERVICES_CONFIGURED'
   );
   if (hasNoServicesError) {
     return null;
@@ -203,9 +204,9 @@ function getServicesConfigWriteBlockerFromError(
   error: unknown
 ): ServicesConfigWriteBlocker | null {
   switch ((error as { code?: string })?.code) {
-    case 'SERVICES_AND_BUILDS':
+    case 'EXPERIMENTAL_SERVICES_AND_BUILDS':
       return 'builds';
-    case 'SERVICES_AND_FUNCTIONS':
+    case 'EXPERIMENTAL_SERVICES_AND_FUNCTIONS':
       return 'functions';
     default:
       return null;

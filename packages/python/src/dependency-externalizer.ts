@@ -29,11 +29,46 @@ import {
   UV_BUNDLE_DIR,
 } from './uv';
 import { detectTargetPlatform } from './platform-info';
+import { derivePycPath, type BytecodeCollectionResult } from './compileall';
 
 const readFile = promisify(fs.readFile);
 
-// AWS Lambda uncompressed size limit is 250MB, but we use 245MB to leave room for Lambda layers
-export const LAMBDA_SIZE_THRESHOLD_BYTES = 245 * 1024 * 1024;
+/**
+ * Files that are never needed at runtime and can be safely stripped from the
+ * vendor directory to reduce bundle size:
+ *
+ * - `*.pyi`          – type stubs for static type checkers
+ * - `py.typed`       – PEP 561 marker for typed packages
+ * - `WHEEL`          – wheel format metadata (installer use only)
+ * - `INSTALLER`      – records which tool installed the package
+ * - `direct_url.json`– PEP 610 install provenance
+ */
+const STRIP_BASENAMES = new Set([
+  'py.typed',
+  'WHEEL',
+  'INSTALLER',
+  'direct_url.json',
+]);
+
+function shouldStripVendorFile(filePath: string): boolean {
+  const segments = filePath.split(sep);
+  if (segments.includes('__pycache__')) return true;
+  const name = segments[segments.length - 1] ?? '';
+  if (name.endsWith('.pyc') || name.endsWith('.pyi')) return true;
+  if (STRIP_BASENAMES.has(name)) return true;
+  return false;
+}
+
+// AWS Lambda uncompressed size limit is 250MB, but we use 245MB to leave room
+// for the standard Lambda layers (rusty runtime, lambdawrapper). When the
+// OpenTelemetry collector layer is also attached, we reserve an additional 5MB.
+const LAMBDA_BASE_SIZE_THRESHOLD_BYTES = 245 * 1024 * 1024;
+const OTEL_LAYER_RESERVATION_BYTES = 5 * 1024 * 1024;
+
+export const LAMBDA_SIZE_THRESHOLD_BYTES =
+  process.env.VERCEL_DEPLOYMENT_HAS_OTEL_LAYER === '1'
+    ? LAMBDA_BASE_SIZE_THRESHOLD_BYTES - OTEL_LAYER_RESERVATION_BYTES
+    : LAMBDA_BASE_SIZE_THRESHOLD_BYTES;
 
 // AWS Lambda ephemeral storage (/tmp) is 512MB. Use 500MB to leave a buffer
 // for runtime overhead (.pyc generation, uv cache, metadata, etc.)
@@ -43,37 +78,8 @@ export const LAMBDA_EPHEMERAL_STORAGE_BYTES = 500 * 1024 * 1024;
 // bundled directly into the Lambda instead of using runtime installation.
 export const HIVE_LAMBDA_SIZE_BYTES = 1 * 1024 * 1024 * 1024;
 
-// Error messages are hard-wrapped with explicit newlines so the Vercel
-// build log renders them as multi-line paragraphs instead of one long
-// unbroken sentence.
-const FUNCTIONS_BETA_CTA =
-  'Run `vercel deploy --functions-beta` to use extended function limits ' +
-  '(up to 1 GB), or reduce your dependency footprint.';
-
 const BUNDLING_DOCS_LINK =
   'https://vercel.com/docs/functions/runtimes/python#controlling-what-gets-bundled';
-const FUNCTIONS_BETA_DOCS_LINK =
-  'https://vercel.com/docs/functions/runtimes/python#extended-size-limits-with-functions-beta';
-
-// Shown when the user is already on Functions Beta (Hive) but their bundle
-// still exceeds the extended 1 GB limit. In that case we cannot suggest
-// opting into Functions Beta -- they are already using it -- so we tell
-// them the only remaining path is to reduce the bundle below 1 GB.
-const FUNCTIONS_BETA_EXCEEDED_CTA =
-  'Your deployment is already using extended function limits (`--functions-beta`).\n' +
-  'Reduce your dependency footprint to under 1 GB or split your application\n' +
-  'into smaller functions.';
-
-/**
- * Returns true when the build environment opts in to showing the
- * `--functions-beta` suggestion in size-limit error messages.
- * Gated behind `VERCEL_FUNCTIONS_BETA_HINT` so it can be rolled out
- * independently of the feature itself.
- */
-export function shouldShowFunctionsBetaHint(): boolean {
-  const v = process.env.VERCEL_FUNCTIONS_BETA_HINT;
-  return v === '1' || v === 'true';
-}
 
 interface PythonDependencyExternalizerOptions {
   venvPath: string;
@@ -195,19 +201,15 @@ export class PythonDependencyExternalizer {
       const limitMB = (LAMBDA_SIZE_THRESHOLD_BYTES / (1024 * 1024)).toFixed(0);
       throw new NowBuildError({
         code: 'LAMBDA_SIZE_EXCEEDED',
-        message: shouldShowFunctionsBetaHint()
-          ? `Total bundle size (${totalBundleSizeMB} MB) exceeds the size limit (${limitMB} MB).\n\n` +
-            FUNCTIONS_BETA_CTA
-          : `Total bundle size (${totalBundleSizeMB} MB) exceeds the size limit (${limitMB} MB).\n\n` +
-            `When using a custom install command, Vercel cannot automatically\n` +
-            `optimize dependency bundling. To reduce the size of your\n` +
-            `dependencies, you can:\n` +
-            `  1. Remove unused dependencies from your project.\n` +
-            `  2. Remove the custom install command to allow Vercel to manage\n` +
-            `     and optimize dependencies automatically.`,
-        link: shouldShowFunctionsBetaHint()
-          ? FUNCTIONS_BETA_DOCS_LINK
-          : BUNDLING_DOCS_LINK,
+        message:
+          `Total bundle size (${totalBundleSizeMB} MB) exceeds the size limit (${limitMB} MB).\n\n` +
+          `When using a custom install command, Vercel cannot automatically\n` +
+          `optimize dependency bundling. To reduce the size of your\n` +
+          `dependencies, you can:\n` +
+          `  1. Remove unused dependencies from your project.\n` +
+          `  2. Remove the custom install command to allow Vercel to manage\n` +
+          `     and optimize dependencies automatically.`,
+        link: BUNDLING_DOCS_LINK,
         action: 'Learn More',
       });
     }
@@ -219,13 +221,11 @@ export class PythonDependencyExternalizer {
       const limitMB = (HIVE_LAMBDA_SIZE_BYTES / (1024 * 1024)).toFixed(0);
       throw new NowBuildError({
         code: 'LAMBDA_SIZE_EXCEEDED',
-        message: shouldShowFunctionsBetaHint()
-          ? `Total bundle size (${totalBundleSizeMB} MB) exceeds the extended function size limit (${limitMB} MB).\n\n` +
-            FUNCTIONS_BETA_EXCEEDED_CTA
-          : `Total bundle size (${totalBundleSizeMB} MB) exceeds the extended function size limit (${limitMB} MB).\n\n` +
-            `Consider removing unused dependencies or splitting your\n` +
-            `application into smaller functions.`,
-        link: 'https://vercel.com/docs/functions/runtimes/python#controlling-what-gets-bundled',
+        message:
+          `Total bundle size (${totalBundleSizeMB} MB) exceeds the extended function size limit (${limitMB} MB).\n\n` +
+          `Consider removing unused dependencies or splitting your\n` +
+          `application into smaller functions.`,
+        link: BUNDLING_DOCS_LINK,
         action: 'Learn More',
       });
     }
@@ -272,17 +272,13 @@ export class PythonDependencyExternalizer {
       ).toFixed(0);
       throw new NowBuildError({
         code: 'LAMBDA_SIZE_EXCEEDED',
-        message: shouldShowFunctionsBetaHint()
-          ? `Total bundle size (${totalBundleSizeMB} MB) exceeds the ephemeral storage limit (${ephemeralLimitMB} MB).\n\n` +
-            FUNCTIONS_BETA_CTA
-          : `Total bundle size (${totalBundleSizeMB} MB) exceeds Lambda ephemeral storage limit (${ephemeralLimitMB} MB).\n\n` +
-            `Even with runtime dependency installation, all packages must fit\n` +
-            `within the ${ephemeralLimitMB} MB ephemeral storage available to Lambda\n` +
-            `functions. Consider removing unused dependencies or splitting\n` +
-            `your application into smaller functions.`,
-        link: shouldShowFunctionsBetaHint()
-          ? FUNCTIONS_BETA_DOCS_LINK
-          : BUNDLING_DOCS_LINK,
+        message:
+          `Total bundle size (${totalBundleSizeMB} MB) exceeds Lambda ephemeral storage limit (${ephemeralLimitMB} MB).\n\n` +
+          `Even with runtime dependency installation, all packages must fit\n` +
+          `within the ${ephemeralLimitMB} MB ephemeral storage available to Lambda\n` +
+          `functions. Consider removing unused dependencies or splitting\n` +
+          `your application into smaller functions.`,
+        link: BUNDLING_DOCS_LINK,
         action: 'Learn More',
       });
     }
@@ -557,17 +553,13 @@ export class PythonDependencyExternalizer {
       const limitMB = (LAMBDA_SIZE_THRESHOLD_BYTES / (1024 * 1024)).toFixed(0);
       throw new NowBuildError({
         code: 'LAMBDA_SIZE_EXCEEDED',
-        message: shouldShowFunctionsBetaHint()
-          ? `Total bundle size (${finalSizeMB} MB) exceeds the size limit (${limitMB} MB).\n\n` +
-            FUNCTIONS_BETA_CTA
-          : `Total bundle size (${finalSizeMB} MB) exceeds Lambda limit (${limitMB} MB) even after\n` +
-            `deferring public packages to runtime installation.\n\n` +
-            `This usually means your private packages or source code are too\n` +
-            `large. Consider reducing the size of private dependencies or\n` +
-            `splitting your application.`,
-        link: shouldShowFunctionsBetaHint()
-          ? FUNCTIONS_BETA_DOCS_LINK
-          : BUNDLING_DOCS_LINK,
+        message:
+          `Total bundle size (${finalSizeMB} MB) exceeds Lambda limit (${limitMB} MB) even after\n` +
+          `deferring public packages to runtime installation.\n\n` +
+          `This usually means your private packages or source code are too\n` +
+          `large. Consider reducing the size of private dependencies or\n` +
+          `splitting your application.`,
+        link: BUNDLING_DOCS_LINK,
         action: 'Learn More',
       });
     }
@@ -744,10 +736,7 @@ export class PythonDependencyExternalizer {
           if (!resolve(resolvedDir, filePath).startsWith(dirPrefix)) {
             continue;
           }
-          if (
-            filePath.endsWith('.pyc') ||
-            filePath.split(sep).includes('__pycache__')
-          ) {
+          if (shouldStripVendorFile(filePath)) {
             continue;
           }
           const srcFsPath = join(dir, filePath);
@@ -831,11 +820,7 @@ export class PythonDependencyExternalizer {
           if (!resolve(resolvedDir, filePath).startsWith(dirPrefix)) {
             continue;
           }
-          // Skip .pyc and __pycache__
-          if (
-            filePath.endsWith('.pyc') ||
-            filePath.split(sep).includes('__pycache__')
-          ) {
+          if (shouldStripVendorFile(filePath)) {
             continue;
           }
 
@@ -862,6 +847,106 @@ export class PythonDependencyExternalizer {
     }
 
     return sizes;
+  }
+
+  /**
+   * Collect pre-compiled `.pyc` bytecode files for vendor packages.
+   *
+   * For each `.py` file listed in a package's RECORD, derives the expected
+   * `__pycache__/*.cpython-XY.pyc` path and checks whether it exists on
+   * disk (i.e. whether `compileall` produced it).  Files that do not exist
+   * are silently skipped.
+   *
+   * Must be called after `analyze()` which populates `sitePackageDirs` and
+   * `distributions`.
+   */
+  async collectBytecodeFiles({
+    vendorDirName,
+    includePackages,
+  }: {
+    vendorDirName: string;
+    includePackages?: string[];
+  }): Promise<BytecodeCollectionResult> {
+    if (!this.sitePackageDirs || !this.distributions) {
+      throw new Error('collectBytecodeFiles() must be called after analyze()');
+    }
+    if (this.pythonMajor == null || this.pythonMinor == null) {
+      return { files: {}, totalSize: 0, perItemSizes: new Map() };
+    }
+
+    const includeSet = includePackages
+      ? new Set(includePackages.map(normalizePackageName))
+      : null;
+
+    interface PycPending {
+      bundlePath: string;
+      srcFsPath: string;
+      packageName: string;
+    }
+    const pending: PycPending[] = [];
+
+    for (const dir of this.sitePackageDirs) {
+      const dirDistributions = this.distributions.get(dir);
+      if (!dirDistributions) continue;
+
+      for (const [name, dist] of dirDistributions) {
+        if (includeSet && !includeSet.has(name)) continue;
+
+        for (const { path: rawPath } of dist.files) {
+          const pycRel = derivePycPath(
+            rawPath,
+            this.pythonMajor,
+            this.pythonMinor
+          );
+          if (!pycRel) continue;
+
+          const pycFilePath = pycRel.replaceAll('/', sep);
+          const srcFsPath = join(dir, pycFilePath);
+          const bundlePath = join(vendorDirName, pycFilePath).replace(
+            /\\/g,
+            '/'
+          );
+          pending.push({ bundlePath, srcFsPath, packageName: name });
+        }
+      }
+    }
+
+    // Stat all .pyc files in parallel.  Missing files (compileall
+    // may have skipped them) are silently dropped.
+    const results = await Promise.all(
+      pending.map(async ({ bundlePath, srcFsPath, packageName }) => {
+        try {
+          const stats = await fs.promises.stat(srcFsPath);
+          return { bundlePath, srcFsPath, size: stats.size, packageName };
+        } catch {
+          return null;
+        }
+      })
+    );
+
+    const files: Files = {};
+    let totalSize = 0;
+    const perItemSizes = new Map<string, number>();
+
+    for (const result of results) {
+      if (!result) continue;
+      files[result.bundlePath] = new FileFsRef({
+        fsPath: result.srcFsPath,
+        size: result.size,
+      });
+      totalSize += result.size;
+      perItemSizes.set(
+        result.packageName,
+        (perItemSizes.get(result.packageName) ?? 0) + result.size
+      );
+    }
+
+    debug(
+      `Collected ${Object.keys(files).length} bytecode files` +
+        ` (${(totalSize / (1024 * 1024)).toFixed(2)} MB)` +
+        (includePackages ? ` from ${includePackages.length} packages` : '')
+    );
+    return { files, totalSize, perItemSizes };
   }
 }
 
