@@ -47,8 +47,7 @@ export default async function addStore(
     flags,
   } = parsedArgs;
 
-  // Never prompt non-interactively: a prompt after the store is created throws
-  // on agents' non-TTY stdin, and the retry creates a duplicate store.
+  // Prompting after the store is created flakes agents into duplicate stores.
   const interactive = client.stdin.isTTY && !client.nonInteractive;
 
   const yes = flags['--yes'] ?? false;
@@ -148,8 +147,7 @@ export default async function addStore(
 
   const link = await getLinkedProject(client);
 
-  // Gate before creating the store: a blocked run creates nothing, so the
-  // suggested --yes retry creates and links exactly one store, not a duplicate.
+  // Gate before creating so a blocked run creates nothing (no duplicate on retry).
   if (
     link.status === 'linked' &&
     client.nonInteractive &&

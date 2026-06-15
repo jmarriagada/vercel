@@ -13,8 +13,7 @@ function getPromptErrorDetails(
 export default async function waitForPrompt(
   cp: CLIProcess,
   rawAssertion: string | RegExp | ((chunk: string) => boolean),
-  // 10s, not 5s: the first prompt waits on CLI startup plus a live API call,
-  // which intermittently exceeds 5s on CI runners and flakes E2E tests.
+  // 10s not 5s: CLI startup + a live API call can exceed 5s on CI and flake.
   timeout = 10000
 ) {
   let assertion: (chunk: string) => boolean;
