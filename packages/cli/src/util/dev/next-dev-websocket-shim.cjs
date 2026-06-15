@@ -93,7 +93,7 @@ if (!globalThis[PATCHED_SYMBOL]) {
           response.detachSocket(socket);
         }
         suppressFrameworkResponse(response);
-        preserveAsyncContextOnSocket(socket);
+        preserveAsyncContextOnSocket(socket, requestContext);
 
         socket.once('close', () => {
           requestContext.run(context, () => {
@@ -133,7 +133,7 @@ function isWebSocketUpgrade(req) {
 
 function isNextInternalUpgrade(req) {
   const pathname = new URL(req?.url || '/', 'http://localhost').pathname;
-  return pathname.startsWith('/_next/') || pathname.startsWith('/__nextjs');
+  return pathname.includes('/_next/') || pathname.startsWith('/__nextjs');
 }
 
 function suppressFrameworkResponse(response) {
@@ -148,8 +148,12 @@ function suppressFrameworkResponse(response) {
   };
 }
 
-function preserveAsyncContextOnSocket(socket) {
-  const runInSnapshot = AsyncLocalStorage.snapshot();
+function preserveAsyncContextOnSocket(socket, requestContext) {
+  const store = requestContext.getStore();
+  const runInSnapshot =
+    typeof AsyncLocalStorage.snapshot === 'function'
+      ? AsyncLocalStorage.snapshot()
+      : callback => requestContext.run(store, callback);
   const originalEmit = socket.emit;
   socket.emit = function emit(...args) {
     return runInSnapshot(() => originalEmit.apply(this, args));

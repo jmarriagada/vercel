@@ -101,10 +101,20 @@ describe('next dev websocket shim', () => {
     });
   });
 
+  it('propagates request context without AsyncLocalStorage.snapshot()', async () => {
+    await expect(runShimScenario('no-snapshot')).resolves.toMatchObject({
+      message: 'context',
+    });
+  });
+
   it('does not intercept Next internal upgrade requests', async () => {
     await expect(runShimScenario('next-internal')).resolves.toMatchObject({
-      body: 'internal-upgrade',
-      requestHandlerCalled: false,
+      results: [
+        { body: 'internal-upgrade:/_next/webpack-hmr' },
+        { body: 'internal-upgrade:/docs/_next/webpack-hmr' },
+        { body: 'internal-upgrade:/asset-prefix/_next/hmr' },
+      ],
+      requestHandlerCalls: 0,
     });
   });
 });
@@ -113,6 +123,11 @@ const childScript = String.raw`
 const http = require('node:http');
 const net = require('node:net');
 const { createHash, randomBytes } = require('node:crypto');
+const asyncHooks = require('node:async_hooks');
+
+if (process.env.SCENARIO === 'no-snapshot') {
+  asyncHooks.AsyncLocalStorage.snapshot = undefined;
+}
 
 require(process.env.SHIM_PATH);
 
@@ -120,6 +135,7 @@ const scenario = process.env.SCENARIO;
 const requestContextSymbol = Symbol.for('@vercel/request-context');
 const websocketGuid = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
 let finished = false;
+let requestHandlerCalls = 0;
 
 function finish(result) {
   if (finished) return;
@@ -209,7 +225,7 @@ const server = http.createServer((req, res) => {
       return;
     }
 
-    if (scenario === 'socket-data-context') {
+    if (scenario === 'socket-data-context' || scenario === 'no-snapshot') {
       const { socket } = consumeUpgrade();
       socket.once('data', () => {
         const store = getContext();
@@ -240,10 +256,7 @@ const server = http.createServer((req, res) => {
       return;
     }
 
-    if (scenario === 'next-internal') {
-      res.end('request-handler');
-      return;
-    }
+    if (scenario === 'next-internal') return;
 
     throw new Error('unknown scenario ' + scenario);
   } catch (error) {
@@ -251,14 +264,13 @@ const server = http.createServer((req, res) => {
   }
 });
 
-let requestHandlerCalled = false;
 server.on('request', () => {
-  if (scenario === 'next-internal') requestHandlerCalled = true;
+  if (scenario === 'next-internal') requestHandlerCalls += 1;
 });
 
 server.on('upgrade', (req, socket) => {
   if (scenario !== 'next-internal') return;
-  socket.end('internal-upgrade');
+  socket.end('internal-upgrade:' + new URL(req.url, 'http://localhost').pathname);
 });
 
 server.listen(0, '127.0.0.1', async () => {
@@ -288,15 +300,26 @@ server.listen(0, '127.0.0.1', async () => {
     }
 
     if (scenario === 'next-internal') {
-      const body = await rawUpgradeBody(port, '/_next/webpack-hmr');
-      finish({ body, requestHandlerCalled });
+      const paths = [
+        '/_next/webpack-hmr',
+        '/docs/_next/webpack-hmr',
+        '/asset-prefix/_next/hmr',
+      ];
+      const results = [];
+      for (const path of paths) {
+        results.push({ body: await rawUpgradeBody(port, path) });
+      }
+      finish({ results, requestHandlerCalls });
       return;
     }
 
     const result = await websocketRequest(port, '/ws', {
       connection:
         scenario === 'connection-list' ? 'keep-alive, Upgrade' : 'Upgrade',
-      sendAfterUpgrade: scenario === 'socket-data-context' ? Buffer.from('x') : undefined,
+      sendAfterUpgrade:
+        scenario === 'socket-data-context' || scenario === 'no-snapshot'
+          ? Buffer.from('x')
+          : undefined,
     });
 
     if (scenario === 'upgrade-present') {

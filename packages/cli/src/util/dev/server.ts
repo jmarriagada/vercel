@@ -97,6 +97,7 @@ import type { ProjectSettings } from '@vercel-internals/types';
 import { treeKill } from '../tree-kill';
 import { ServicesOrchestrator } from './services-orchestrator';
 import { QueueBroker } from './queue-broker';
+import { maybeInjectNextDevWebSocketShim } from './next-dev-websocket-shim';
 import { applyOverriddenHeaders, nodeHeadersToFetchHeaders } from './headers';
 import { formatQueryString, parseQueryString } from './parse-query-string';
 import {
@@ -115,8 +116,6 @@ const frontendRuntimeSet = new Set(
 
 const DEV_SERVER_PORT_BIND_TIMEOUT = ms('5m');
 const DEV_QUEUES_DEFAULT_VISIBILITY_TIMEOUT_SECONDS = 60;
-const NEXT_DEV_WEBSOCKET_SHIM = join(__dirname, 'next-dev-websocket-shim.cjs');
-
 interface FSEvent {
   type: string;
   path: string;
@@ -2813,14 +2812,13 @@ export default class DevServer {
       .replace(/\$PORT/g, `${port}`)
       .replace(/%PORT%/g, `${port}`);
 
-    if (shouldInjectNextDevWebSocketShim(command, this.projectSettings)) {
-      env.NODE_OPTIONS = prependNodeRequireOption(
-        env.NODE_OPTIONS,
-        NEXT_DEV_WEBSOCKET_SHIM
-      );
-      output.debug(
-        `Injecting Next.js dev WebSocket shim: ${NEXT_DEV_WEBSOCKET_SHIM}`
-      );
+    const shimPath = maybeInjectNextDevWebSocketShim(
+      env,
+      command,
+      this.projectSettings
+    );
+    if (shimPath) {
+      output.debug(`Injecting Next.js dev WebSocket shim: ${shimPath}`);
     }
 
     output.debug(
@@ -2879,24 +2877,6 @@ export default class DevServer {
     ]);
     this.devProcessOrigin = `http://${devProcessHost}:${port}`;
   }
-}
-
-function shouldInjectNextDevWebSocketShim(
-  command: string,
-  projectSettings?: ProjectSettings
-): boolean {
-  return (
-    projectSettings?.framework === 'nextjs' ||
-    /(?:^|\s)(?:next|next\.js)\s+dev(?:\s|$)/.test(command)
-  );
-}
-
-function prependNodeRequireOption(
-  nodeOptions: string | undefined,
-  requirePath: string
-): string {
-  const requireOption = `--require ${JSON.stringify(requirePath)}`;
-  return nodeOptions ? `${requireOption} ${nodeOptions}` : requireOption;
 }
 
 function isServiceDestination(
