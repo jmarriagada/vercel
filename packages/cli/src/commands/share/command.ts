@@ -22,7 +22,7 @@ export const shareCommand = {
       type: String,
       deprecated: false,
       description:
-        'Optional expiry for the share link (for example: 30m, 1h, 82800)',
+        'Optional expiry for the share link, up to 730d (for example: 30m, 1h, 82800)',
       argument: 'DURATION',
     },
   ],

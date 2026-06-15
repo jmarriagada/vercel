@@ -27,8 +27,10 @@ import { help } from '../help';
 import { shareCommand } from './command';
 
 interface ProtectionBypassResponse {
-  protectionBypass?: Record<string, unknown>;
+  protectionBypass?: Record<string, { scope?: string }>;
 }
+
+const MAX_TTL_SECONDS = 63_072_000;
 
 export default async function share(client: Client): Promise<number> {
   const telemetry = new ShareTelemetryClient({
@@ -103,17 +105,16 @@ export default async function share(client: Client): Promise<number> {
 
   if (target) {
     try {
-      accountId = await inferAccountId(client, scopeTeamId, userId);
+      const selectedAccountId = scopeTeamId ?? userId;
       const deployment = await getDeploymentForShare(
         client,
         contextName,
         target,
-        accountId
+        selectedAccountId
       );
       deploymentId = deployment.id;
-      baseUrl = target.includes('.')
-        ? `https://${toHost(target)}`
-        : `https://${deployment.url}`;
+      accountId = deployment.ownerId ?? selectedAccountId;
+      baseUrl = getShareBaseUrl(target, deployment.url);
     } catch (err) {
       if (err instanceof DeploymentNotFound) {
         output.error(`Deployment not found: ${target}`);
@@ -257,27 +258,6 @@ async function confirmShareCreation(
   return confirmed;
 }
 
-async function inferAccountId(
-  client: Client,
-  scopeTeamId: string | undefined,
-  userId: string
-): Promise<string> {
-  if (scopeTeamId) {
-    return scopeTeamId;
-  }
-
-  try {
-    const linkedProject = await getLinkedProject(client, client.cwd);
-    if (linkedProject.status === 'linked' && linkedProject.org) {
-      return linkedProject.org.id;
-    }
-  } catch {
-    // Ignore link lookup failures and fall back to the user account.
-  }
-
-  return userId;
-}
-
 async function createShareUrl(
   client: Client,
   deploymentId: string,
@@ -290,18 +270,13 @@ async function createShareUrl(
       `/v1/aliases/${encodeURIComponent(deploymentId)}/protection-bypass`,
       {
         method: 'PATCH',
-        body: ttl === undefined ? '{}' : JSON.stringify({ ttl }),
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        body: ttl === undefined ? {} : { ttl },
         accountId,
       }
     );
 
     const token = extractShareToken(response);
     const shareUrl = new URL(baseUrl);
-    shareUrl.pathname = '/';
-    shareUrl.search = '';
     shareUrl.searchParams.set('_vercel_share', token);
 
     client.stdout.write(`${shareUrl.toString()}\n`);
@@ -321,30 +296,60 @@ async function getDeploymentForShare(
   client: Client,
   contextName: string,
   target: string,
-  accountId: string
+  selectedAccountId: string
 ): Promise<Deployment> {
   const hostOrId = target.includes('.') ? toHost(target) : target;
+  let lookupError: unknown;
 
-  try {
-    return await client.fetch<Deployment>(
-      `/v13/deployments/${encodeURIComponent(hostOrId)}`,
-      { accountId }
-    );
-  } catch (err: unknown) {
-    if (isAPIError(err)) {
-      if (err.status === 404) {
-        throw new DeploymentNotFound({ id: hostOrId, context: contextName });
+  for (const options of [
+    { accountId: selectedAccountId },
+    { useCurrentTeam: false },
+  ] as const) {
+    try {
+      return await client.fetch<Deployment>(
+        `/v13/deployments/${encodeURIComponent(hostOrId)}`,
+        options
+      );
+    } catch (err: unknown) {
+      if (!isAPIError(err) || (err.status !== 403 && err.status !== 404)) {
+        lookupError = err;
+        break;
       }
-      if (err.status === 403) {
-        throw new DeploymentPermissionDenied(hostOrId, contextName);
-      }
-      if (err.status === 400 && err.message.includes('`id`')) {
-        throw new InvalidDeploymentId(hostOrId);
+
+      if (!lookupError || err.status === 403) {
+        lookupError = err;
       }
     }
-
-    throw err;
   }
+
+  if (isAPIError(lookupError)) {
+    if (lookupError.status === 404) {
+      throw new DeploymentNotFound({ id: hostOrId, context: contextName });
+    }
+    if (lookupError.status === 403) {
+      throw new DeploymentPermissionDenied(hostOrId, contextName);
+    }
+    if (lookupError.status === 400 && lookupError.message.includes('`id`')) {
+      throw new InvalidDeploymentId(hostOrId);
+    }
+  }
+
+  throw lookupError;
+}
+
+function getShareBaseUrl(target: string, deploymentUrl: string): string {
+  if (!target.includes('.')) {
+    return `https://${deploymentUrl}`;
+  }
+
+  const url = new URL(
+    /^[a-z][a-z\d+.-]*:\/\//i.test(target) ? target : `https://${target}`
+  );
+  url.protocol = 'https:';
+
+  return url.pathname === '/' && !url.search && !url.hash
+    ? url.origin
+    : url.toString();
 }
 
 function parseTTL(value: string | undefined): number | Error | undefined {
@@ -357,7 +362,7 @@ function parseTTL(value: string | undefined): number | Error | undefined {
     if (!Number.isSafeInteger(seconds) || seconds <= 0) {
       return new Error('Invalid TTL. Provide a positive number of seconds.');
     }
-    return seconds;
+    return validateTTLMaximum(seconds);
   }
 
   const duration = ms(value);
@@ -367,13 +372,24 @@ function parseTTL(value: string | undefined): number | Error | undefined {
     );
   }
 
-  return Math.ceil(duration / 1000);
+  return validateTTLMaximum(Math.ceil(duration / 1000));
+}
+
+function validateTTLMaximum(seconds: number): number | Error {
+  if (seconds > MAX_TTL_SECONDS) {
+    return new Error(
+      `Invalid TTL. The maximum duration is ${MAX_TTL_SECONDS} seconds (730d).`
+    );
+  }
+
+  return seconds;
 }
 
 function extractShareToken(response: ProtectionBypassResponse): string {
-  const token = response.protectionBypass
-    ? Object.keys(response.protectionBypass)[0]
-    : undefined;
+  const entries = Object.entries(response.protectionBypass ?? {});
+  const token =
+    entries.find(([, bypass]) => bypass.scope === 'shareable-link')?.[0] ??
+    (entries.length === 1 ? entries[0][0] : undefined);
 
   if (!token) {
     throw new Error('Failed to create a share token for this deployment.');

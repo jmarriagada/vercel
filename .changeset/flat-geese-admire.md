@@ -2,4 +2,4 @@
 'vercel': patch
 ---
 
-Add a `vercel share` command for generating shareable links to protected deployments.
+Add a `vercel share` command for generating shareable links to protected deployments, including current-branch deployment discovery.

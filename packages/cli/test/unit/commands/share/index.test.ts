@@ -52,17 +52,26 @@ describe('share', () => {
       expect(req.params.id).toBe(deployment.id);
       res.json({
         protectionBypass: {
-          share_token: {},
+          user_token: {
+            scope: 'user',
+          },
+          share_token: {
+            scope: 'shareable-link',
+          },
         },
       });
     });
 
-    client.setArgv('share', `https://${deployment.url}`, '--yes');
+    client.setArgv(
+      'share',
+      `http://${deployment.url}/docs?mode=preview`,
+      '--yes'
+    );
     const exitCode = await share(client);
 
     expect(exitCode).toBe(0);
     expect(client.stdout.getFullOutput()).toBe(
-      `https://${deployment.url}/?_vercel_share=share_token\n`
+      `https://${deployment.url}/docs?mode=preview&_vercel_share=share_token\n`
     );
     expect(client.telemetryEventStore).toHaveTelemetryEvents([
       {
@@ -81,7 +90,10 @@ describe('share', () => {
     const user = useUser();
     useTeams('team_dummy');
     client.config.currentTeam = 'team_dummy';
-    const deployment = useDeployment({ creator: user });
+    const deployment = useDeployment({
+      creator: user,
+      ownerId: 'team_dummy',
+    });
 
     client.scenario.patch('/v1/aliases/:id/protection-bypass', (req, res) => {
       expect(req.params.id).toBe(deployment.id);
@@ -272,5 +284,15 @@ describe('share', () => {
 
     expect(exitCode).toBe(1);
     await expect(client.stderr).toOutput('Invalid TTL');
+  });
+
+  it('errors when --ttl exceeds the API maximum', async () => {
+    client.setArgv('share', 'dpl_123', '--ttl', '731d');
+    const exitCode = await share(client);
+
+    expect(exitCode).toBe(1);
+    await expect(client.stderr).toOutput(
+      'The maximum duration is 63072000 seconds (730d).'
+    );
   });
 });

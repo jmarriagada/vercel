@@ -21,6 +21,7 @@ export function useDeployment({
   project = defaultProject,
   target = 'production',
   meta = {},
+  ownerId = creator.id,
 }: {
   creator: Pick<User, 'id' | 'email' | 'name' | 'username'>;
   state?:
@@ -34,6 +35,7 @@ export function useDeployment({
   project?: any; // FIX ME: Use `Project` once PR #9956 is merged
   target?: Deployment['target'];
   meta?: Deployment['meta'];
+  ownerId?: string;
 }) {
   setupDeploymentEndpoints();
 
@@ -59,7 +61,7 @@ export function useDeployment({
     inspectorUrl: `https://vercel.com/${creator.name}/${id}`,
     meta,
     name,
-    ownerId: creator.id,
+    ownerId,
     plan: 'hobby',
     projectId: project.id,
     public: false,
