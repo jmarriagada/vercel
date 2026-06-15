@@ -16,8 +16,11 @@ if (
   (process.argv[2] === '--version' || process.argv[2] === '-v')
 ) {
   const { version } = await import('./version.mjs');
+  const { default: chalk } = await import('chalk');
   const binaryLabel = process.env.VERCEL_VC_NATIVE === '1' ? ' (native)' : '';
-  console.error(`Vercel CLI ${version}${binaryLabel}`);
+  // Dim the banner to match the grey of the per-command version banner
+  // (chalk.dim in index.ts).
+  console.error(chalk.dim(`Vercel CLI ${version}${binaryLabel}`));
   console.log(version);
   process.exit(0);
 }

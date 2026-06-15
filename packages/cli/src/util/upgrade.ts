@@ -1,17 +1,59 @@
-import { spawn } from 'child_process';
+import { spawn, execFile } from 'child_process';
+import { promisify } from 'util';
 import { tmpdir } from 'os';
 import { getUpdateCommandInfo } from './get-update-command';
+import pkg from './pkg';
 import output from '../output-manager';
+
+const execFileAsync = promisify(execFile);
+
+/**
+ * Reads the currently-installed CLI version by invoking the global `--version`
+ * fast path.
+ *
+ * Used after an upgrade to determine the resulting version. This works for both
+ * the Node.js CLI and the native binary, since both ship `vercel` and `vc` bins
+ * that print the bare semver to stdout — the same detection `vc --version`
+ * already relies on.
+ *
+ * @returns The installed version, or `undefined` if it can't be determined.
+ */
+async function getInstalledVersion(): Promise<string | undefined> {
+  for (const bin of ['vercel', 'vc']) {
+    try {
+      const { stdout } = await execFileAsync(bin, ['--version'], {
+        encoding: 'utf8',
+        windowsHide: true,
+      });
+      const version = stdout.trim();
+      if (version) {
+        return version;
+      }
+    } catch {
+      // bin not found on PATH; try the next name
+    }
+  }
+  return undefined;
+}
 
 /**
  * Executes the upgrade command to update the Vercel CLI.
  * Returns the exit code from the upgrade process.
+ *
+ * @param targetVersion The version being upgraded to, when the caller already
+ * knows it (the update notifier). When omitted (e.g. `vercel upgrade`), the
+ * resulting version is detected after the install so we can report when no
+ * upgrade was actually available.
  */
-export async function executeUpgrade(): Promise<number> {
+export async function executeUpgrade(targetVersion?: string): Promise<number> {
   const { command: updateCommand, global } = await getUpdateCommandInfo();
   const [command, ...args] = updateCommand.split(' ');
 
   const cwd = global ? tmpdir() : process.cwd();
+
+  // The version currently running, captured before the install overwrites it.
+  // This is what `vc --version` reports, for both Node.js and native binary.
+  const versionBefore = pkg.version;
 
   output.log(`Upgrading Vercel CLI...`);
   output.debug(`Executing: ${updateCommand} (cwd: ${cwd})`);
@@ -41,9 +83,7 @@ export async function executeUpgrade(): Promise<number> {
     });
 
     upgradeProcess.on('close', (code: number | null) => {
-      if (code === 0) {
-        output.success('Vercel CLI has been upgraded successfully!');
-      } else {
+      if (code !== 0) {
         // Show output only on error
         const stdoutStr = Buffer.concat(stdout).toString();
         const stderrStr = Buffer.concat(stderr).toString();
@@ -57,8 +97,37 @@ export async function executeUpgrade(): Promise<number> {
         output.log(
           `You can try running the command manually: ${updateCommand}`
         );
+        resolve(code ?? 1);
+        return;
       }
-      resolve(code ?? 1);
+
+      // The caller already knows the target version (update notifier) — there
+      // is always a newer version in that flow, so just report it.
+      if (targetVersion) {
+        output.success(
+          `Vercel CLI has been upgraded to v${targetVersion} successfully!`
+        );
+        resolve(0);
+        return;
+      }
+
+      // No known target (e.g. `vercel upgrade`). Package managers exit 0 even
+      // when nothing changed, so read the now-installed version to report what
+      // actually happened, including when no upgrade was available.
+      getInstalledVersion().then(versionAfter => {
+        if (versionAfter && versionAfter === versionBefore) {
+          output.log(
+            `No upgrade available. Vercel CLI is already on the latest version (v${versionBefore}).`
+          );
+        } else if (versionAfter) {
+          output.success(
+            `Vercel CLI has been upgraded to v${versionAfter} successfully!`
+          );
+        } else {
+          output.success('Vercel CLI has been upgraded successfully!');
+        }
+        resolve(0);
+      });
     });
   });
 }
