@@ -183,11 +183,7 @@ test.skip('assign a domain to a project', async () => {
   const domain = `project-domain.${team.slug}.vercel.app`;
   const directory = await setupE2EFixture('static-deployment');
 
-  const deploymentOutput = await execCli(binaryPath, [
-    directory,
-    '--public',
-    '--yes',
-  ]);
+  const deploymentOutput = await execCli(binaryPath, [directory, '--yes']);
   expect(deploymentOutput.exitCode, formatOutput(deploymentOutput)).toBe(0);
 
   const host = deploymentOutput.stdout?.trim().replace('https://', '');
@@ -218,7 +214,6 @@ test('ensure `github` and `scope` are not sent to the API', async () => {
   expect(output.exitCode, formatOutput(output)).toBe(0);
 });
 
-// TODO: fix: --public does not make deployments public
 // biome-ignore lint/suspicious/noSkippedTests: temporarily disabled
 test.skip('should show prompts to set up project during first deploy', async () => {
   const dir = await setupE2EFixture('project-link-deploy');
@@ -471,15 +466,11 @@ test('use `rootDirectory` from project when deploying', async () => {
 
   const directory = await setupE2EFixture('project-root-directory');
 
-  const firstDeploy = execCli(
-    binaryPath,
-    [directory, '--name', projectName, '--public'],
-    {
-      env: {
-        FORCE_TTY: '1',
-      },
-    }
-  );
+  const firstDeploy = execCli(binaryPath, [directory, '--name', projectName], {
+    env: {
+      FORCE_TTY: '1',
+    },
+  });
   await setupProject(
     firstDeploy,
     projectName,
@@ -500,7 +491,7 @@ test('use `rootDirectory` from project when deploying', async () => {
 
   expect(projectResponse.status, await projectResponse.text()).toBe(200);
 
-  const secondResult = await execCli(binaryPath, [directory, '--public']);
+  const secondResult = await execCli(binaryPath, [directory]);
   expect(secondResult.exitCode, formatOutput(secondResult)).toBe(0);
 
   const { href } = new URL(secondResult.stdout);
@@ -882,7 +873,7 @@ test.skip(
     async function tryDeploy(cwd: string) {
       const { exitCode, stdout, stderr } = await execCli(
         binaryPath,
-        ['--public', '--yes'],
+        ['--yes'],
         {
           cwd,
           stdio: 'inherit',
@@ -911,7 +902,6 @@ test.skip(
   6 * 60 * 1000
 );
 
-// TODO: fix: --public does not make deployments public
 // biome-ignore lint/suspicious/noSkippedTests: temporarily disabled
 test.skip('deploy pnpm twice using pnp and symlink=false', async () => {
   const directory = path.join(__dirname, 'fixtures/unit/pnpm-pnp-symlink');
@@ -919,7 +909,7 @@ test.skip('deploy pnpm twice using pnp and symlink=false', async () => {
   await remove(path.join(directory, '.vercel'));
 
   function deploy() {
-    return execCli(binaryPath, [directory, '--name', session, '--public'], {
+    return execCli(binaryPath, [directory, '--name', session], {
       env: {
         FORCE_TTY: '1',
       },
@@ -1518,7 +1508,6 @@ test('[vc build] should not include .vercel when zeroConfig is true and outputDi
   expect(dir).toContain('index.txt');
 });
 
-// TODO: fix: --public does not make deployments public
 // biome-ignore lint/suspicious/noSkippedTests: temporarily disabled
 test.skip('vercel.json configuration overrides in a new project prompt user and merges settings correctly', async () => {
   let directory = await setupE2EFixture(
@@ -1594,7 +1583,7 @@ test('vercel.json configuration overrides in an existing project do not prompt u
   async function deploy(autoConfirm = false) {
     const deployment = await execCli(
       binaryPath,
-      [directory, '--public'].concat(autoConfirm ? ['--yes'] : [])
+      [directory].concat(autoConfirm ? ['--yes'] : [])
     );
     expect(deployment.exitCode, formatOutput(deployment)).toBe(0);
     return deployment;

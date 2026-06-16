@@ -997,7 +997,6 @@ describe('deploy', () => {
 
   describe('calls createDeploy with the appropriate arguments', () => {
     let mock: MockInstance;
-    let deploymentRequestBody: Record<string, unknown>;
     beforeEach(() => {
       mock = vi.spyOn(createDeployModule, 'default');
       const user = useUser();
@@ -1009,7 +1008,6 @@ describe('deploy', () => {
       });
 
       client.scenario.post(`/v13/deployments`, (req, res) => {
-        deploymentRequestBody = req.body;
         process.stderr.write('itme');
         res.json({
           creator: {
@@ -1078,25 +1076,6 @@ describe('deploy', () => {
       );
       expect(client.telemetryEventStore).toHaveTelemetryEvents([
         { key: 'flag:with-cache', value: 'TRUE' },
-        { key: 'target_environment', value: 'preview' },
-        { key: 'output:deployment-id', value: 'dpl_archive_test' },
-      ]);
-    });
-    it('--public', async () => {
-      client.cwd = setupUnitFixture('commands/deploy/static');
-      client.setArgv('deploy', '--public');
-      const exitCode = await deploy(client);
-      expect(exitCode).toEqual(0);
-
-      expect(mock).toHaveBeenCalledWith(
-        ...Object.values({
-          ...baseCreateDeployArgs,
-          createArgs: expect.objectContaining({ wantsPublic: true }),
-        })
-      );
-      expect(deploymentRequestBody).not.toHaveProperty('public');
-      expect(client.telemetryEventStore).toHaveTelemetryEvents([
-        { key: 'flag:public', value: 'TRUE' },
         { key: 'target_environment', value: 'preview' },
         { key: 'output:deployment-id', value: 'dpl_archive_test' },
       ]);
