@@ -997,6 +997,7 @@ describe('deploy', () => {
 
   describe('calls createDeploy with the appropriate arguments', () => {
     let mock: MockInstance;
+    let deploymentRequestBody: Record<string, unknown>;
     beforeEach(() => {
       mock = vi.spyOn(createDeployModule, 'default');
       const user = useUser();
@@ -1008,6 +1009,7 @@ describe('deploy', () => {
       });
 
       client.scenario.post(`/v13/deployments`, (req, res) => {
+        deploymentRequestBody = req.body;
         process.stderr.write('itme');
         res.json({
           creator: {
@@ -1092,6 +1094,7 @@ describe('deploy', () => {
           createArgs: expect.objectContaining({ wantsPublic: true }),
         })
       );
+      expect(deploymentRequestBody).not.toHaveProperty('public');
       expect(client.telemetryEventStore).toHaveTelemetryEvents([
         { key: 'flag:public', value: 'TRUE' },
         { key: 'target_environment', value: 'preview' },

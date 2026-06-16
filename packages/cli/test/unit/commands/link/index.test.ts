@@ -2541,8 +2541,8 @@ describe('link', () => {
       expect(exitCode).toEqual(0);
       const plainOutput = stripAnsi(client.stderr.getFullOutput());
       expect(plainOutput).toMatch(/^\s{0,2}Directory\s+.+/m);
-      expect(plainOutput).toContain(
-        'Searched        1 team available without SSO\nNo matching projects found'
+      expect(plainOutput).toMatch(
+        /^\s{0,2}Searched\s+1 team available without SSO\n\s{0,2}No matching projects found/m
       );
       expect(plainOutput).toMatch(
         /^\s{0,2}Searched\s+1 team\n\n\s{0,2}Found existing project/m

@@ -146,7 +146,7 @@ async function setupProject(
     process.stdin?.write('\n');
   }
 
-  await waitForPrompt(process, /Linked\s+/);
+  await waitForPrompt(process, /Created\s+/);
 }
 
 beforeAll(async () => {
@@ -355,7 +355,7 @@ test('should prefill "project name" prompt with vercel.json `name`', async () =>
   await waitForPrompt(now, 'Customize advanced settings?');
   now.stdin?.write('\n');
 
-  await waitForPrompt(now, /Linked\s+/);
+  await waitForPrompt(now, /Created\s+/);
 
   const output = await now;
   expect(output.exitCode, formatOutput(output)).toBe(0);
@@ -1132,7 +1132,7 @@ test('[vc link] should show project prompts but not framework when `builds` defi
   await waitForPrompt(vc, 'Customize advanced settings?');
   vc.stdin?.write('\n');
 
-  await waitForPrompt(vc, /Linked\s+/);
+  await waitForPrompt(vc, /Created\s+/);
 
   const output = await vc;
 
@@ -1570,7 +1570,7 @@ test.skip('vercel.json configuration overrides in a new project prompt user and 
   );
   vc.stdin?.write('\x1b[B'); // Down Arrow
   vc.stdin?.write('\n');
-  await waitForPrompt(vc, /Linked\s+/);
+  await waitForPrompt(vc, /Created\s+/);
   const deployment = await vc;
   expect(deployment.exitCode, formatOutput(deployment)).toBe(0);
   // assert the command were executed
