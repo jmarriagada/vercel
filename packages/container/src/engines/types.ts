@@ -34,12 +34,11 @@ export interface ContainerEngine {
 
   /**
    * Prepare the runtime environment (e.g. start dockerd). No-op for daemonless
-   * engines. The callback runs build/login/push/readiness inside this scope.
+   * engines. The callback runs build/login/push inside this scope.
    */
   withRuntime<T>(span: Span | undefined, fn: () => Promise<T>): Promise<T>;
 
   build(params: BuildPushParams): Promise<void>;
   login(params: BuildPushParams): Promise<void>;
   push(params: BuildPushParams): Promise<string | undefined>;
-  inspectRemoteImage(imageRef: string): Promise<void>;
 }

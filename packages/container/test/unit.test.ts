@@ -58,8 +58,6 @@ function fakeChild(stdout = '') {
 const VCR_ENV_KEYS = [
   'VERCEL_OIDC_TOKEN',
   'VERCEL_API_URL',
-  'VERCEL_VCR_READY_URL',
-  'VERCEL_VCR_READY_INTERVAL_MS',
   'VERCEL_BUILD_IMAGE',
   'VERCEL_CONTAINER_ENGINE',
 ];
@@ -296,51 +294,6 @@ describe('@vercel/container', () => {
     expect(result.output['_svc/api/index']).toMatchObject({
       handler: `vcr.vercel.com/acme/my-app/api@${digest}`,
     });
-  });
-
-  it('polls the configured readiness endpoint before returning', async () => {
-    const token = fakeOidcToken();
-    process.env.VERCEL_OIDC_TOKEN = token;
-    process.env.VERCEL_VCR_READY_URL = 'https://vcr.vercel.com/ready';
-    process.env.VERCEL_VCR_READY_INTERVAL_MS = '1';
-    existsSyncMock.mockReturnValue(true);
-    const digest = `sha256:${'b'.repeat(64)}`;
-    spawnMock.mockImplementation((_cmd: string, args: string[]) => {
-      if (args.includes('push')) {
-        return fakeChild(`latest: digest: ${digest} size: 1234\n`);
-      }
-      return fakeChild('');
-    });
-
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ ready: false }) })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ vhs: { path: 'x' } }),
-      });
-    vi.stubGlobal('fetch', fetchMock);
-
-    const result = expectTypicalBuildResult(
-      await build({
-        ...createBuildOptions({ runtime: 'container' }),
-        service: { name: 'api', type: 'web' },
-      })
-    );
-
-    expect(result.output['_svc/api/index']).toMatchObject({
-      handler: `vcr.vercel.com/acme/my-app/api@${digest}`,
-    });
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(fetchMock).toHaveBeenLastCalledWith('https://vcr.vercel.com/ready', {
-      headers: { authorization: `Bearer ${token}` },
-    });
-    // The registry manifest fallback should not run when a ready URL is set.
-    const commands = spawnMock.mock.calls.map(call => {
-      const [cmd, args] = call as [string, string[]];
-      return `${cmd} ${args.join(' ')}`;
-    });
-    expect(commands.some(c => c.includes('manifest'))).toBe(false);
   });
 
   it('fails the Dockerfile build when no OIDC token is available', async () => {

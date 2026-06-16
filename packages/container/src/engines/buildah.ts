@@ -7,10 +7,6 @@ import { DEBUG, debug, info, isBuildContainer, run, toTag } from '../util';
 import type { BuildPushParams, ContainerEngine } from './types';
 import { TARGET_PLATFORM } from './types';
 
-function skopeoImageRef(imageRef: string): string {
-  return imageRef.startsWith('docker://') ? imageRef : `docker://${imageRef}`;
-}
-
 async function runBuildah(
   args: string[],
   opts: { input?: string; quiet?: boolean } = {}
@@ -51,26 +47,16 @@ export const buildahEngine: ContainerEngine = {
       const version = (
         await runBuildah(['--version'], { quiet: true })
       ).stdout.trim();
-      let skopeoVersion = 'n/a';
-      try {
-        skopeoVersion = (
-          await run('skopeo', ['--version'], { quiet: true })
-        ).stdout.trim();
-      } catch {
-        // skopeo optional for diagnostics
-      }
 
       info(
         `buildah: ${version.split('\n')[0] ?? version} ` +
           `(storage-driver=${storageDriver})`
       );
-      debug(`skopeo: ${skopeoVersion.split('\n')[0] ?? skopeoVersion}`);
 
       span?.setAttributes({
         'container.engine': 'buildah',
         'buildah.version': toTag(version.split('\n')[0]),
         'buildah.storage_driver': toTag(storageDriver),
-        'skopeo.version': toTag(skopeoVersion.split('\n')[0]),
       });
     } catch (err) {
       debug(`buildah diagnostics unavailable: ${(err as Error).message}`);
@@ -155,9 +141,5 @@ export const buildahEngine: ContainerEngine = {
     } finally {
       rmSync(digestDir, { recursive: true, force: true });
     }
-  },
-
-  async inspectRemoteImage(imageRef: string): Promise<void> {
-    await run('skopeo', ['inspect', skopeoImageRef(imageRef)], { quiet: true });
   },
 };

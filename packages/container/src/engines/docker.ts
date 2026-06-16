@@ -351,8 +351,4 @@ export const dockerEngine: ContainerEngine = {
       throw err;
     }
   },
-
-  async inspectRemoteImage(imageRef: string): Promise<void> {
-    await run('docker', ['manifest', 'inspect', imageRef], { quiet: true });
-  },
 };

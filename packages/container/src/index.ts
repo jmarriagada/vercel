@@ -8,7 +8,7 @@ import {
   TARGET_PLATFORM,
 } from './engines';
 import type { BuildPushParams } from './engines/types';
-import { ensureRepository, waitForImageReady } from './registry';
+import { ensureRepository } from './registry';
 import {
   debug,
   debugTokenClaims,
@@ -194,16 +194,6 @@ async function buildAndPushImage(params: {
           'image.digest': digest,
           'image.resolved_ref': resolvedRef,
         });
-
-        const readyStart = Date.now();
-        step('Waiting for image to be ready');
-        await withSpan(
-          buildSpan,
-          'container.wait_for_ready',
-          { 'image.ref': resolvedRef },
-          s => waitForImageReady(engine, resolvedRef, s)
-        );
-        done(`ready in ${elapsed(readyStart)}`);
 
         info(`Image reference ${resolvedRef}`);
         return resolvedRef;
