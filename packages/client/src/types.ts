@@ -157,7 +157,6 @@ export interface VercelConfig {
   name?: string;
   meta?: string[];
   version?: number;
-  public?: boolean;
   env?: Dictionary<string>;
   build?: {
     env?: Dictionary<string>;
@@ -234,7 +233,6 @@ export interface DeploymentOptions {
   source?: string;
   target?: string;
   name?: string;
-  public?: boolean;
   meta?: Dictionary<string>;
   projectSettings?: ProjectSettings;
   gitMetadata?: GitMetadata;

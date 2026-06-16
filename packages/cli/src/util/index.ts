@@ -33,7 +33,6 @@ export interface CreateOptions {
   // Latest
   name: string;
   project?: string;
-  wantsPublic: boolean;
   prebuilt?: boolean;
   vercelOutputDir?: string;
   rootDirectory?: string | null;
@@ -115,7 +114,6 @@ export default class Now {
       prebuilt = false,
       vercelOutputDir,
       rootDirectory,
-      wantsPublic,
       meta,
       gitMetadata,
       regions,
@@ -145,7 +143,6 @@ export default class Now {
       ...nowConfig,
       env,
       build,
-      public: wantsPublic || nowConfig.public,
       name,
       project,
       meta,
@@ -161,6 +158,7 @@ export default class Now {
     // Ignore specific items from vercel.json
     delete requestBody.scope;
     delete requestBody.github;
+    delete requestBody.public;
 
     const deployment = await processDeployment({
       now: this,

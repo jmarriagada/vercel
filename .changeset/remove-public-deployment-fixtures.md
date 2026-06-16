@@ -1,6 +1,7 @@
 ---
 'vercel': patch
 '@vercel/client': patch
+'@vercel/config': patch
 ---
 
-Remove deprecated `public` field from deployment test fixtures and helpers after the API stopped accepting public deployments.
+Remove deprecated `public` from deployment test fixtures and helpers, and stop the CLI from sending the removed `public` field on deploy (including the `--public` flag).
