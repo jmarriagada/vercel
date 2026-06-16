@@ -96,6 +96,14 @@ describe('next dev websocket shim preload', () => {
     });
   });
 
+  it('does not crash when the upgraded socket emits an error', async () => {
+    await expect(
+      runShimScenario('socket-error-after-upgrade')
+    ).resolves.toMatchObject({
+      ok: true,
+    });
+  });
+
   it('keeps concurrent websocket request contexts isolated', async () => {
     await expect(runShimScenario('concurrent-context')).resolves.toMatchObject({
       messages: ['/ws?id=1', '/ws?id=2'],
@@ -252,6 +260,16 @@ const server = http.createServer((req, res) => {
       return;
     }
 
+    if (scenario === 'socket-error-after-upgrade') {
+      const { socket } = consumeUpgrade();
+      setImmediate(() => {
+        socket.emit('error', Object.assign(new Error('read ECONNRESET'), { code: 'ECONNRESET' }));
+        socket.destroy();
+        setTimeout(() => finish({ ok: true }), 10);
+      });
+      return;
+    }
+
     if (scenario === 'concurrent-context') {
       const { req: rawReq, socket } = consumeUpgrade();
       socket.end(textFrame(new URL(rawReq.url, 'http://localhost').pathname + new URL(rawReq.url, 'http://localhost').search));
@@ -296,6 +314,14 @@ server.listen(0, '127.0.0.1', async () => {
 
     if (scenario === 'abort-on-close') {
       const client = net.createConnection({ host: '127.0.0.1', port });
+      await once(client, 'connect');
+      client.write(upgradeRequest('/ws'));
+      return;
+    }
+
+    if (scenario === 'socket-error-after-upgrade') {
+      const client = net.createConnection({ host: '127.0.0.1', port });
+      client.on('error', () => {});
       await once(client, 'connect');
       client.write(upgradeRequest('/ws'));
       return;

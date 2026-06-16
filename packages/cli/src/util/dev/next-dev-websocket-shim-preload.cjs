@@ -19,8 +19,7 @@ if (!globalThis[PATCHED_SYMBOL]) {
     enumerable: false,
     configurable: true,
     value: {
-      get: () =>
-        requestContext.getStore() ?? previousRequestContext?.get?.(),
+      get: () => requestContext.getStore() ?? previousRequestContext?.get?.(),
     },
   });
 
@@ -123,6 +122,7 @@ function emitWebSocketRequest({
           abortController.abort();
         });
       });
+      socket.once('error', noop);
 
       return { req, socket, head };
     },
