@@ -276,7 +276,6 @@ async function handleInitDeployment(
 
   const link = await ensureLink('deploy', client, cwd, {
     autoConfirm,
-    setupMsg: 'Set up',
     projectName:
       projectNameOrId ??
       getProjectName({
@@ -840,7 +839,6 @@ async function handleContinueSubcommand(
 
   const link = await ensureLink('deploy', client, cwd, {
     autoConfirm: true,
-    setupMsg: 'Set up',
     projectName: getProjectName({
       nameParam: undefined,
       nowConfig: localConfig,
@@ -1125,7 +1123,6 @@ async function handleDefaultDeploy(
 
   const link = await ensureLink('deploy', client, cwd, {
     autoConfirm,
-    setupMsg: 'Set up',
     projectName:
       projectNameOrId ??
       getProjectName({
