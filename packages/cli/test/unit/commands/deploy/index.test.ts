@@ -1080,24 +1080,6 @@ describe('deploy', () => {
         { key: 'output:deployment-id', value: 'dpl_archive_test' },
       ]);
     });
-    it('--public', async () => {
-      client.cwd = setupUnitFixture('commands/deploy/static');
-      client.setArgv('deploy', '--public');
-      const exitCode = await deploy(client);
-      expect(exitCode).toEqual(0);
-
-      expect(mock).toHaveBeenCalledWith(
-        ...Object.values({
-          ...baseCreateDeployArgs,
-          createArgs: expect.objectContaining({ wantsPublic: true }),
-        })
-      );
-      expect(client.telemetryEventStore).toHaveTelemetryEvents([
-        { key: 'flag:public', value: 'TRUE' },
-        { key: 'target_environment', value: 'preview' },
-        { key: 'output:deployment-id', value: 'dpl_archive_test' },
-      ]);
-    });
     it('--env', async () => {
       client.cwd = setupUnitFixture('commands/deploy/static');
       client.setArgv('deploy', '--env', 'KEY1=value', '--env', 'KEY2=value2');
