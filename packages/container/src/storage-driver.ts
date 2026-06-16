@@ -27,18 +27,24 @@ async function hasBinary(name: string): Promise<boolean> {
 
 let cachedStorageDriver: Promise<string | undefined> | undefined;
 
+/** Test-only: clear the memoized driver so env changes take effect. */
+export function __resetStorageDriverCache(): void {
+  cachedStorageDriver = undefined;
+}
+
 /**
  * Pick a storage driver for container image builds.
  *
- * In the build container we return `undefined`: the build image ships an
- * `/etc/containers/storage.conf` that selects the native `overlay` driver with
- * the graphroot on the XFS `/var/lib/containers` volume, so we let buildah use
- * that config rather than forcing a `--storage-driver` flag (which would
- * override storage.conf). `assertBuildContainerStorage()` then verifies the
- * effective driver/backing-fs post-init.
+ * The intended steady state in the build cell is the native `overlay` driver on
+ * the mounted XFS `/var/lib/containers` volume (configured via the build
+ * image's `/etc/containers/storage.conf`). However, that volume is not yet
+ * mounted on all cells, and native `overlay` cannot run on the cell's overlay
+ * rootfs. So for now we pick a driver that works everywhere: fuse-overlayfs
+ * when usable, otherwise vfs. `assertBuildContainerStorage()` reports (without
+ * failing) whether we're on the intended overlay+XFS setup.
  *
- * Locally there is no storage.conf, so we pick the best available driver:
- * fuse-overlayfs when usable, otherwise vfs.
+ * Set `VERCEL_VCR_DEFER_STORAGE_CONF=1` to instead defer to storage.conf (don't
+ * force a `--storage-driver`), once the volume is reliably mounted.
  *
  * `VERCEL_VCR_DOCKER_STORAGE_DRIVER` overrides the choice entirely.
  */
@@ -49,7 +55,7 @@ export function selectStorageDriver(): Promise<string | undefined> {
       if (override) {
         return override;
       }
-      if (isBuildContainer()) {
+      if (readString(process.env.VERCEL_VCR_DEFER_STORAGE_CONF)) {
         // Defer to /etc/containers/storage.conf (native overlay on the volume).
         return undefined;
       }
@@ -147,13 +153,17 @@ export async function readBuildahStoreInfo(): Promise<
 }
 
 /**
- * In the build container, verify buildah came up with the intended storage:
- * native `overlay` driver, graphroot on the mounted `/var/lib/containers`
- * volume, backed by a real (non-overlay) filesystem. Throws loudly otherwise so
- * we never silently run on the slow `vfs` driver or off the wrong volume.
+ * In the build container, report whether buildah came up with the intended
+ * storage: native `overlay` driver, graphroot on the mounted
+ * `/var/lib/containers` volume, backed by a real (non-overlay) filesystem.
  *
- * No-op outside the build container. Set `VERCEL_VCR_ALLOW_VFS_FALLBACK=1` to
- * downgrade a mismatch to a warning.
+ * This is observability-only by default: on a mismatch it logs loudly but does
+ * NOT fail the build, because the volume mount is not yet applied on all cells
+ * (it ships via the deployed api-build-containers-loop service, not the pinned
+ * build-container image). Set `VERCEL_VCR_STRICT_STORAGE=1` to make a mismatch
+ * a hard error once the volume is reliably mounted.
+ *
+ * No-op outside the build container.
  */
 export async function assertBuildContainerStorage(
   log: (message: string) => void = () => {}
@@ -166,25 +176,33 @@ export async function assertBuildContainerStorage(
     return;
   }
 
+  const strict = Boolean(readString(process.env.VERCEL_VCR_STRICT_STORAGE));
+
   let storeInfo: BuildahStoreInfo | undefined;
   try {
     storeInfo = await readBuildahStoreInfo();
   } catch (err) {
-    throw new Error(
-      `Could not verify buildah storage via \`buildah info\`: ${
-        (err as Error).message
-      }`
-    );
+    // `buildah info` itself failing (e.g. overlay can't init on this fs) is the
+    // very condition we're reporting on; surface it but don't block by default.
+    const message = `Could not verify buildah storage via \`buildah info\`: ${
+      (err as Error).message
+    }`;
+    if (strict) {
+      throw new Error(message);
+    }
+    log(message);
+    return;
   }
   if (!storeInfo) {
-    throw new Error(
-      'Could not verify buildah storage: `buildah info` returned no store data.'
-    );
+    const message =
+      'Could not verify buildah storage: `buildah info` returned no store data.';
+    if (strict) {
+      throw new Error(message);
+    }
+    log(message);
+    return;
   }
 
-  const allowVfs = Boolean(
-    readString(process.env.VERCEL_VCR_ALLOW_VFS_FALLBACK)
-  );
   const problems: string[] = [];
   if (storeInfo.driver !== REQUIRED_BUILD_CONTAINER_DRIVER) {
     problems.push(
@@ -220,15 +238,16 @@ export async function assertBuildContainerStorage(
   const detail =
     `${summary}\nProblems: ${problems.join('; ')}.\n` +
     'Expected the native overlay driver on the XFS `/var/lib/containers` ' +
-    'cell volume (requires vercel/hive#2310 capabilities + vercel/api#76567 ' +
-    'volume mount).';
+    'cell volume (requires vercel/hive#2310 capabilities + the ' +
+    '`/var/lib/containers` cell-spec volume from vercel/api#76567).';
 
-  if (allowVfs) {
-    log(`${detail}\nContinuing because VERCEL_VCR_ALLOW_VFS_FALLBACK is set.`);
-    return;
+  if (strict) {
+    throw new Error(
+      `Container build storage is not configured as intended.\n${detail}`
+    );
   }
-  throw new Error(
-    `Container build storage is not configured as intended.\n${detail}\n` +
-      'To proceed anyway, set VERCEL_VCR_ALLOW_VFS_FALLBACK=1.'
+  // Observability-only by default: log loudly, keep building.
+  log(
+    `${detail}\nContinuing (set VERCEL_VCR_STRICT_STORAGE=1 to fail builds).`
   );
 }

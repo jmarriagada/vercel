@@ -3,6 +3,7 @@ import { EventEmitter } from 'node:events';
 import { writeFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { build } from '../src';
+import { __resetStorageDriverCache } from '../src/storage-driver';
 
 const { spawnMock, existsSyncMock } = vi.hoisted(() => ({
   spawnMock: vi.fn(),
@@ -117,11 +118,15 @@ const VCR_ENV_KEYS = [
   'VERCEL_API_URL',
   'VERCEL_BUILD_IMAGE',
   'VERCEL_CONTAINER_ENGINE',
+  'VERCEL_VCR_DOCKER_STORAGE_DRIVER',
+  'VERCEL_VCR_DEFER_STORAGE_CONF',
+  'VERCEL_VCR_STRICT_STORAGE',
 ];
 
 beforeEach(() => {
   existsSyncMock.mockReturnValue(false);
   spawnMock.mockReset();
+  __resetStorageDriverCache();
   for (const key of VCR_ENV_KEYS) {
     delete process.env[key];
   }
@@ -305,9 +310,6 @@ describe('@vercel/container', () => {
     );
     expect(commands.some(c => /\bbuildah\b.*\blogin\b/.test(c))).toBe(true);
     expect(commands.some(c => /\bbuildah\b.*\bpush\b/.test(c))).toBe(true);
-    // In the build container we defer to /etc/containers/storage.conf (native
-    // overlay on the mounted volume); we must NOT force a --storage-driver.
-    expect(commands.some(c => c.includes('--storage-driver'))).toBe(false);
     expect(commands.some(c => c.includes('--registries-conf'))).toBe(true);
     expect(
       commands.some(c => c.includes('--root /var/lib/containers/storage'))
@@ -315,8 +317,20 @@ describe('@vercel/container', () => {
     expect(commands.some(c => c.startsWith('docker build'))).toBe(false);
   });
 
-  it('verifies buildah storage and fails when it is not overlay on the volume', async () => {
-    // Simulate buildah falling back to vfs (e.g. overlay couldn't initialize).
+  it('defers to storage.conf when VERCEL_VCR_DEFER_STORAGE_CONF is set', async () => {
+    process.env.VERCEL_VCR_DEFER_STORAGE_CONF = '1';
+    try {
+      const commands = await runDockerfileBuild({ buildImageEnv: 'al2023' });
+      // Deferring to storage.conf means we don't force a --storage-driver.
+      expect(commands.some(c => c.includes('--storage-driver'))).toBe(false);
+    } finally {
+      delete process.env.VERCEL_VCR_DEFER_STORAGE_CONF;
+    }
+  });
+
+  it('storage verification is observability-only by default (does not fail the build)', async () => {
+    // Simulate buildah on vfs (overlay couldn't initialize). The build should
+    // still succeed; verification only warns unless VERCEL_VCR_STRICT_STORAGE.
     await expect(
       runDockerfileBuild({
         buildImageEnv: 'al2023',
@@ -327,7 +341,26 @@ describe('@vercel/container', () => {
           GraphStatus: { 'Backing Filesystem': 'xfs' },
         },
       })
-    ).rejects.toThrow(/storage driver is "vfs", expected "overlay"/);
+    ).resolves.toBeDefined();
+  });
+
+  it('storage verification fails the build under VERCEL_VCR_STRICT_STORAGE', async () => {
+    process.env.VERCEL_VCR_STRICT_STORAGE = '1';
+    try {
+      await expect(
+        runDockerfileBuild({
+          buildImageEnv: 'al2023',
+          storeInfo: {
+            GraphRoot: '/var/lib/containers/storage',
+            RunRoot: '/run/containers/storage',
+            GraphDriverName: 'vfs',
+            GraphStatus: { 'Backing Filesystem': 'xfs' },
+          },
+        })
+      ).rejects.toThrow(/storage driver is "vfs", expected "overlay"/);
+    } finally {
+      delete process.env.VERCEL_VCR_STRICT_STORAGE;
+    }
   });
 
   it('ensures the VCR repository exists before pushing', async () => {

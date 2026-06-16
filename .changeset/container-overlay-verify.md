@@ -2,11 +2,13 @@
 '@vercel/container': patch
 ---
 
-Require and verify the native `overlay` storage driver for buildah in the build
-container instead of silently falling back to `vfs`. We now defer to the build
-image's `/etc/containers/storage.conf` (native overlay with graphroot on the
-mounted `/var/lib/containers` XFS volume) and assert via `buildah info` that the
-effective driver is `overlay` on the expected volume, failing the build loudly
-otherwise. Also pass `buildah build --layers` to enable per-instruction layer
-caching. Set `VERCEL_VCR_ALLOW_VFS_FALLBACK=1` to downgrade the check to a
-warning.
+Build container images with buildah using a working storage driver
+(fuse-overlayfs when available, otherwise vfs) and report — without failing the
+build — whether buildah came up on the intended native `overlay` driver backed
+by the mounted XFS `/var/lib/containers` volume. The volume mount ships via the
+deployed api-build-containers-loop service rather than the pinned build-container
+image, so it is not yet applied on all cells; the storage report is therefore
+observability-only by default. Set `VERCEL_VCR_STRICT_STORAGE=1` to fail the
+build on a mismatch, or `VERCEL_VCR_DEFER_STORAGE_CONF=1` to defer to the image's
+storage.conf (native overlay) once the volume is reliably mounted. Also pass
+`buildah build --layers` for per-instruction layer caching.
