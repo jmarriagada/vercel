@@ -29,7 +29,7 @@ export function shouldInjectNextDevWebSocketShim(
 ): boolean {
   return (
     projectSettings?.framework === 'nextjs' ||
-    /(?:^|\s)(?:next|next\.js)\s+dev(?:\s|$)/.test(command)
+    /(?:^|\s)(?:next|next\.js)(?:\s+dev)?(?:\s+-|\s*$|$)/.test(command)
   );
 }
 

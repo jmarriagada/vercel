@@ -7,8 +7,11 @@ import {
 
 describe('Next.js dev WebSocket shim injection', () => {
   it('detects Next.js dev commands', () => {
+    expect(shouldInjectNextDevWebSocketShim('next')).toBe(true);
+    expect(shouldInjectNextDevWebSocketShim('next -p 3000')).toBe(true);
     expect(shouldInjectNextDevWebSocketShim('next dev --port 3000')).toBe(true);
     expect(shouldInjectNextDevWebSocketShim('pnpm next dev')).toBe(true);
+    expect(shouldInjectNextDevWebSocketShim('next build')).toBe(false);
     expect(shouldInjectNextDevWebSocketShim('vite dev')).toBe(false);
   });
 
