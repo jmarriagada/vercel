@@ -119,6 +119,49 @@ export const buildahEngine: ContainerEngine = {
     }
   },
 
+  async reportStorage(span?: Span): Promise<void> {
+    if (!DEBUG) {
+      return;
+    }
+    try {
+      const { stdout } = await runBuildah(['info'], { quiet: true });
+      const store = (JSON.parse(stdout) as { store?: Record<string, unknown> })
+        .store;
+      if (!store) {
+        debug('buildah info: no `store` field in output');
+        return;
+      }
+      const graphRoot = String(store.GraphRoot ?? '?');
+      const runRoot = String(store.RunRoot ?? '?');
+      const driver = String(store.GraphDriverName ?? '?');
+      // GraphStatus often reports the backing filesystem, e.g. "Backing Filesystem: xfs".
+      const graphStatus = store.GraphStatus as
+        | Record<string, string>
+        | undefined;
+      const backingFs =
+        graphStatus?.['Backing Filesystem'] ??
+        graphStatus?.['Backing filesystem'] ??
+        '?';
+      const imageStore = store.ImageStore as { number?: number } | undefined;
+
+      info(
+        `buildah storage: graphRoot=${graphRoot} runRoot=${runRoot} ` +
+          `driver=${driver} backingFs=${backingFs}` +
+          (imageStore?.number !== undefined
+            ? ` images=${imageStore.number}`
+            : '')
+      );
+      span?.setAttributes({
+        'buildah.storage.graph_root': graphRoot,
+        'buildah.storage.run_root': runRoot,
+        'buildah.storage.driver': driver,
+        'buildah.storage.backing_fs': backingFs,
+      });
+    } catch (err) {
+      debug(`buildah storage report unavailable: ${(err as Error).message}`);
+    }
+  },
+
   async push(params: BuildPushParams): Promise<string | undefined> {
     const digestDir = mkdtempSync(join(tmpdir(), 'vercel-container-digest-'));
     const digestFile = join(digestDir, 'digest');

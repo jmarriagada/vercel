@@ -41,4 +41,11 @@ export interface ContainerEngine {
   build(params: BuildPushParams): Promise<void>;
   login(params: BuildPushParams): Promise<void>;
   push(params: BuildPushParams): Promise<string | undefined>;
+
+  /**
+   * Best-effort report of the engine's effective on-disk image store (graph
+   * root, run root, driver, backing filesystem). Used to confirm the build is
+   * using the mounted cell storage volume. Must not fail the build.
+   */
+  reportStorage?(span?: Span): Promise<void>;
 }

@@ -191,6 +191,14 @@ async function buildAndPushImage(params: {
             : `pushed in ${elapsed(pushStart)}`
         );
 
+        // Post-build confirmation of the effective image store (debug-only).
+        await withSpan(
+          buildSpan,
+          'container.report_storage',
+          { 'container.engine': engine.name },
+          s => engine.reportStorage?.(s) ?? Promise.resolve()
+        );
+
         const resolvedRef = digest
           ? `${VCR_REGISTRY}/${fullRepository}@${digest}`
           : imageRef;
