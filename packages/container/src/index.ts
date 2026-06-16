@@ -8,6 +8,7 @@ import {
   TARGET_PLATFORM,
 } from './engines';
 import type { BuildPushParams } from './engines/types';
+import { resolveOidcTokenForBuild } from './oidc';
 import { ensureRepository } from './registry';
 import {
   debug,
@@ -79,46 +80,42 @@ async function buildAndPushImage(params: {
   const { contextDir, dockerfilePath, repository, tag, parentSpan } = params;
   const engine = selectContainerEngine();
 
-  const token = readString(process.env.VERCEL_OIDC_TOKEN);
-  if (!token) {
-    throw new Error(
-      'Missing VERCEL_OIDC_TOKEN for the container registry ' +
-        '(it is auto-pulled by `vercel build`).'
-    );
-  }
-  const claims = decodeOidcClaims(token);
-  debug(`registry token: ${tokenFingerprint(token)}`);
-  debugTokenClaims('OIDC token claims', token);
-
-  const username = claims.owner_id;
-  if (!username) {
-    throw new Error(
-      'The OIDC token is missing the `owner_id` (team id) claim required to ' +
-        'authenticate to the container registry.'
-    );
-  }
-
-  const fullRepository = [claims.owner, claims.project, repository].join('/');
-  const imageRef = `${VCR_REGISTRY}/${fullRepository}:${tag}`;
-
   return withSpan(
     parentSpan,
     'container.build_and_push',
     {
       'container.engine': engine.name,
       'container.registry': VCR_REGISTRY,
-      'container.repository': fullRepository,
-      'image.tag': tag,
-      'image.ref': imageRef,
-      'registry.username': username,
+      'container.repository': repository,
     },
     async buildSpan => {
-      await withSpan(
-        buildSpan,
-        'container.ensure_repository',
-        { 'container.repository': repository },
-        s => ensureRepository(repository, token, claims, s)
+      const token = await withSpan(buildSpan, 'container.mint_oidc', {}, s =>
+        resolveOidcTokenForBuild(s)
       );
+
+      const claims = decodeOidcClaims(token);
+      debug(`registry token: ${tokenFingerprint(token)}`);
+      debugTokenClaims('OIDC token claims', token);
+
+      const username = claims.owner_id;
+      if (!username) {
+        throw new Error(
+          'VERCEL_OIDC_TOKEN is missing the `owner_id` (team id) claim required to ' +
+            'authenticate to the container registry.'
+        );
+      }
+
+      const fullRepository = [claims.owner, claims.project, repository].join(
+        '/'
+      );
+      const imageRef = `${VCR_REGISTRY}/${fullRepository}:${tag}`;
+
+      buildSpan?.setAttributes({
+        'container.repository': fullRepository,
+        'image.tag': tag,
+        'image.ref': imageRef,
+        'registry.username': username,
+      });
 
       return engine.withRuntime(buildSpan, async () => {
         await withSpan(
@@ -135,11 +132,6 @@ async function buildAndPushImage(params: {
           s => engine.logDiagnostics(s)
         );
 
-        info(`Building image ${imageRef} (${engine.name})`);
-        debug(`dockerfile: ${dockerfilePath}`);
-        debug(`context:    ${contextDir}`);
-        debug(`platform:   ${TARGET_PLATFORM}`);
-
         const buildParams: BuildPushParams = {
           contextDir,
           dockerfilePath,
@@ -150,16 +142,6 @@ async function buildAndPushImage(params: {
           repository,
           span: buildSpan,
         };
-
-        const buildStart = Date.now();
-        step(`${engine.name} build (${TARGET_PLATFORM})`);
-        await withSpan(
-          buildSpan,
-          'container.image_build',
-          { 'image.ref': imageRef, 'image.platform': TARGET_PLATFORM },
-          () => engine.build(buildParams)
-        );
-        done(`built in ${elapsed(buildStart)}`);
 
         step(`Authenticating to ${VCR_REGISTRY} as ${username}`);
         await withSpan(
@@ -172,6 +154,28 @@ async function buildAndPushImage(params: {
           () => engine.login(buildParams)
         );
         done('authenticated');
+
+        await withSpan(
+          buildSpan,
+          'container.ensure_repository',
+          { 'container.repository': repository },
+          s => ensureRepository(repository, token, claims, s)
+        );
+
+        info(`Building image ${imageRef} (${engine.name})`);
+        debug(`dockerfile: ${dockerfilePath}`);
+        debug(`context:    ${contextDir}`);
+        debug(`platform:   ${TARGET_PLATFORM}`);
+
+        const buildStart = Date.now();
+        step(`${engine.name} build (${TARGET_PLATFORM})`);
+        await withSpan(
+          buildSpan,
+          'container.image_build',
+          { 'image.ref': imageRef, 'image.platform': TARGET_PLATFORM },
+          () => engine.build(buildParams)
+        );
+        done(`built in ${elapsed(buildStart)}`);
 
         const pushStart = Date.now();
         step(`Pushing ${imageRef}`);

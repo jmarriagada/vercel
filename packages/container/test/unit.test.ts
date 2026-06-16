@@ -34,10 +34,66 @@ function fakeOidcToken(claims: Record<string, unknown> = {}) {
       owner: 'acme',
       owner_id: 'team_test',
       project: 'my-app',
+      project_id: 'prj_test',
+      iss: 'https://oidc.vercel.com',
+      exp: Math.floor(Date.now() / 1000) + 3600,
       ...claims,
     })
   ).toString('base64url');
   return `eyJhbGciOiJSUzI1NiJ9.${payload}.sig`;
+}
+
+function stubRegistryFetch(
+  fetchMock: ReturnType<typeof vi.fn>,
+  options: { repositoryStatus?: number; mintStatus?: number } = {}
+) {
+  const repositoryStatus = options.repositoryStatus ?? 200;
+  const mintStatus = options.mintStatus ?? 200;
+  fetchMock.mockImplementation((url: string | URL) => {
+    const href = String(url);
+    if (href.includes('/v1/projects/') && href.includes('/token')) {
+      const projectId =
+        href.match(/\/projects\/([^/?]+)\/token/)?.[1] ?? 'prj_test';
+      const token = fakeOidcToken({
+        project_id: projectId,
+        owner_id: 'team_test',
+      });
+      return Promise.resolve({
+        ok: mintStatus >= 200 && mintStatus < 300,
+        status: mintStatus,
+        json: async () => ({ token }),
+        text: async () =>
+          mintStatus === 403 ? 'Forbidden' : JSON.stringify({ token }),
+      });
+    }
+    if (href.includes('/v1/vcr/repository')) {
+      return Promise.resolve({
+        ok: repositoryStatus >= 200 && repositoryStatus < 300,
+        status: repositoryStatus,
+        text: async () => '',
+      });
+    }
+    return Promise.resolve({
+      ok: true,
+      status: 200,
+      text: async () => '',
+    });
+  });
+}
+
+/** Fake child process that exits with a failure code. */
+function fakeChildFailure(stderr = '') {
+  const child: any = new EventEmitter();
+  child.stdout = new EventEmitter();
+  child.stderr = new EventEmitter();
+  child.stdin = { end: vi.fn() };
+  setImmediate(() => {
+    if (stderr) {
+      child.stderr.emit('data', Buffer.from(stderr));
+    }
+    child.emit('close', 1);
+  });
+  return child;
 }
 
 /** Fake child process that emits the given stdout, then exits successfully. */
@@ -57,6 +113,7 @@ function fakeChild(stdout = '') {
 
 const VCR_ENV_KEYS = [
   'VERCEL_OIDC_TOKEN',
+  'VERCEL_TOKEN',
   'VERCEL_API_URL',
   'VERCEL_BUILD_IMAGE',
   'VERCEL_CONTAINER_ENGINE',
@@ -160,6 +217,9 @@ describe('@vercel/container', () => {
       process.env.VERCEL_CONTAINER_ENGINE = options.engineOverride;
     }
     process.env.VERCEL_OIDC_TOKEN = fakeOidcToken();
+    const fetchMock = vi.fn();
+    stubRegistryFetch(fetchMock);
+    vi.stubGlobal('fetch', fetchMock);
     // Everything exists except /dev/fuse so storage-driver selection falls
     // back to vfs deterministically (otherwise fuse-overlayfs may be picked).
     existsSyncMock.mockImplementation((path: string) => path !== '/dev/fuse');
@@ -199,7 +259,10 @@ describe('@vercel/container', () => {
 
   it('builds a Dockerfile with docker locally, pushes to VCR, and emits the digest reference', async () => {
     const commands = await runDockerfileBuild();
-    expect(commands.some(c => c.startsWith('docker build'))).toBe(true);
+    const loginIndex = commands.findIndex(c => c.includes('login'));
+    const buildIndex = commands.findIndex(c => c.startsWith('docker build'));
+    expect(loginIndex).toBeGreaterThanOrEqual(0);
+    expect(buildIndex).toBeGreaterThan(loginIndex);
     expect(
       commands.some(
         c =>
@@ -243,11 +306,8 @@ describe('@vercel/container', () => {
       return fakeChild('');
     });
 
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      text: async () => '',
-    });
+    const fetchMock = vi.fn();
+    stubRegistryFetch(fetchMock, { repositoryStatus: 200 });
     vi.stubGlobal('fetch', fetchMock);
 
     await build({
@@ -277,11 +337,8 @@ describe('@vercel/container', () => {
       return fakeChild('');
     });
 
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: false,
-      status: 409,
-      text: async () => 'already exists',
-    });
+    const fetchMock = vi.fn();
+    stubRegistryFetch(fetchMock, { repositoryStatus: 409 });
     vi.stubGlobal('fetch', fetchMock);
 
     const result = expectTypicalBuildResult(
@@ -305,6 +362,128 @@ describe('@vercel/container', () => {
         ...createBuildOptions({ runtime: 'container' }),
         service: { name: 'api', type: 'web' },
       })
-    ).rejects.toThrow(/VERCEL_OIDC_TOKEN/);
+    ).rejects.toThrow(/Missing VERCEL_OIDC_TOKEN/);
+  });
+
+  it('uses the existing OIDC token directly when no VERCEL_TOKEN is set', async () => {
+    existsSyncMock.mockReturnValue(true);
+    process.env.VERCEL_OIDC_TOKEN = fakeOidcToken({
+      project_id: 'prj_test123',
+    });
+    const fetchMock = vi.fn();
+    stubRegistryFetch(fetchMock);
+    vi.stubGlobal('fetch', fetchMock);
+    spawnMock.mockImplementation((_cmd: string, args: string[]) => {
+      if (args.includes('push')) {
+        return fakeChild(
+          `latest: digest: sha256:${'e'.repeat(64)} size: 1234\n`
+        );
+      }
+      return fakeChild('');
+    });
+
+    await build({
+      ...createBuildOptions({ runtime: 'container' }),
+      service: { name: 'api', type: 'web' },
+    });
+
+    // An OIDC token cannot mint another OIDC token, so without a user/CLI auth
+    // token (VERCEL_TOKEN) we must not call the project token-mint endpoint.
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      expect.stringContaining('/v1/projects/'),
+      expect.anything()
+    );
+  });
+
+  it('mints a fresh OIDC token when VERCEL_TOKEN is available', async () => {
+    existsSyncMock.mockReturnValue(true);
+    process.env.VERCEL_OIDC_TOKEN = fakeOidcToken({
+      project_id: 'prj_test123',
+    });
+    process.env.VERCEL_TOKEN = 'cli-auth-token';
+    const fetchMock = vi.fn();
+    stubRegistryFetch(fetchMock);
+    vi.stubGlobal('fetch', fetchMock);
+    spawnMock.mockImplementation((_cmd: string, args: string[]) => {
+      if (args.includes('push')) {
+        return fakeChild(
+          `latest: digest: sha256:${'e'.repeat(64)} size: 1234\n`
+        );
+      }
+      return fakeChild('');
+    });
+
+    await build({
+      ...createBuildOptions({ runtime: 'container' }),
+      service: { name: 'api', type: 'web' },
+    });
+
+    // The mint request must authenticate with the CLI auth token, not the OIDC
+    // token.
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('/v1/projects/prj_test123/token'),
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({
+          authorization: 'Bearer cli-auth-token',
+        }),
+      })
+    );
+  });
+
+  it('falls back to the existing OIDC token when minting fails', async () => {
+    existsSyncMock.mockReturnValue(true);
+    process.env.VERCEL_OIDC_TOKEN = fakeOidcToken({
+      project_id: 'prj_test123',
+    });
+    process.env.VERCEL_TOKEN = 'cli-auth-token';
+    const fetchMock = vi.fn();
+    stubRegistryFetch(fetchMock, { mintStatus: 403 });
+    vi.stubGlobal('fetch', fetchMock);
+    spawnMock.mockImplementation((_cmd: string, args: string[]) => {
+      if (args.includes('push')) {
+        return fakeChild(
+          `latest: digest: sha256:${'e'.repeat(64)} size: 1234\n`
+        );
+      }
+      return fakeChild('');
+    });
+
+    // A failed mint must not fail the build; it falls back to the existing token.
+    await expect(
+      build({
+        ...createBuildOptions({ runtime: 'container' }),
+        service: { name: 'api', type: 'web' },
+      })
+    ).resolves.toBeDefined();
+  });
+
+  it('fails before building when registry login is rejected', async () => {
+    existsSyncMock.mockReturnValue(true);
+    process.env.VERCEL_OIDC_TOKEN = fakeOidcToken({
+      owner_id: 'team_TtmJZYmD3tcLBLqWOhoVawd1',
+    });
+    const fetchMock = vi.fn();
+    stubRegistryFetch(fetchMock);
+    vi.stubGlobal('fetch', fetchMock);
+    spawnMock.mockImplementation((_cmd: string, args: string[]) => {
+      if (args.includes('login')) {
+        return fakeChildFailure(
+          'Error response from daemon: login attempt to https://vcr.vercel.com/v2/ failed with status: 403 Forbidden'
+        );
+      }
+      return fakeChild('');
+    });
+
+    await expect(
+      build({
+        ...createBuildOptions({ runtime: 'container' }),
+        service: { name: 'api', type: 'web' },
+      })
+    ).rejects.toThrow(/vercel-enable-vcr/);
+
+    expect(
+      spawnMock.mock.calls.some(([, args]) => args.includes('build'))
+    ).toBe(false);
   });
 });

@@ -1,5 +1,6 @@
 import type { Span } from '@vercel/build-utils';
 import { spawn, type ChildProcess } from 'node:child_process';
+import { formatVcrAuthError } from '../oidc';
 import {
   DEBUG,
   debug,
@@ -303,14 +304,11 @@ export const dockerEngine: ContainerEngine = {
       const message = (err as Error).message;
       if (/denied|forbidden|unauthorized|401|403/i.test(message)) {
         throw new Error(
-          [
-            `Authentication to ${params.registry} as "${params.username}" was rejected.`,
-            '',
-            `Make sure your team ("${params.username}") is enrolled in the`,
-            '`vercel-enable-vcr` flag and that the OIDC token is valid for it.',
-            '',
-            `Underlying error: ${message}`,
-          ].join('\n')
+          formatVcrAuthError(
+            params.registry,
+            params.username,
+            `Underlying error: ${message}`
+          )
         );
       }
       throw err;
