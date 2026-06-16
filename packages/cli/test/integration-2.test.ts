@@ -618,7 +618,7 @@ test('override an existing env var', async () => {
   );
 
   expect(output.exitCode, formatOutput(output)).toBe(0);
-  expect(output.stderr).toContain('✓ Added           envVarName');
+  expect(output.stderr).toMatch(/^✓ Added\s+envVarName/m);
   expect(output.stderr).toContain('Environments    Production');
 
   // 2. Override
@@ -632,7 +632,7 @@ test('override an existing env var', async () => {
   );
 
   expect(outputOverride.exitCode, formatOutput(outputOverride)).toBe(0);
-  expect(outputOverride.stderr).toContain('✓ Overrode         envVarName');
+  expect(outputOverride.stderr).toMatch(/^✓ Overrode\s+envVarName/m);
   expect(outputOverride.stderr).toContain('Environments    Production');
 
   await apiFetch(`/v2/projects/${projectName}`, { method: 'DELETE' });
