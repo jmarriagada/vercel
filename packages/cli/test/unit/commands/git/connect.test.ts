@@ -573,11 +573,12 @@ describe('git connect', () => {
           linked: 10,
           nextTierLimit: 150,
           ctaLabel: 'Upgrade to Pro',
-          ctaUrl: 'https://vercel.com/account/billing?ref=repo-link-limit',
+          ctaUrl:
+            'https://vercel.com/dashboard?upgradeToPro=repo-link-limit&upgradeToProTeamScope=my-team',
           docsUrl:
             'https://vercel.com/docs/errors/error-list#repository-connection-limitation',
         },
-        `Error: A Git Repository cannot be connected to more than 10 Projects. (400)\nUpgrade to Pro: https://vercel.com/account/billing?ref=repo-link-limit`
+        `Error: A Git Repository cannot be connected to more than 10 Projects. (400)\nUpgrade to Pro: https://vercel.com/dashboard?upgradeToPro=repo-link-limit&upgradeToProTeamScope=my-team`
       );
     });
 
