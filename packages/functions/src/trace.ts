@@ -68,6 +68,7 @@ class Span implements Instrument {
         },
       ],
     });
+    this.ended = true;
   }
 }
 
