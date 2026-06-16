@@ -252,3 +252,37 @@ export interface Framework {
    */
   language?: Language;
 }
+
+/**
+ * The execution engine that runs a deployed function. The specific version
+ * (e.g. `nodejs24.x`) is detected separately by the builders.
+ */
+export enum Runtime {
+  Node = 'node',
+  Bun = 'bun',
+  Python = 'python',
+  Ruby = 'ruby',
+  Go = 'go',
+  Rust = 'rust',
+}
+
+/**
+ * A non-default runtime that may be selected for a language when its detectors
+ * match the project.
+ */
+export interface RuntimePreset {
+  runtime: Runtime;
+  detectors: {
+    every?: FrameworkDetectionItem[];
+    some?: FrameworkDetectionItem[];
+  };
+}
+
+/**
+ * Runtime configuration for a single language: the default runtime, plus any
+ * alternatives evaluated in order against project signals.
+ */
+export interface LanguageRuntimes {
+  default: Runtime;
+  alternatives?: RuntimePreset[];
+}
