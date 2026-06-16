@@ -1,0 +1,10 @@
+/**
+ * Converts any thrown value into a message suitable for diagnostics.
+ */
+export function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return String(error);
+}
