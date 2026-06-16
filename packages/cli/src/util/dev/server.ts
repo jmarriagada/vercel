@@ -22,7 +22,6 @@ import deepEqual from 'fast-deep-equal';
 import { checkForPort } from './port-utils';
 import npa from 'npm-package-arg';
 import type { ChildProcess } from 'child_process';
-import type { Socket } from 'net';
 import JSONparse from 'json-parse-better-errors';
 
 import { getVercelIgnore, fileNameSymbol } from '@vercel/client';
@@ -238,7 +237,6 @@ export default class DevServer {
     });
 
     this.server = http.createServer(this.devServerHandler);
-    this.server.on('upgrade', this.handleUpgrade);
     this.server.timeout = 0; // Disable timeout
     this.stopping = false;
     this.buildMatches = new Map();
@@ -1089,6 +1087,40 @@ export default class DevServer {
     // Wait for "ready" event of the watcher
     await once(this.watcher, 'ready');
 
+    // Configure the server to forward WebSocket "upgrade" events to the proxy.
+    this.server.on('upgrade', async (req, socket, head) => {
+      await this.startPromise;
+
+      if (this.orchestrator) {
+        const pathname = url.parse(req.url || '/').pathname || '/';
+        const service = this.orchestrator.getServiceForRoute(pathname);
+        if (service) {
+          const target = `http://${service.host}:${service.port}`;
+          output.debug(
+            `Detected "upgrade" event, proxying to service "${service.name}" at ${target}`
+          );
+          this.proxy.ws(req, socket, head, { target });
+          return;
+        }
+        output.debug(
+          `Detected "upgrade" event, but no matching service found for ${pathname}`
+        );
+        socket.destroy();
+        return;
+      }
+
+      if (!this.devProcessOrigin) {
+        output.debug(
+          `Detected "upgrade" event, but closing socket because no frontend dev server is running`
+        );
+        socket.destroy();
+        return;
+      }
+      const target = this.devProcessOrigin;
+      output.debug(`Detected "upgrade" event, proxying to ${target}`);
+      this.proxy.ws(req, socket, head, { target });
+    });
+
     await devCommandPromise;
 
     // For multi-service mode, URLs were already printed.
@@ -1101,44 +1133,6 @@ export default class DevServer {
       output.ready(`Available at ${link(addressFormatted)}`);
     }
   }
-
-  private handleUpgrade = async (
-    req: http.IncomingMessage,
-    socket: Socket,
-    head: Buffer
-  ) => {
-    await this.startPromise;
-
-    if (this.orchestrator) {
-      const pathname = url.parse(req.url || '/').pathname || '/';
-      const service = this.orchestrator.getServiceForRoute(pathname);
-      if (service) {
-        const target = `http://${service.host}:${service.port}`;
-        output.debug(
-          `Detected "upgrade" event, proxying to service "${service.name}" at ${target}`
-        );
-        this.proxy.ws(req, socket, head, { target });
-        return;
-      }
-      output.debug(
-        `Detected "upgrade" event, but no matching service found for ${pathname}`
-      );
-      socket.destroy();
-      return;
-    }
-
-    if (!this.devProcessOrigin) {
-      output.debug(
-        `Detected "upgrade" event, but closing socket because no frontend dev server is running`
-      );
-      socket.destroy();
-      return;
-    }
-
-    const target = this.devProcessOrigin;
-    output.debug(`Detected "upgrade" event, proxying to ${target}`);
-    this.proxy.ws(req, socket, head, { target });
-  };
 
   /**
    * Shuts down the `vercel dev` server, and cleans up any temporary resources.

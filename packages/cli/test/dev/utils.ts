@@ -225,6 +225,18 @@ export function webSocketEcho(
   });
 }
 
+export function webSocketEchoWithRetry(
+  port: number,
+  path: string,
+  message: string
+): Promise<string> {
+  return retry(() => webSocketEcho(port, path, message), {
+    retries: 5,
+    minTimeout: 250,
+    maxTimeout: 250,
+  });
+}
+
 function appendBuffer(buffer: Buffer, chunk: Buffer): Buffer {
   const next = Buffer.alloc(buffer.length + chunk.length);
   for (let i = 0; i < buffer.length; i++) {
