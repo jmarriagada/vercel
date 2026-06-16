@@ -7,7 +7,7 @@ import {
   testFixture,
   testFixtureStdio,
   validateResponseHeaders,
-  webSocketEchoWithRetry,
+  webSocketEcho,
 } from './utils';
 import assert from 'assert';
 import nodeFetch from 'node-fetch';
@@ -661,9 +661,9 @@ describe('[vercel dev] Multi-service with experimentalServices', () => {
 
     try {
       await readyResolver;
-      await expect(
-        webSocketEchoWithRetry(port, '/api/ws', 'hello')
-      ).resolves.toBe('echo:hello');
+      await expect(webSocketEcho(port, '/api/ws', 'hello')).resolves.toBe(
+        'echo:hello'
+      );
     } finally {
       await dev.kill();
     }
