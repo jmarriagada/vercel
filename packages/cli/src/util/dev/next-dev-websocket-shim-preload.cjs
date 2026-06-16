@@ -20,7 +20,7 @@ if (!globalThis[PATCHED_SYMBOL]) {
     configurable: true,
     value: {
       get: () =>
-        requestContext.getStore() ?? previousRequestContext?.get?.() ?? {},
+        requestContext.getStore() ?? previousRequestContext?.get?.(),
     },
   });
 

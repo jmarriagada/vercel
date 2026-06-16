@@ -48,6 +48,7 @@ async function runShimScenario(scenario: string) {
 describe('next dev websocket shim preload', () => {
   it('does not expose upgradeWebSocket for normal HTTP requests', async () => {
     await expect(runShimScenario('non-upgrade')).resolves.toMatchObject({
+      hasContext: false,
       upgradeWebSocket: false,
     });
   });
@@ -192,7 +193,8 @@ const server = http.createServer((req, res) => {
     if (scenario === 'non-upgrade') {
       res.setHeader('connection', 'close');
       res.end(JSON.stringify({
-        upgradeWebSocket: typeof ctx.upgradeWebSocket === 'function',
+        hasContext: ctx !== undefined,
+        upgradeWebSocket: typeof ctx?.upgradeWebSocket === 'function',
       }));
       return;
     }
