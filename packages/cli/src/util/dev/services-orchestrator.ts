@@ -40,7 +40,7 @@ import { importBuilders } from '../build/import-builders';
 import { getStaticServiceSchedules } from '../service-schedules';
 import output from '../../output-manager';
 import { treeKill } from '../tree-kill';
-import { injectNextDevWebSocketShimIfNeeded } from './next-dev-websocket-shim';
+import { injectNextDevWebSocketShimIfNeeded } from './next-dev-websocket-shim-injection';
 
 const STARTUP_TIMEOUT = ms('5m');
 

@@ -3,7 +3,7 @@ import {
   injectNextDevWebSocketShimIfNeeded,
   prependNodeRequireOption,
   shouldInjectNextDevWebSocketShim,
-} from '../../../../src/util/dev/next-dev-websocket-shim';
+} from '../../../../src/util/dev/next-dev-websocket-shim-injection';
 
 describe('Next.js dev WebSocket shim injection', () => {
   it('detects Next.js dev commands', () => {
@@ -37,7 +37,7 @@ describe('Next.js dev WebSocket shim injection', () => {
       framework: 'nextjs',
     });
 
-    expect(shimPath).toContain('next-dev-websocket-shim.cjs');
+    expect(shimPath).toContain('next-dev-websocket-shim-preload.cjs');
     expect(env.NODE_OPTIONS).toBe(
       `--require ${JSON.stringify(shimPath)} --trace-warnings`
     );

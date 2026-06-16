@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 const shimPath = resolve(
   process.cwd(),
-  'src/util/dev/next-dev-websocket-shim.cjs'
+  'src/util/dev/next-dev-websocket-shim-preload.cjs'
 );
 
 async function runShimScenario(scenario: string) {
@@ -45,7 +45,7 @@ async function runShimScenario(scenario: string) {
   return JSON.parse(stdout.trim());
 }
 
-describe('next dev websocket shim', () => {
+describe('next dev websocket shim preload', () => {
   it('does not expose upgradeWebSocket for normal HTTP requests', async () => {
     await expect(runShimScenario('non-upgrade')).resolves.toMatchObject({
       upgradeWebSocket: false,

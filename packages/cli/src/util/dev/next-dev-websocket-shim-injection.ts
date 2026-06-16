@@ -3,7 +3,7 @@ import type { ProjectSettings } from '@vercel-internals/types';
 
 const NEXT_DEV_WEBSOCKET_SHIM = path.join(
   __dirname,
-  'next-dev-websocket-shim.cjs'
+  'next-dev-websocket-shim-preload.cjs'
 );
 
 export function injectNextDevWebSocketShimIfNeeded(

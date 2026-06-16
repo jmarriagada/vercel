@@ -162,8 +162,8 @@ copyFileSync(
   new URL('commands/dev/builder-worker.cjs', distRoot)
 );
 copyFileSync(
-  new URL('src/util/dev/next-dev-websocket-shim.cjs', repoRoot),
-  new URL('commands/dev/next-dev-websocket-shim.cjs', distRoot)
+  new URL('src/util/dev/next-dev-websocket-shim-preload.cjs', repoRoot),
+  new URL('commands/dev/next-dev-websocket-shim-preload.cjs', distRoot)
 );
 copyFileSync(
   new URL('src/util/get-latest-version/get-latest-worker.cjs', repoRoot),
