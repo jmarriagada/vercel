@@ -204,7 +204,6 @@ describe('validateConfig', () => {
   it('should not error with complete config', async () => {
     const config = {
       version: 2,
-      public: true,
       regions: ['sfo1', 'iad1'],
       cleanUrls: true,
       headers: [{ source: '/', headers: [{ key: 'x-id', value: '123' }] }],
