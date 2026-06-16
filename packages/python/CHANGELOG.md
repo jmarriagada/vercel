@@ -1,5 +1,11 @@
 # @vercel/python
 
+## 6.45.1
+
+### Patch Changes
+
+- e9aa6f5: Remove hidden `--functions-beta` / `--no-functions-beta` deploy flags and the size-limit hint messaging
+
 ## 6.45.0
 
 ### Minor Changes
