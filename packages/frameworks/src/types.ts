@@ -247,4 +247,9 @@ export interface Framework {
    * @example true
    */
   runtimeFramework?: boolean;
+  /**
+   * The language this framework is written in.
+   * @example Language.JavaScript
+   */
+  language?: Language;
 }
