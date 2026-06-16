@@ -6,6 +6,7 @@ import stripAnsi from 'strip-ansi';
 import nodeFetch, { type Response } from 'node-fetch';
 import {
   fixture,
+  nukeProcessTree,
   testFixture,
   testFixtureStdio,
   validateResponseHeaders,
@@ -468,7 +469,11 @@ function withLocalDev(
       await waitForReady(() => `${stdout}\n${stderr}`);
       await fn(port);
     } finally {
-      dev.kill('SIGTERM', { forceKillAfterTimeout: 5000 });
+      if (dev.pid) {
+        await nukeProcessTree(dev.pid);
+      } else {
+        dev.kill('SIGTERM', { forceKillAfterTimeout: 5000 });
+      }
       await dev.catch(() => null);
     }
 

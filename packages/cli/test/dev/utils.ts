@@ -160,27 +160,39 @@ export function webSocketEcho(
   return new Promise((resolve, reject) => {
     const socket = net.connect(port, '127.0.0.1');
     const key = randomBytes(16).toString('base64');
-    let buffer = Buffer.alloc(0);
+    let buffer: Uint8Array<ArrayBufferLike> = new Uint8Array(0);
     let handshakeComplete = false;
+    let settled = false;
 
-    const fail = (error: Error) => {
-      socket.destroy();
-      reject(error);
+    const timeout = setTimeout(() => {
+      fail(new Error('Timed out waiting for WebSocket response'));
+    }, 10_000);
+
+    const settle = (fn: () => void) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      fn();
     };
 
-    socket.setTimeout(10_000, () => {
-      fail(new Error('Timed out waiting for WebSocket response'));
-    });
+    const fail = (error: Error) => {
+      settle(() => {
+        socket.destroy();
+        reject(error);
+      });
+    };
 
-    socket.once('error', reject);
+    socket.once('error', fail);
     socket.on('data', chunk => {
-      buffer = appendBuffer(buffer, chunk);
+      buffer = appendBytes(buffer, toBytes(chunk));
 
       if (!handshakeComplete) {
-        const headerEnd = buffer.indexOf('\r\n\r\n');
+        const headerEnd = indexOfBytes(buffer, headerSeparator);
         if (headerEnd === -1) return;
 
-        const headers = buffer.subarray(0, headerEnd).toString('utf8');
+        const headers = Buffer.from(buffer.subarray(0, headerEnd)).toString(
+          'utf8'
+        );
         if (!headers.startsWith('HTTP/1.1 101 Switching Protocols')) {
           fail(new Error(`Unexpected WebSocket handshake:\n${headers}`));
           return;
@@ -205,8 +217,10 @@ export function webSocketEcho(
 
       const text = readTextFrame(buffer);
       if (text !== undefined) {
-        socket.end();
-        resolve(text);
+        settle(() => {
+          socket.end();
+          resolve(text);
+        });
       }
     });
 
@@ -225,30 +239,46 @@ export function webSocketEcho(
   });
 }
 
-export function webSocketEchoWithRetry(
-  port: number,
-  path: string,
-  message: string
-): Promise<string> {
-  return retry(() => webSocketEcho(port, path, message), {
-    retries: 5,
-    minTimeout: 250,
-    maxTimeout: 250,
-  });
-}
+const headerSeparator: Uint8Array<ArrayBufferLike> = new Uint8Array([
+  13, 10, 13, 10,
+]);
 
-function appendBuffer(buffer: Buffer, chunk: Buffer): Buffer {
-  const next = Buffer.alloc(buffer.length + chunk.length);
-  for (let i = 0; i < buffer.length; i++) {
-    next[i] = buffer[i];
-  }
-  for (let i = 0; i < chunk.length; i++) {
-    next[buffer.length + i] = chunk[i];
-  }
+function appendBytes(
+  a: Uint8Array<ArrayBufferLike>,
+  b: Uint8Array<ArrayBufferLike>
+): Uint8Array<ArrayBufferLike> {
+  const next = new Uint8Array(a.length + b.length);
+  next.set(a, 0);
+  next.set(b, a.length);
   return next;
 }
 
-function maskedTextFrame(message: string): Uint8Array {
+function toBytes(buffer: ArrayLike<number>): Uint8Array<ArrayBufferLike> {
+  const bytes = new Uint8Array(buffer.length);
+  for (let i = 0; i < buffer.length; i++) {
+    bytes[i] = buffer[i];
+  }
+  return bytes;
+}
+
+function indexOfBytes(
+  buffer: Uint8Array<ArrayBufferLike>,
+  needle: Uint8Array<ArrayBufferLike>
+): number {
+  for (let i = 0; i <= buffer.length - needle.length; i++) {
+    let matches = true;
+    for (let j = 0; j < needle.length; j++) {
+      if (buffer[i + j] !== needle[j]) {
+        matches = false;
+        break;
+      }
+    }
+    if (matches) return i;
+  }
+  return -1;
+}
+
+function maskedTextFrame(message: string): Uint8Array<ArrayBufferLike> {
   const payload = Buffer.from(message);
   const mask = randomBytes(4);
   const frame = new Uint8Array(6 + payload.length);
@@ -263,7 +293,9 @@ function maskedTextFrame(message: string): Uint8Array {
   return frame;
 }
 
-function readTextFrame(buffer: Buffer): string | undefined {
+function readTextFrame(
+  buffer: Uint8Array<ArrayBufferLike>
+): string | undefined {
   if (buffer.length < 2) return undefined;
 
   const length = buffer[1] & 0x7f;
@@ -272,7 +304,7 @@ function readTextFrame(buffer: Buffer): string | undefined {
   }
   if (buffer.length < 2 + length) return undefined;
 
-  return buffer.subarray(2, 2 + length).toString('utf8');
+  return Buffer.from(buffer.subarray(2, 2 + length)).toString('utf8');
 }
 
 export async function exec(directory: string, args: string[] = []) {
@@ -373,29 +405,35 @@ function getEnvironmentMessage(isDev: boolean): string {
 
 export async function testFixture(
   directory: string,
-  opts: Options<null> & { skipDeploy?: boolean; skipNpmInstall?: boolean } = {},
+  opts: Options<null> & { skipNpmInstall?: boolean } = {},
   args: string[] = []
 ) {
-  const { skipDeploy, skipNpmInstall, ...execaOpts } = opts;
+  const { skipNpmInstall, ...execaOpts } = opts;
   if (!skipNpmInstall) {
     await runNpmInstall(directory);
   }
 
-  const token = skipDeploy ? undefined : await fetchCachedToken();
-  const tokenArgs = token ? ['-t', token] : [];
-  const scopeArgs =
-    token && process.env.VERCEL_TEAM_ID
-      ? ['--scope', process.env.VERCEL_TEAM_ID]
-      : [];
+  const token = await fetchCachedToken();
 
   console.log(
-    `testFixture() ${binaryPath} dev ${directory}${
-      token ? ' -t ***' : ''
-    }${scopeArgs.length ? ' --scope ***' : ''} -l ${port} ${args.join(' ')}`
+    `testFixture() ${binaryPath} dev ${directory} -t ***${
+      process.env.VERCEL_TEAM_ID ? ' --scope ***' : ''
+    } -l ${port} ${args.join(' ')}`
   );
   const dev = execa(
     binaryPath,
-    ['dev', directory, ...tokenArgs, ...scopeArgs, '-l', String(port), ...args],
+    [
+      'dev',
+      directory,
+      '-t',
+      token,
+      ...(process.env.VERCEL_TEAM_ID
+        ? ['--scope', process.env.VERCEL_TEAM_ID]
+        : []),
+      '-l',
+      String(port),
+      ...args,
+    ],
     {
       reject: false,
       shell: true,
@@ -730,7 +768,7 @@ async function nukePID(
   await nukePID(pid, 'SIGKILL', retries - 1);
 }
 
-async function nukeProcessTree(pid: number, signal?: string) {
+export async function nukeProcessTree(pid: number, signal?: string) {
   if (process.platform === 'win32') {
     spawnSync('taskkill', ['/pid', pid.toString(), '/T', '/F'], {
       stdio: 'inherit',
