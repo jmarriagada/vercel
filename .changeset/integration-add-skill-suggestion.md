@@ -2,4 +2,4 @@
 'vercel': minor
 ---
 
-[cli] `integration add` now suggests installing the matching Claude Code skill (if the product exposes one) by printing a ready-to-run `npx skills add <url> --skill <name>` command. The suggestion is also surfaced as a `skill` field in `--format=json` output. Suggestion is skipped silently when the product has no associated skill.
+[cli] `integration add` now suggests a Claude Code skill from skills.sh after provisioning. If the product declares an agent skill, it prints a ready-to-run `npx skills add owner/repo@skill` command (normalizing a skills.sh or GitHub SKILL.md link to the exact skill id). Otherwise it falls back to `npx skills find "<provider>"` so the agent can discover and install the provider's skill. The suggestion is also surfaced as a `skill` field in `--format=json` output.

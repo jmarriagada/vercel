@@ -85,6 +85,11 @@ export interface IntegrationProduct {
   guides?: IntegrationGuide[];
   snippets?: IntegrationSnippet[];
   resourceLinks?: IntegrationResourceLink[];
+  /**
+   * A skills.sh link or public SKILL.md URL for this product's agent skill.
+   * Normalized to an `npx skills add` source by `getSkillSuggestion`.
+   */
+  agentSkillUrl?: string;
 }
 
 type InstallationType = 'marketplace' | 'external';
