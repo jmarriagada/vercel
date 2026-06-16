@@ -449,9 +449,6 @@ async function handleInitDeployment(
       vercelOutputDir: undefined,
       rootDirectory,
       quiet,
-      wantsPublic: Boolean(
-        parsedArguments.flags['--public'] || localConfig.public
-      ),
       nowConfig: {
         ...localConfig,
         images: undefined,
@@ -963,7 +960,6 @@ async function handleDefaultDeploy(
   telemetryClient.trackCliFlagSkipDomain(
     parsedArguments.flags['--skip-domain']
   );
-  telemetryClient.trackCliFlagPublic(parsedArguments.flags['--public']);
   telemetryClient.trackCliFlagLogs(parsedArguments.flags['--logs']);
   telemetryClient.trackCliFlagNoLogs(parsedArguments.flags['--no-logs']);
   telemetryClient.trackCliFlagGuidance(parsedArguments.flags['--guidance']);
@@ -1388,9 +1384,6 @@ async function handleDefaultDeploy(
       vercelOutputDir,
       rootDirectory,
       quiet,
-      wantsPublic: Boolean(
-        parsedArguments.flags['--public'] || localConfig.public
-      ),
       nowConfig: {
         ...localConfig,
         images: undefined,
@@ -2194,10 +2187,12 @@ async function handleContinueDeployment({
 
         const isProdDeployment = finalDeployment.target === 'production';
         const previewUrl = `https://${finalDeployment.url}`;
+        // The ▲ gutter belongs on the Aliased row, which only prints when we
+        // wait for alias assignment — with noWait it falls back to Production.
         printAlignedLabel(
           isProdDeployment ? 'Production' : 'Preview',
           chalk.cyan(previewUrl),
-          isProdDeployment ? { gutter: '▲' } : {}
+          isProdDeployment && noWait ? { gutter: '▲' } : {}
         );
 
         if (noWait) {
