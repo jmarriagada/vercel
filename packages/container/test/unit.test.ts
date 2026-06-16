@@ -283,6 +283,11 @@ describe('@vercel/container', () => {
       buildImageEnv: 'al2023',
     });
     expect(commands.some(c => /\bbuildah\b.*\bbuild\b/.test(c))).toBe(true);
+    // RUN steps must use host networking; the Hive cell can't program iptables
+    // for buildah's default rootless network.
+    expect(
+      commands.some(c => /\bbuildah\b.*\bbuild\b.*--network host/.test(c))
+    ).toBe(true);
     expect(commands.some(c => /\bbuildah\b.*\blogin\b/.test(c))).toBe(true);
     expect(commands.some(c => /\bbuildah\b.*\bpush\b/.test(c))).toBe(true);
     expect(commands.some(c => c.includes('--storage-driver vfs'))).toBe(true);

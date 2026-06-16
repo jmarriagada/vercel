@@ -33,9 +33,9 @@ export const buildahEngine: ContainerEngine = {
         throw new Error(
           isBuildContainer()
             ? 'The `buildah` CLI is not available in this build container. ' +
-                'Install buildah (via SPAL) in the build image.'
+              'Install buildah (via SPAL) in the build image.'
             : 'Buildah was not found on your PATH. Install buildah or run the build ' +
-                'on Vercel where the build container provides it.'
+              'on Vercel where the build container provides it.'
         );
       }
       throw err;
@@ -76,6 +76,14 @@ export const buildahEngine: ContainerEngine = {
       'build',
       '--platform',
       TARGET_PLATFORM,
+      // Use the host network namespace for RUN steps. The build runs inside a
+      // restricted Hive cell that cannot program iptables, so buildah's default
+      // rootless networking (netavark) fails with
+      // "netavark: iptables ... Could not fetch rule set generation id".
+      // Host networking skips per-container network setup and reuses the cell's
+      // existing egress.
+      '--network',
+      'host',
       '-t',
       params.imageRef,
       '-f',
