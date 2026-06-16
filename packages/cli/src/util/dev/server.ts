@@ -66,6 +66,12 @@ import { getVercelDirectory } from '../projects/link';
 import { staticFiles as getFiles } from '../get-files';
 import { validateConfig } from '../validate-config';
 import { devRouter, getRoutesTypes, resolveRouteParameters } from './router';
+import {
+  applyRequestTransforms,
+  applyResponseTransforms,
+  hasResponseTransforms,
+  type Transform,
+} from './transforms';
 import getMimeType from './mime-type';
 import { executeBuild, getBuildMatches, shutdownBuilder } from './builder';
 import { generateErrorMessage, generateHttpStatusDescription } from './errors';
@@ -201,6 +207,11 @@ export default class DevServer {
   private projectId?: string;
   private orgId?: string;
 
+  private responseTransformsByReq = new WeakMap<
+    http.IncomingMessage,
+    Transform[]
+  >();
+
   private shouldUseServicesOrchestrator(): boolean {
     if (!this.services || this.services.length === 0) {
       return false;
@@ -230,9 +241,17 @@ export default class DevServer {
       ws: true,
       xfwd: true,
     });
-    this.proxy.on('proxyRes', proxyRes => {
+    this.proxy.on('proxyRes', (proxyRes, req) => {
       // override "server" header, like production
       proxyRes.headers['server'] = 'Vercel';
+
+      // Apply any transforms for responses that were stored
+      // before proxying this request
+      const transforms = this.responseTransformsByReq.get(req);
+      if (transforms) {
+        this.responseTransformsByReq.delete(req);
+        applyResponseTransforms(proxyRes.headers, transforms);
+      }
     });
 
     this.server = http.createServer(this.devServerHandler);
@@ -1335,6 +1354,25 @@ export default class DevServer {
     }
   }
 
+  private prepareTransforms(
+    req: http.IncomingMessage,
+    transforms: Transform[] | undefined
+  ): void {
+    if (!transforms || transforms.length === 0) {
+      return;
+    }
+    applyRequestTransforms(req, transforms);
+    // response transforms are applied later when proxy returns a response,
+    // so for now just store them for future use
+    if (hasResponseTransforms(transforms)) {
+      this.responseTransformsByReq.set(req, transforms);
+    }
+  }
+
+  clearResponseTransforms(req: http.IncomingMessage): void {
+    this.responseTransformsByReq.delete(req);
+  }
+
   /**
    * Returns the request `headers` that will be sent to the Lambda.
    */
@@ -1392,7 +1430,8 @@ export default class DevServer {
     res: http.ServerResponse,
     requestId: string,
     matchedRoute: RouteWithSrc & { destination: ServiceDestination },
-    vercelConfig: VercelConfig
+    vercelConfig: VercelConfig,
+    transforms?: Transform[]
   ): Promise<void> {
     const { debug } = output;
     const { service: serviceName, path: destPath } = matchedRoute.destination;
@@ -1415,6 +1454,7 @@ export default class DevServer {
     // Resolve lookup path for the service's route table
     const parsed = url.parse(req.url || '/');
     const originalPathname = parsed.pathname || '/';
+
     let lookupPath = originalPathname;
     if (typeof destPath === 'string' && matchedRoute.src) {
       const keys: string[] = [];
@@ -1469,6 +1509,9 @@ export default class DevServer {
     for (const [name, value] of Object.entries(proxyHeaders)) {
       req.headers[name] = value;
     }
+
+    // Apply request time transforms
+    this.prepareTransforms(req, transforms);
 
     this.setResponseHeaders(res, requestId);
     debug(`Delegating to service "${serviceName}": ${origin}`);
@@ -1937,6 +1980,7 @@ export default class DevServer {
     let prevUrl = req.url;
     let prevHeaders: HttpHeadersConfig = {};
     let middlewarePid: number | undefined;
+    const appliedTransforms: Transform[] = [];
 
     // Run the middleware file, if present, and apply any
     // mutations to the incoming request based on the
@@ -2128,6 +2172,10 @@ export default class DevServer {
         phase
       );
 
+      if (routeResult.transforms) {
+        appliedTransforms.push(...routeResult.transforms);
+      }
+
       if (routeResult.continue) {
         if (routeResult.dest) {
           prevUrl = getReqUrl(routeResult);
@@ -2149,7 +2197,8 @@ export default class DevServer {
           res,
           requestId,
           routeResult.matched_route,
-          vercelConfig
+          vercelConfig,
+          appliedTransforms
         );
       }
 
@@ -2160,6 +2209,8 @@ export default class DevServer {
         Object.assign(destQuery, routeResult.query);
         destParsed.search = formatQueryString(destQuery);
         const destUrl = url.format(destParsed);
+
+        this.prepareTransforms(req, appliedTransforms);
 
         debug(`ProxyPass: ${destUrl}`);
         this.setResponseHeaders(res, requestId);
@@ -2200,6 +2251,10 @@ export default class DevServer {
           'miss'
         );
 
+        if (routeResult.transforms) {
+          appliedTransforms.push(...routeResult.transforms);
+        }
+
         match = await findBuildMatch(
           this.buildMatches,
           this.files,
@@ -2234,6 +2289,10 @@ export default class DevServer {
           'hit'
         );
         routeResult.status = prevStatus;
+
+        if (routeResult.transforms) {
+          appliedTransforms.push(...routeResult.transforms);
+        }
       }
 
       statusCode = routeResult.status;
@@ -2340,6 +2399,7 @@ export default class DevServer {
         Object.assign(origQuery, query);
         origUrl.search = formatQueryString(origQuery);
         req.url = url.format(origUrl);
+        this.prepareTransforms(req, appliedTransforms);
         return proxyPass(req, res, upstream, this, requestId, false);
       }
 
@@ -2480,6 +2540,7 @@ export default class DevServer {
           req.headers[name] = value;
         }
 
+        this.prepareTransforms(req, appliedTransforms);
         this.setResponseHeaders(res, requestId);
         return proxyPass(
           req,
@@ -2517,6 +2578,7 @@ export default class DevServer {
         req.headers[name] = value;
       }
 
+      this.prepareTransforms(req, appliedTransforms);
       this.setResponseHeaders(res, requestId);
       return proxyPass(req, res, this.devProcessOrigin, this, requestId, false);
     }
@@ -2536,6 +2598,11 @@ export default class DevServer {
     switch (asset.type) {
       case 'FileFsRef':
         this.setResponseHeaders(res, requestId);
+        const staticResHeaders: http.OutgoingHttpHeaders = {};
+        applyResponseTransforms(staticResHeaders, appliedTransforms);
+        for (const [name, value] of Object.entries(staticResHeaders)) {
+          if (value !== undefined) res.setHeader(name, value);
+        }
         req.url = `/${basename(asset.fsPath)}`;
         return serveStaticFile(req, res, dirname(asset.fsPath), {
           headers: [
@@ -2556,6 +2623,7 @@ export default class DevServer {
           'Content-Length': asset.data.length,
           'Content-Type': asset.contentType || getMimeType(assetKey),
         };
+        applyResponseTransforms(headers, appliedTransforms);
         this.setResponseHeaders(res, requestId, headers);
         res.end(asset.data);
         return;
@@ -2583,10 +2651,13 @@ export default class DevServer {
         const origQuery = parseQueryString(origUrl.search);
         Object.assign(origQuery, query);
         origUrl.search = formatQueryString(origQuery);
-        const path = url.format({
+        req.url = url.format({
           pathname: origUrl.pathname,
           search: origUrl.search,
         });
+
+        applyRequestTransforms(req, appliedTransforms);
+        const path = req.url || '/';
 
         const body = await rawBody(req);
         const payload: InvokePayload = {
@@ -2625,7 +2696,9 @@ export default class DevServer {
         if (!statusCode) {
           res.statusCode = result.statusCode;
         }
-        this.setResponseHeaders(res, requestId, result.headers);
+        const lambdaHeaders = result.headers ?? {};
+        applyResponseTransforms(lambdaHeaders, appliedTransforms);
+        this.setResponseHeaders(res, requestId, lambdaHeaders);
 
         let resBody: Buffer | string | undefined;
         if (result.encoding === 'base64' && typeof result.body === 'string') {
@@ -2898,6 +2971,9 @@ function proxyPass(
     res,
     { target: dest, ignorePath },
     (error: NodeJS.ErrnoException) => {
+      // response transforms for this request would never be applied
+      // so clear the stored transforms
+      devServer.clearResponseTransforms(req);
       // only debug output this error because it's always something generic like
       // "Error: socket hang up"
       // and the original error should have already been logged
