@@ -2,4 +2,4 @@
 'vercel': patch
 ---
 
-Add CLI UX guidance, shared aligned-row output support, and strip the legacy `public` field from deployment requests.
+Add CLI UX guidance and improve CLI output consistency.
