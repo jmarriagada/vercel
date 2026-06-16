@@ -1,5 +1,9 @@
 import { packageName } from '../../util/pkg-name';
-import { yesOption } from '../../util/arg-common';
+import {
+  deploymentOption,
+  protectionBypassOption,
+  yesOption,
+} from '../../util/arg-common';
 
 export const getSubcommand = {
   name: 'get',
@@ -78,23 +82,8 @@ export const createSubcommand = {
     'Capture a session trace for a request (alias for `vercel curl --trace`).',
   arguments: [{ name: 'path', required: true }],
   options: [
-    {
-      name: 'deployment',
-      shorthand: null,
-      type: String,
-      deprecated: false,
-      description: 'The deployment ID or URL to target',
-      argument: 'ID|URL',
-    },
-    {
-      name: 'protection-bypass',
-      shorthand: null,
-      type: String,
-      deprecated: false,
-      description:
-        'Protection bypass secret for accessing protected deployments',
-      argument: 'SECRET',
-    },
+    deploymentOption,
+    protectionBypassOption,
     {
       name: 'json',
       shorthand: null,
