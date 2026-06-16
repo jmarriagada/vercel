@@ -1,5 +1,17 @@
 import { Rewrite, Route } from '@vercel/routing-utils';
 
+/**
+ * The surface language a framework is written in. Drives runtime selection —
+ * e.g. a JavaScript framework can run on either the Node or Bun runtime.
+ */
+export enum Language {
+  JavaScript = 'javascript',
+  Python = 'python',
+  Ruby = 'ruby',
+  Go = 'go',
+  Rust = 'rust',
+}
+
 export interface FrameworkDetectionItem {
   /**
    * A file path to detect.
