@@ -2,14 +2,33 @@ import chalk from 'chalk';
 import { help } from '../help';
 import { whoamiCommand } from './command';
 
-import getScope from '../../util/get-scope';
+import getScope, { type ScopeContext } from '../../util/get-scope';
 import { parseArguments } from '../../util/get-args';
 import type Client from '../../util/client';
 import { getFlagsSpecification } from '../../util/get-flags-specification';
 import { printError } from '../../util/error';
+import { InvalidToken } from '../../util/errors-ts';
 import output from '../../output-manager';
 import { WhoamiTelemetryClient } from '../../util/telemetry/commands/whoami';
 import { validateJsonOutput } from '../../util/output-format';
+
+type UserinfoResponse = {
+  sub: string;
+  principal_type?: 'app';
+  app?: {
+    id: string;
+    name: string | null;
+  };
+  team: { id: string; slug: string; name: string } | null;
+};
+
+type AppPrincipalUserinfoResponse = UserinfoResponse & {
+  principal_type: 'app';
+  app: {
+    id: string;
+    name: string | null;
+  };
+};
 
 export default async function whoami(client: Client): Promise<number> {
   let parsedArgs = null;
@@ -43,7 +62,20 @@ export default async function whoami(client: Client): Promise<number> {
   const asJson = formatResult.jsonOutput;
   telemetry.trackCliOptionFormat(parsedArgs.flags['--format']);
 
-  const scope = await getScope(client, { resolveLocalScope: true });
+  let scope: ScopeContext;
+  try {
+    scope = await getScope(client, { resolveLocalScope: true });
+  } catch (error) {
+    if (error instanceof InvalidToken) {
+      const authPrincipal = await getAppPrincipal(client);
+      if (authPrincipal) {
+        printAppPrincipal(client, authPrincipal, asJson);
+        return 0;
+      }
+    }
+    printError(error);
+    return 1;
+  }
   const { user, team, globalTeam } = scope;
 
   // A local override exists when the effective team (from the linked project)
@@ -109,4 +141,63 @@ export default async function whoami(client: Client): Promise<number> {
   }
 
   return 0;
+}
+
+async function getAppPrincipal(
+  client: Client
+): Promise<AppPrincipalUserinfoResponse | null> {
+  try {
+    const userinfo = await client.fetch<UserinfoResponse>(
+      '/login/oauth/userinfo'
+    );
+    if (userinfo.principal_type !== 'app' || !userinfo.app) {
+      return null;
+    }
+    return {
+      ...userinfo,
+      principal_type: 'app',
+      app: userinfo.app,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function printAppPrincipal(
+  client: Client,
+  userinfo: AppPrincipalUserinfoResponse,
+  asJson: boolean
+) {
+  const appName = userinfo.app.name ?? userinfo.app.id;
+
+  if (asJson) {
+    client.stdout.write(
+      `${JSON.stringify(
+        {
+          principal: {
+            type: 'app',
+            id: userinfo.app.id,
+            name: userinfo.app.name,
+          },
+          app: userinfo.app,
+          team: userinfo.team,
+        },
+        null,
+        2
+      )}\n`
+    );
+  } else if (client.stdout.isTTY) {
+    output.log(`Logged in as Vercel App: ${chalk.bold(appName)}`);
+    if (userinfo.team) {
+      output.log(
+        `Active team: ${chalk.bold(userinfo.team.slug)}${
+          userinfo.team.name && userinfo.team.name !== userinfo.team.slug
+            ? ` (${userinfo.team.name})`
+            : ''
+        }`
+      );
+    }
+  } else {
+    client.stdout.write(`${appName}\n`);
+  }
 }

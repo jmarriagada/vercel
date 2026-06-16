@@ -49,6 +49,40 @@ describe('whoami', () => {
     await expect(client.stderr).toOutput(`Active team: ${team.slug}`);
   });
 
+  it('should print the Vercel App principal when the token is not user-backed', async () => {
+    client.scenario.get('/v2/user', (_req, res) => {
+      res.status(403).json({
+        error: {
+          code: 'forbidden',
+          message: 'Not authorized',
+        },
+      });
+    });
+    client.scenario.get('/login/oauth/userinfo', (_req, res) => {
+      res.json({
+        sub: 'cl_vercel_agent',
+        principal_type: 'app',
+        app: {
+          id: 'cl_vercel_agent',
+          name: 'Vercel Agent',
+        },
+        team: {
+          id: 'team_vercel',
+          slug: 'vercel',
+          name: 'Vercel',
+        },
+      });
+    });
+
+    const exitCode = await whoami(client);
+
+    expect(exitCode).toEqual(0);
+    await expect(client.stderr).toOutput(
+      'Logged in as Vercel App: Vercel Agent'
+    );
+    await expect(client.stderr).toOutput('Active team: vercel (Vercel)');
+  });
+
   it('should flag a local override when a linked project uses a different team', async () => {
     useUser();
     // Both teams must be known so they can be resolved by ID.
@@ -155,6 +189,56 @@ describe('whoami', () => {
         name: team.name,
       });
       expect(jsonOutput.localOverride).toBeUndefined();
+    });
+
+    it('outputs Vercel App principal information as JSON', async () => {
+      client.scenario.get('/v2/user', (_req, res) => {
+        res.status(403).json({
+          error: {
+            code: 'forbidden',
+            message: 'Not authorized',
+          },
+        });
+      });
+      client.scenario.get('/login/oauth/userinfo', (_req, res) => {
+        res.json({
+          sub: 'cl_vercel_agent',
+          principal_type: 'app',
+          app: {
+            id: 'cl_vercel_agent',
+            name: 'Vercel Agent',
+          },
+          team: {
+            id: 'team_vercel',
+            slug: 'vercel',
+            name: 'Vercel',
+          },
+        });
+      });
+      client.setArgv('whoami', '--format', 'json');
+
+      const exitCode = await whoami(client);
+
+      expect(exitCode).toEqual(0);
+      const output = client.stdout.getFullOutput();
+      const jsonOutput = JSON.parse(output);
+
+      expect(jsonOutput).toMatchObject({
+        principal: {
+          type: 'app',
+          id: 'cl_vercel_agent',
+          name: 'Vercel Agent',
+        },
+        app: {
+          id: 'cl_vercel_agent',
+          name: 'Vercel Agent',
+        },
+        team: {
+          id: 'team_vercel',
+          slug: 'vercel',
+          name: 'Vercel',
+        },
+      });
     });
   });
 });
