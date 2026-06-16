@@ -132,6 +132,16 @@ async function buildAndPushImage(params: {
           s => engine.logDiagnostics(s)
         );
 
+        // Verify storage is configured as intended (native overlay on the
+        // mounted cell volume) before doing any work. Fails the build fast if
+        // misconfigured rather than silently running on slow vfs.
+        await withSpan(
+          buildSpan,
+          'container.verify_storage',
+          { 'container.engine': engine.name },
+          s => engine.verifyStorage?.(s) ?? Promise.resolve()
+        );
+
         const buildParams: BuildPushParams = {
           contextDir,
           dockerfilePath,

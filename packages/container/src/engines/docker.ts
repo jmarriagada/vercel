@@ -48,7 +48,9 @@ function tail(text: string, n = 12): string {
 }
 
 async function startDockerDaemon(span?: Span): Promise<ManagedDaemon> {
-  const driver = await selectStorageDriver();
+  // Docker is the local-dev engine; selectStorageDriver only returns undefined
+  // in the build container (buildah), so default to vfs defensively.
+  const driver = (await selectStorageDriver()) ?? 'vfs';
   const args = ['--storage-driver', driver];
   const extra = readString(process.env.VERCEL_VCR_DOCKERD_ARGS);
   if (extra) {
@@ -208,7 +210,7 @@ export const dockerEngine: ContainerEngine = {
           onVercel
             ? 'The `docker` CLI is not available in this build container.'
             : 'Docker CLI was not found on your PATH. Install Docker and make sure ' +
-                'the `docker` command is available so the container image can be built.'
+              'the `docker` command is available so the container image can be built.'
         );
       }
 

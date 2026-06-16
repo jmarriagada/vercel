@@ -2,7 +2,12 @@ import type { Span } from '@vercel/build-utils';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { buildahStorageArgs, selectStorageDriver } from '../storage-driver';
+import {
+  assertBuildContainerStorage,
+  buildahStorageArgs,
+  readBuildahStoreInfo,
+  selectStorageDriver,
+} from '../storage-driver';
 import { formatVcrAuthError } from '../oidc';
 import { DEBUG, debug, info, isBuildContainer, run, toTag } from '../util';
 import type { BuildPushParams, ContainerEngine } from './types';
@@ -25,7 +30,7 @@ export const buildahEngine: ContainerEngine = {
       const { stdout } = await runBuildah(['--version'], { quiet: true });
       span?.setAttributes({
         'buildah.version': stdout.trim().split('\n')[0],
-        'buildah.storage_driver': storageDriver,
+        'buildah.storage_driver': storageDriver ?? 'storage.conf',
       });
     } catch (err) {
       const message = (err as Error).message;
@@ -51,13 +56,13 @@ export const buildahEngine: ContainerEngine = {
 
       info(
         `buildah: ${version.split('\n')[0] ?? version} ` +
-          `(storage-driver=${storageDriver})`
+          `(storage-driver=${storageDriver ?? 'storage.conf'})`
       );
 
       span?.setAttributes({
         'container.engine': 'buildah',
         'buildah.version': toTag(version.split('\n')[0]),
-        'buildah.storage_driver': toTag(storageDriver),
+        'buildah.storage_driver': toTag(storageDriver ?? 'storage.conf'),
       });
     } catch (err) {
       debug(`buildah diagnostics unavailable: ${(err as Error).message}`);
@@ -76,6 +81,11 @@ export const buildahEngine: ContainerEngine = {
       'build',
       '--platform',
       TARGET_PLATFORM,
+      // Commit and cache a layer per Dockerfile instruction so unchanged steps
+      // (base image, dependency installs, etc.) can be reused on later builds
+      // when the image store is warm. Without this buildah squashes the build
+      // and no per-step caching happens.
+      '--layers',
       // Use the host network namespace for RUN steps. The build runs inside a
       // restricted Hive cell that cannot program iptables, so buildah's default
       // rootless networking (netavark) fails with
@@ -119,43 +129,36 @@ export const buildahEngine: ContainerEngine = {
     }
   },
 
+  async verifyStorage(span?: Span): Promise<void> {
+    // Fail loudly (in the build container) if buildah didn't come up on the
+    // native overlay driver / mounted volume. No-op locally.
+    await assertBuildContainerStorage(message => {
+      info(message);
+      const info0 = message.split('\n')[0];
+      span?.setAttributes({ 'buildah.storage.verify': info0 });
+    });
+  },
+
   async reportStorage(span?: Span): Promise<void> {
     if (!DEBUG) {
       return;
     }
     try {
-      const { stdout } = await runBuildah(['info'], { quiet: true });
-      const store = (JSON.parse(stdout) as { store?: Record<string, unknown> })
-        .store;
-      if (!store) {
+      const storeInfo = await readBuildahStoreInfo();
+      if (!storeInfo) {
         debug('buildah info: no `store` field in output');
         return;
       }
-      const graphRoot = String(store.GraphRoot ?? '?');
-      const runRoot = String(store.RunRoot ?? '?');
-      const driver = String(store.GraphDriverName ?? '?');
-      // GraphStatus often reports the backing filesystem, e.g. "Backing Filesystem: xfs".
-      const graphStatus = store.GraphStatus as
-        | Record<string, string>
-        | undefined;
-      const backingFs =
-        graphStatus?.['Backing Filesystem'] ??
-        graphStatus?.['Backing filesystem'] ??
-        '?';
-      const imageStore = store.ImageStore as { number?: number } | undefined;
-
       info(
-        `buildah storage: graphRoot=${graphRoot} runRoot=${runRoot} ` +
-          `driver=${driver} backingFs=${backingFs}` +
-          (imageStore?.number !== undefined
-            ? ` images=${imageStore.number}`
-            : '')
+        `buildah storage: graphRoot=${storeInfo.graphRoot} ` +
+          `runRoot=${storeInfo.runRoot} driver=${storeInfo.driver} ` +
+          `backingFs=${storeInfo.backingFs || '?'}`
       );
       span?.setAttributes({
-        'buildah.storage.graph_root': graphRoot,
-        'buildah.storage.run_root': runRoot,
-        'buildah.storage.driver': driver,
-        'buildah.storage.backing_fs': backingFs,
+        'buildah.storage.graph_root': storeInfo.graphRoot,
+        'buildah.storage.run_root': storeInfo.runRoot,
+        'buildah.storage.driver': storeInfo.driver,
+        'buildah.storage.backing_fs': storeInfo.backingFs,
       });
     } catch (err) {
       debug(`buildah storage report unavailable: ${(err as Error).message}`);

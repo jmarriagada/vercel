@@ -43,6 +43,13 @@ export interface ContainerEngine {
   push(params: BuildPushParams): Promise<string | undefined>;
 
   /**
+   * Verify the engine's storage is configured as intended (e.g. native overlay
+   * on the mounted cell volume) before building. MAY throw to fail the build
+   * fast when storage is misconfigured. Runs before build/login/push.
+   */
+  verifyStorage?(span?: Span): Promise<void>;
+
+  /**
    * Best-effort report of the engine's effective on-disk image store (graph
    * root, run root, driver, backing filesystem). Used to confirm the build is
    * using the mounted cell storage volume. Must not fail the build.

@@ -209,6 +209,8 @@ describe('@vercel/container', () => {
   async function runDockerfileBuild(options?: {
     buildImageEnv?: string;
     engineOverride?: string;
+    /** Override the simulated `buildah info` store object. */
+    storeInfo?: Record<string, unknown>;
   }) {
     if (options?.buildImageEnv) {
       process.env.VERCEL_BUILD_IMAGE = options.buildImageEnv;
@@ -220,11 +222,20 @@ describe('@vercel/container', () => {
     const fetchMock = vi.fn();
     stubRegistryFetch(fetchMock);
     vi.stubGlobal('fetch', fetchMock);
-    // Everything exists except /dev/fuse so storage-driver selection falls
-    // back to vfs deterministically (otherwise fuse-overlayfs may be picked).
-    existsSyncMock.mockImplementation((path: string) => path !== '/dev/fuse');
+    existsSyncMock.mockReturnValue(true);
+    // Simulate `buildah info` reporting the intended store: native overlay on
+    // the mounted XFS volume. Tests can override via `storeInfo`.
+    const storeInfo = options?.storeInfo ?? {
+      GraphRoot: '/var/lib/containers/storage',
+      RunRoot: '/run/containers/storage',
+      GraphDriverName: 'overlay',
+      GraphStatus: { 'Backing Filesystem': 'xfs' },
+    };
     const digest = `sha256:${'a'.repeat(64)}`;
     spawnMock.mockImplementation((cmd: string, args: string[]) => {
+      if (cmd === 'buildah' && args.includes('info')) {
+        return fakeChild(JSON.stringify({ store: storeInfo }));
+      }
       if (args.includes('push')) {
         if (cmd === 'buildah') {
           const digestIdx = args.indexOf('--digestfile');
@@ -288,14 +299,35 @@ describe('@vercel/container', () => {
     expect(
       commands.some(c => /\bbuildah\b.*\bbuild\b.*--network host/.test(c))
     ).toBe(true);
+    // Per-instruction layer caching must be enabled.
+    expect(commands.some(c => /\bbuildah\b.*\bbuild\b.*--layers/.test(c))).toBe(
+      true
+    );
     expect(commands.some(c => /\bbuildah\b.*\blogin\b/.test(c))).toBe(true);
     expect(commands.some(c => /\bbuildah\b.*\bpush\b/.test(c))).toBe(true);
-    expect(commands.some(c => c.includes('--storage-driver vfs'))).toBe(true);
+    // In the build container we defer to /etc/containers/storage.conf (native
+    // overlay on the mounted volume); we must NOT force a --storage-driver.
+    expect(commands.some(c => c.includes('--storage-driver'))).toBe(false);
     expect(commands.some(c => c.includes('--registries-conf'))).toBe(true);
     expect(
       commands.some(c => c.includes('--root /var/lib/containers/storage'))
     ).toBe(true);
     expect(commands.some(c => c.startsWith('docker build'))).toBe(false);
+  });
+
+  it('verifies buildah storage and fails when it is not overlay on the volume', async () => {
+    // Simulate buildah falling back to vfs (e.g. overlay couldn't initialize).
+    await expect(
+      runDockerfileBuild({
+        buildImageEnv: 'al2023',
+        storeInfo: {
+          GraphRoot: '/var/lib/containers/storage',
+          RunRoot: '/run/containers/storage',
+          GraphDriverName: 'vfs',
+          GraphStatus: { 'Backing Filesystem': 'xfs' },
+        },
+      })
+    ).rejects.toThrow(/storage driver is "vfs", expected "overlay"/);
   });
 
   it('ensures the VCR repository exists before pushing', async () => {
