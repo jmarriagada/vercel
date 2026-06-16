@@ -158,7 +158,10 @@ export default class Now {
     // Ignore specific items from vercel.json
     delete requestBody.scope;
     delete requestBody.github;
-    delete requestBody.public;
+    // `public` is no longer part of `VercelConfig`, but a user's
+    // vercel.json may still contain a stale value that must be stripped
+    // before sending to the API.
+    delete (requestBody as Record<string, unknown>).public;
 
     const deployment = await processDeployment({
       now: this,
