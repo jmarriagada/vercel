@@ -1,5 +1,21 @@
 # vercel
 
+## 54.14.1
+
+### Patch Changes
+
+- 3d6f057: [cli] Make `vercel blob` store commands work non-interactively for agents
+- 28dda45: Update Claude Code Vercel plugin prompts and remember accepted plugin updates for future automatic updates.
+- d55310f: Add CLI UX guidance and improve CLI output consistency.
+- b341a19: Improve CLI version output: the native binary now prints `Vercel CLI <version>` without the Node.js suffix, and `vercel upgrade` reports the version it upgraded to and says "No upgrade available" when already on the latest version.
+- 7f5f0f2: Fix telemetry flushing when running the CLI as a native binary.
+- 7866d3d: Allow `vercel buy addon customEnvironment <quantity>` by adding `customEnvironment` to the CLI add-on allowlist and help examples.
+- e9aa6f5: Remove hidden `--functions-beta` / `--no-functions-beta` deploy flags and the size-limit hint messaging
+- fd26487: Remove deprecated `public` from deployment test fixtures and helpers, and stop the CLI from sending the removed `public` field on deploy (including the `--public` flag).
+- aeea9f2: Render the ▲ gutter once per deploy summary: on the Aliased row, falling back to the Production row when no Aliased row will print (`--no-wait`, `--skip-domain`)
+- Updated dependencies [e9aa6f5]
+  - @vercel/python@6.45.1
+
 ## 54.14.0
 
 ### Minor Changes
