@@ -61,12 +61,22 @@ export async function connectGitProvider(
     } else if (apiError && err.code === 'repo_links_exceeded_limit') {
       // The error meta carries a plan-appropriate call to action (newer
       // `ctaLabel`/`ctaUrl`, older `action`/`link`) — surface it instead of
-      // dropping it.
-      const ctaLabel =
-        typeof err.ctaLabel === 'string' ? err.ctaLabel : err.action;
-      const ctaUrl = typeof err.ctaUrl === 'string' ? err.ctaUrl : err.link;
+      // dropping it. Take the label and URL as a pair so we never mix a new
+      // label with a legacy URL (or vice versa).
+      let ctaLabel: string | undefined;
+      let ctaUrl: string | undefined;
+      if (typeof err.ctaLabel === 'string' && typeof err.ctaUrl === 'string') {
+        ctaLabel = err.ctaLabel;
+        ctaUrl = err.ctaUrl;
+      } else if (
+        typeof err.action === 'string' &&
+        typeof err.link === 'string'
+      ) {
+        ctaLabel = err.action;
+        ctaUrl = err.link;
+      }
       let message = err.message;
-      if (typeof ctaLabel === 'string' && typeof ctaUrl === 'string') {
+      if (ctaLabel && ctaUrl) {
         message += `\n${ctaLabel}: ${link(ctaUrl)}`;
       }
       output.error(message);

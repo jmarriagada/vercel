@@ -599,7 +599,9 @@ describe('git connect', () => {
       );
     });
 
-    it('uses the same call-to-action line for enterprise payloads', async () => {
+    it('uses the same call-to-action line for a custom-limit (raised) enterprise payload', async () => {
+      // 300 is a custom/raised override (the default enterprise limit is 150);
+      // the CLI just echoes whatever limit/message the API sends.
       await connectAndExpect(
         {
           ...limitErrorBase,
