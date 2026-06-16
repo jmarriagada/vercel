@@ -1,4 +1,5 @@
 import { packageName } from '../../util/pkg-name';
+import { yesOption } from '../../util/arg-common';
 
 export const getSubcommand = {
   name: 'get',
@@ -70,12 +71,65 @@ export const getSubcommand = {
   ],
 } as const;
 
+export const createSubcommand = {
+  name: 'create',
+  aliases: [],
+  description:
+    'Capture a session trace for a request (alias for `vercel curl --trace`).',
+  arguments: [{ name: 'path', required: true }],
+  options: [
+    {
+      name: 'deployment',
+      shorthand: null,
+      type: String,
+      deprecated: false,
+      description: 'The deployment ID or URL to target',
+      argument: 'ID|URL',
+    },
+    {
+      name: 'protection-bypass',
+      shorthand: null,
+      type: String,
+      deprecated: false,
+      description:
+        'Protection bypass secret for accessing protected deployments',
+      argument: 'SECRET',
+    },
+    {
+      name: 'json',
+      shorthand: null,
+      type: Boolean,
+      deprecated: false,
+      description: 'Emit { response, requestId } as JSON on stdout',
+    },
+    {
+      ...yesOption,
+      description:
+        'Skip the production confirmation prompt (e.g. in non-interactive mode)',
+    },
+  ],
+  examples: [
+    {
+      name: 'Capture a session trace for a request',
+      value: `${packageName} traces create /api/hello`,
+    },
+    {
+      name: 'Target a specific deployment',
+      value: `${packageName} traces create /api/status --deployment https://your-project-abc123.vercel.app`,
+    },
+    {
+      name: 'Pass curl flags after the separator',
+      value: `${packageName} traces create /api/test -- --request POST --data '{"name": "John"}'`,
+    },
+  ],
+} as const;
+
 export const tracesCommand = {
   name: 'traces',
   aliases: [],
   description: 'Fetch traces captured for a Vercel project.',
   arguments: [{ name: 'requestId', required: false }],
-  subcommands: [getSubcommand],
+  subcommands: [getSubcommand, createSubcommand],
   options: [],
   examples: [
     {
@@ -85,6 +139,10 @@ export const tracesCommand = {
     {
       name: 'Print the raw trace JSON',
       value: `${packageName} traces get req_1234567890 --json`,
+    },
+    {
+      name: 'Capture a session trace for a request',
+      value: `${packageName} traces create /api/hello`,
     },
   ],
 } as const;
