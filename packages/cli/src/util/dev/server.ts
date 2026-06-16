@@ -235,6 +235,27 @@ export default class DevServer {
       // override "server" header, like production
       proxyRes.headers['server'] = 'Vercel';
     });
+    this.proxy.on('error', (err, req, res) => {
+      output.debug(
+        `Proxy error for ${req?.url ?? 'unknown request'}: ${errorToString(err)}`
+      );
+
+      if (!res) {
+        return;
+      }
+
+      if ('destroy' in res && typeof res.destroy === 'function') {
+        res.destroy();
+        return;
+      }
+
+      if (res instanceof http.ServerResponse) {
+        if (!res.headersSent) {
+          res.writeHead(502);
+        }
+        res.end();
+      }
+    });
 
     this.server = http.createServer(this.devServerHandler);
     this.server.timeout = 0; // Disable timeout
