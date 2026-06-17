@@ -150,6 +150,10 @@ export {
 } from './max-duration';
 export * from './package-manifest';
 export { generateProjectManifest } from './node-diagnostics';
+export {
+  generateRubyProjectManifest,
+  parseGemfileLock,
+} from './ruby-diagnostics';
 export * from './types';
 export * from './errors';
 
