@@ -301,7 +301,7 @@ async function resolveImageHandler(
 }
 
 export async function build(options: BuildOptions): Promise<BuildResultV2> {
-  const handler = await withSpan(
+  const image = await withSpan(
     options.span,
     'container.resolve_image',
     { 'service.name': options.service?.name },
@@ -319,7 +319,7 @@ export async function build(options: BuildOptions): Promise<BuildResultV2> {
       [outputPath]: {
         type: 'Lambda',
         files: {},
-        handler,
+        image,
         runtime: 'container',
         environment: {},
         ...(command ? { command } : {}),
