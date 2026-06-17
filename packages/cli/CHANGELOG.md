@@ -1,5 +1,12 @@
 # vercel
 
+## 54.14.2
+
+### Patch Changes
+
+- 8e56ad5: Add experimental shim to enable Next.js WebSocket upgrade support in `vc dev`.
+- 07d3fe2: [cli] Add `traces create` as an alias for `curl --trace`
+
 ## 54.14.1
 
 ### Patch Changes
