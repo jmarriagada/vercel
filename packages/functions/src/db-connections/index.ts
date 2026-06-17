@@ -191,7 +191,9 @@ function waitUntilIdleTimeout(dbPool: DbPool) {
 
   const requestContext = getContext();
   if (requestContext?.waitUntil) {
-    requestContext.waitUntil(promise);
+    const span = createRootSpan('@vercel/function waitUntilIdleTimeout');
+    const waitUntilPromise = promise.finally(() => span.end());
+    requestContext.waitUntil(waitUntilPromise);
   } else {
     console.warn('Pool release event triggered outside of request scope.');
   }
@@ -228,9 +230,6 @@ export function attachDatabasePool(dbPool: DbPool) {
     idleTimeoutResolve?.();
     clearTimeout(idleTimeout);
   }
-
-  const span = createRootSpan('@vercel/function attachDatabasePool');
-  span.end();
 
   // PostgreSQL, MySQL2, MariaDB - Listen for release events
   if (
