@@ -37,6 +37,8 @@ export interface PassportIdentity {
   externalIssuer?: string;
   externalSubject?: string;
   connectorId?: string;
+  email?: string;
+  name?: string;
   owner: {
     id?: string;
     slug: string;
@@ -120,8 +122,9 @@ export interface PassportIdentityOptions {
 }
 
 const PASSPORT_ISSUER = 'https://passport.vercel.com';
+const VERCEL_OIDC_ISSUER = 'https://oidc.vercel.com';
 const PASSPORT_JWKS = createRemoteJWKSet(
-  new URL(`${PASSPORT_ISSUER}/.well-known/jwks`)
+  new URL(`${VERCEL_OIDC_ISSUER}/.well-known/jwks`)
 );
 const DEFAULT_ALGORITHMS = ['RS256'];
 const SYMBOL_FOR_REQ_CONTEXT = Symbol.for('@vercel/request-context');
@@ -213,6 +216,8 @@ function createIdentity(
     externalIssuer: stringClaim(payload.external_iss),
     externalSubject: stringClaim(payload.external_sub),
     connectorId: stringClaim(payload.connector_id),
+    email: stringClaim(payload.email),
+    name: stringClaim(payload.name),
     owner: {
       id: stringClaim(payload.owner_id),
       slug: stringClaim(payload.owner)!,
@@ -671,18 +676,6 @@ function validatePassportPayload(payload: PassportIdentityPayload): void {
   if (!externalSub) {
     throw new PassportIdentityError(
       'Passport identity is missing an external_sub claim.'
-    );
-  }
-
-  const expectedSubject = `owner:${owner}:connector:${connectorId}:principal:${externalSub}`;
-  if (payload.sub !== expectedSubject) {
-    throw new PassportIdentityError(
-      'Passport identity sub claim does not match owner, connector_id, and external_sub claims.'
-    );
-  }
-  if (typeof payload.scope === 'string' && payload.scope !== expectedSubject) {
-    throw new PassportIdentityError(
-      'Passport identity scope claim does not match the Passport subject.'
     );
   }
 }

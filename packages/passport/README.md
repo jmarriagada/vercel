@@ -42,8 +42,8 @@ export async function GET() {
 Vercel after Passport validates the visitor. For tests and local debugging, you
 can also pass the `_vercel_passport` cookie explicitly.
 
-By default, request tokens are verified against Passport's JWKS. The helper only
-accepts the dedicated `https://passport.vercel.com/{owner}` issuer. It also
+By default, request tokens are verified against Vercel's OIDC JWKS. The helper
+only accepts the dedicated `https://passport.vercel.com/{owner}` issuer. It also
 validates the Passport-specific token shape so regular Vercel OIDC tokens are
 not accepted as Passport identities.
 
@@ -96,7 +96,6 @@ const identity = await getIdentity(undefined, {
     connector_id: 'local',
     external_sub: 'local-user',
     sub: 'owner:local:connector:local:principal:local-user',
-    scope: 'owner:local:connector:local:principal:local-user',
   },
 });
 ```

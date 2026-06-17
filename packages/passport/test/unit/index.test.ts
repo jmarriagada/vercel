@@ -5,7 +5,7 @@ vi.mock('jose', () => ({
   jwtVerify: vi.fn(async (token: string) => ({ payload: decodeToken(token) })),
 }));
 
-import { jwtVerify } from 'jose';
+import { createRemoteJWKSet, jwtVerify } from 'jose';
 import {
   getIdentity,
   PASSPORT_COOKIE_NAME,
@@ -28,10 +28,12 @@ function decodeToken(token: string): Record<string, unknown> {
 const payload = {
   aud: 'https://vercel.com/team-slug/my-project/production',
   connector_id: 'scl_123',
+  email: 'user@example.com',
   environment: 'production',
   external_iss: 'https://example.okta.com/oauth2/default',
   external_sub: 'user_123',
   iss: 'https://passport.vercel.com/team-slug',
+  name: 'Example User',
   owner: 'team-slug',
   owner_id: 'team_123',
   project: 'my-project',
@@ -59,6 +61,9 @@ describe('getIdentity', () => {
       const identity = await getIdentity(undefined, { verifyOptions });
       expect(identity?.tokenSource).toBe('header');
       expect(identity?.externalSubject).toBe('user_123');
+      expect(createRemoteJWKSet).toHaveBeenCalledWith(
+        new URL('https://oidc.vercel.com/.well-known/jwks')
+      );
       expect(jwtVerify).toHaveBeenCalledWith(
         token,
         'jwks',
@@ -84,8 +89,10 @@ describe('getIdentity', () => {
     expect(identity).toMatchObject({
       connectorId: 'scl_123',
       environment: 'production',
+      email: 'user@example.com',
       externalIssuer: 'https://example.okta.com/oauth2/default',
       externalSubject: 'user_123',
+      name: 'Example User',
       owner: { id: 'team_123', slug: 'team-slug' },
       project: { id: 'prj_123', name: 'my-project' },
       subject: payload.sub,
@@ -127,6 +134,27 @@ describe('getIdentity', () => {
 
     expect(identity?.tokenSource).toBe('header');
     expect(identity?.externalSubject).toBe('user_123');
+  });
+
+  test('accepts owner-id-based subject and deployment-scoped scope', async () => {
+    const actualPassportPayload = {
+      ...payload,
+      aud: 'owner:team_123:project:prj_123:environment:production',
+      scope: 'owner:team_123:project:prj_123:deployment:dpl_123',
+      sub: 'owner:team_123:connector:scl_123:principal:user_123',
+    };
+    const token = createToken(actualPassportPayload);
+    const identity = await getIdentity(
+      new Headers({ [PASSPORT_HEADER_NAME]: token }),
+      { verifyOptions }
+    );
+
+    expect(identity).toMatchObject({
+      externalSubject: 'user_123',
+      owner: { id: 'team_123', slug: 'team-slug' },
+      subject: 'owner:team_123:connector:scl_123:principal:user_123',
+      verified: true,
+    });
   });
 
   test('rejects Vercel OIDC issuer tokens', async () => {
