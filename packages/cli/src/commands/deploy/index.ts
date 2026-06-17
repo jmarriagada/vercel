@@ -1912,7 +1912,7 @@ function handleCreateDeployError(error: Error, localConfig: VercelConfig) {
   if (error instanceof BuildsRateLimited) {
     output.error(error.message);
     output.note(
-      `Run ${getCommandName('upgrade')} to increase your builds limit.`
+      `Run ${getCommandName('buy pro')} to increase your builds limit.`
     );
     return 1;
   }
