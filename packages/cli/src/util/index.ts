@@ -229,6 +229,12 @@ export default class Now {
         err.status = error.status;
         err.code = error.code;
         err.retryAfterMs = 'never';
+        // Preserve any plan-appropriate call to action the API sent so it can
+        // be surfaced to the user instead of dropped.
+        err.ctaLabel = error.ctaLabel;
+        err.ctaUrl = error.ctaUrl;
+        err.action = error.action;
+        err.link = error.link;
         return err;
       }
 
