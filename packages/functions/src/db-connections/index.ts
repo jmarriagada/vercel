@@ -176,9 +176,6 @@ function waitUntilIdleTimeout(dbPool: DbPool) {
     idleTimeoutResolve = resolve;
   });
 
-  const span = createRootSpan('@vercel/function waitUntilIdleTimeout');
-  promise.finally(() => span.end());
-
   // Don't wait longer than the maximum duration
   const waitTime = Math.min(
     getIdleTimeout(dbPool) + 100,
@@ -231,6 +228,9 @@ export function attachDatabasePool(dbPool: DbPool) {
     idleTimeoutResolve?.();
     clearTimeout(idleTimeout);
   }
+
+  const span = createRootSpan('@vercel/function attachDatabasePool');
+  span.end();
 
   // PostgreSQL, MySQL2, MariaDB - Listen for release events
   if (
