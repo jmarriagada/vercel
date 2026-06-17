@@ -3,11 +3,33 @@ import type Client from './client';
 import type { Org, Team, User } from '@vercel-internals/types';
 import getUser from './get-user';
 import getTeamById from './teams/get-team-by-id';
-import { TeamDeleted } from './errors-ts';
+import { InvalidToken, TeamDeleted } from './errors-ts';
 import { getLinkFromDir, getVercelDirectory } from './projects/link';
 import { getRepoLink, findProjectsFromPath } from './link/repo';
 import type { RepoProjectsConfig } from './link/repo';
 import output from '../output-manager';
+import { introspectToken } from './introspect-token';
+
+const APP_PRINCIPAL_SCOPE_ENV = 'VERCEL_CLI_WHOAMI_INTROSPECTION';
+
+type AppPrincipalTeam = Pick<Team, 'id' | 'slug' | 'name'>;
+
+export interface AppPrincipalScopeContext {
+  org: Org;
+  contextName: string;
+  user: null;
+  appPrincipal: {
+    id: string;
+    name?: string;
+    team: AppPrincipalTeam | null;
+  };
+  team: AppPrincipalTeam | null;
+  globalTeam: null;
+  linkedRepo: null;
+  isCrossTeamRepo: false;
+  scopeMismatch: false;
+  explicitScopeProvided: boolean;
+}
 
 export interface ScopeContext {
   org: Org;
@@ -38,6 +60,7 @@ interface BasicScopeContext {
 interface GetScopeOptions {
   getTeam?: boolean;
   resolveLocalScope?: boolean;
+  allowAppPrincipal?: boolean;
 }
 
 interface GetScopeWithLocalScopeOptions extends GetScopeOptions {
@@ -50,6 +73,10 @@ interface GetScopeWithoutLocalScopeOptions extends GetScopeOptions {
 
 export default function getScope(
   client: Client,
+  opts: GetScopeWithLocalScopeOptions & { allowAppPrincipal: true }
+): Promise<ScopeContext | AppPrincipalScopeContext>;
+export default function getScope(
+  client: Client,
   opts: GetScopeWithLocalScopeOptions
 ): Promise<ScopeContext>;
 export default function getScope(
@@ -59,8 +86,31 @@ export default function getScope(
 export default async function getScope(
   client: Client,
   opts: GetScopeOptions = {}
-): Promise<BasicScopeContext | ScopeContext> {
-  const user = await getUser(client);
+): Promise<BasicScopeContext | ScopeContext | AppPrincipalScopeContext> {
+  let appPrincipalError: unknown;
+  const appPrincipalPromise =
+    opts.allowAppPrincipal && isAppPrincipalScopeEnabled()
+      ? getAppPrincipal(client).catch(error => {
+          appPrincipalError = error;
+          return null;
+        })
+      : null;
+
+  let user: User;
+  try {
+    user = await getUser(client);
+  } catch (error) {
+    if (error instanceof InvalidToken && appPrincipalPromise) {
+      const appPrincipal = await appPrincipalPromise;
+      if (appPrincipalError) {
+        throw appPrincipalError;
+      }
+      if (appPrincipal) {
+        return createAppPrincipalScopeContext(client, appPrincipal);
+      }
+    }
+    throw error;
+  }
   let contextName = user.username || user.email;
   let team: Team | null = null;
   const defaultTeamId =
@@ -192,6 +242,79 @@ export default async function getScope(
     scopeMismatch,
     explicitScopeProvided,
   } satisfies ScopeContext;
+}
+
+export function isAppPrincipalScopeContext(
+  scope: BasicScopeContext | ScopeContext | AppPrincipalScopeContext
+): scope is AppPrincipalScopeContext {
+  return 'appPrincipal' in scope;
+}
+
+async function getAppPrincipal(client: Client): Promise<{
+  id: string;
+  name?: string;
+  team: AppPrincipalTeam | null;
+} | null> {
+  const token = client.authConfig.token;
+  if (!token) {
+    return null;
+  }
+
+  const introspection = await introspectToken(client, token);
+  if (
+    !introspection.active ||
+    introspection.subject_type !== 'client' ||
+    !introspection.client_id
+  ) {
+    return null;
+  }
+
+  return {
+    id: introspection.client_id,
+    name: introspection.client_name,
+    team: introspection.team ?? null,
+  };
+}
+
+function createAppPrincipalScopeContext(
+  client: Client,
+  appPrincipal: {
+    id: string;
+    name?: string;
+    team: AppPrincipalTeam | null;
+  }
+): AppPrincipalScopeContext {
+  const explicitScopeProvided = detectExplicitScope(client);
+  const org = appPrincipal.team
+    ? {
+        type: 'team' as const,
+        id: appPrincipal.team.id,
+        slug: appPrincipal.team.slug,
+      }
+    : {
+        type: 'user' as const,
+        id: appPrincipal.id,
+        slug: appPrincipal.name ?? appPrincipal.id,
+      };
+
+  return {
+    org,
+    contextName:
+      appPrincipal.team?.slug ?? appPrincipal.name ?? appPrincipal.id,
+    user: null,
+    appPrincipal,
+    team: appPrincipal.team,
+    globalTeam: null,
+    linkedRepo: null,
+    isCrossTeamRepo: false,
+    scopeMismatch: false,
+    explicitScopeProvided,
+  };
+}
+
+function isAppPrincipalScopeEnabled(): boolean {
+  const value = process.env[APP_PRINCIPAL_SCOPE_ENV];
+  return value === '1' || value?.toLowerCase() === 'true';
 }
 
 export function applyScopeFromLink(client: Client, link: { org: Org }): void {

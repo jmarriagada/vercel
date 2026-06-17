@@ -2,32 +2,18 @@ import chalk from 'chalk';
 import { help } from '../help';
 import { whoamiCommand } from './command';
 
-import getScope, { type ScopeContext } from '../../util/get-scope';
+import getScope, {
+  isAppPrincipalScopeContext,
+  type AppPrincipalScopeContext,
+  type ScopeContext,
+} from '../../util/get-scope';
 import { parseArguments } from '../../util/get-args';
 import type Client from '../../util/client';
 import { getFlagsSpecification } from '../../util/get-flags-specification';
 import { printError } from '../../util/error';
-import { InvalidToken } from '../../util/errors-ts';
 import output from '../../output-manager';
 import { WhoamiTelemetryClient } from '../../util/telemetry/commands/whoami';
 import { validateJsonOutput } from '../../util/output-format';
-
-const WHOAMI_INTROSPECTION_ENV = 'VERCEL_CLI_WHOAMI_INTROSPECTION';
-
-type TokenIntrospectionResponse = {
-  active: boolean;
-  client_id?: string;
-  client_name?: string;
-  sub?: string;
-  subject_type?: 'client' | 'user';
-  team?: { id: string; slug: string; name: string };
-};
-
-type AppPrincipalIntrospectionResponse = TokenIntrospectionResponse & {
-  active: true;
-  client_id: string;
-  subject_type: 'client';
-};
 
 export default async function whoami(client: Client): Promise<number> {
   let parsedArgs = null;
@@ -61,24 +47,22 @@ export default async function whoami(client: Client): Promise<number> {
   const asJson = formatResult.jsonOutput;
   telemetry.trackCliOptionFormat(parsedArgs.flags['--format']);
 
-  const appPrincipalPromise = isWhoamiIntrospectionEnabled()
-    ? getAppPrincipal(client)
-    : Promise.resolve(null);
-
-  let scope: ScopeContext;
+  let scope: ScopeContext | AppPrincipalScopeContext;
   try {
-    scope = await getScope(client, { resolveLocalScope: true });
+    scope = await getScope(client, {
+      resolveLocalScope: true,
+      allowAppPrincipal: true,
+    });
   } catch (error) {
-    if (error instanceof InvalidToken) {
-      const authPrincipal = await appPrincipalPromise;
-      if (authPrincipal) {
-        printAppPrincipal(client, authPrincipal, asJson);
-        return 0;
-      }
-    }
     printError(error);
     return 1;
   }
+
+  if (isAppPrincipalScopeContext(scope)) {
+    printAppPrincipal(client, scope.appPrincipal, asJson);
+    return 0;
+  }
+
   const { user, team, globalTeam } = scope;
 
   // A local override exists when the effective team (from the linked project)
@@ -146,50 +130,16 @@ export default async function whoami(client: Client): Promise<number> {
   return 0;
 }
 
-async function getAppPrincipal(
-  client: Client
-): Promise<AppPrincipalIntrospectionResponse | null> {
-  const token = client.authConfig.token;
-  if (!token) {
-    return null;
-  }
-
-  try {
-    const introspection = await client.fetch<TokenIntrospectionResponse>(
-      '/login/oauth/token/introspect',
-      {
-        method: 'POST',
-        useCurrentTeam: false,
-        headers: {
-          'content-type': 'application/x-www-form-urlencoded',
-        },
-        body: new URLSearchParams({ token }),
-      }
-    );
-    if (
-      !introspection.active ||
-      introspection.subject_type !== 'client' ||
-      !introspection.client_id
-    ) {
-      return null;
-    }
-    return {
-      ...introspection,
-      active: true,
-      client_id: introspection.client_id,
-      subject_type: 'client',
-    };
-  } catch {
-    return null;
-  }
-}
-
 function printAppPrincipal(
   client: Client,
-  introspection: AppPrincipalIntrospectionResponse,
+  appPrincipal: {
+    id: string;
+    name?: string;
+    team: { id: string; slug: string; name: string } | null;
+  },
   asJson: boolean
 ) {
-  const appName = introspection.client_name ?? introspection.client_id;
+  const appName = appPrincipal.name ?? appPrincipal.id;
 
   if (asJson) {
     client.stdout.write(
@@ -197,14 +147,14 @@ function printAppPrincipal(
         {
           principal: {
             type: 'app',
-            id: introspection.client_id,
-            name: introspection.client_name,
+            id: appPrincipal.id,
+            name: appPrincipal.name,
           },
           app: {
-            id: introspection.client_id,
-            name: introspection.client_name,
+            id: appPrincipal.id,
+            name: appPrincipal.name,
           },
-          team: introspection.team ?? null,
+          team: appPrincipal.team,
         },
         null,
         2
@@ -212,12 +162,12 @@ function printAppPrincipal(
     );
   } else if (client.stdout.isTTY) {
     output.log(`Logged in as Vercel App: ${chalk.bold(appName)}`);
-    if (introspection.team) {
+    if (appPrincipal.team) {
       output.log(
-        `Active team: ${chalk.bold(introspection.team.slug)}${
-          introspection.team.name &&
-          introspection.team.name !== introspection.team.slug
-            ? ` (${introspection.team.name})`
+        `Active team: ${chalk.bold(appPrincipal.team.slug)}${
+          appPrincipal.team.name &&
+          appPrincipal.team.name !== appPrincipal.team.slug
+            ? ` (${appPrincipal.team.name})`
             : ''
         }`
       );
@@ -225,9 +175,4 @@ function printAppPrincipal(
   } else {
     client.stdout.write(`${appName}\n`);
   }
-}
-
-function isWhoamiIntrospectionEnabled(): boolean {
-  const value = process.env[WHOAMI_INTROSPECTION_ENV];
-  return value === '1' || value?.toLowerCase() === 'true';
 }
