@@ -7,6 +7,15 @@ export const TARGET_PLATFORM = 'linux/amd64';
 
 export const DIGEST_RE = /sha256:[a-f0-9]{64}/;
 
+/** Build `--build-arg KEY=VALUE` flags from the params' project build env. */
+export function buildArgFlags(params: { buildArgs?: Record<string, string> }) {
+  const flags: string[] = [];
+  for (const [key, value] of Object.entries(params.buildArgs ?? {})) {
+    flags.push('--build-arg', `${key}=${value}`);
+  }
+  return flags;
+}
+
 export interface BuildPushParams {
   contextDir: string;
   dockerfilePath: string;
@@ -16,6 +25,14 @@ export interface BuildPushParams {
   token: string;
   /** Bare repository name (without team/project prefix), for error messages. */
   repository: string;
+  /**
+   * Project build env (from `meta.buildEnv`) forwarded to the image build as
+   * `--build-arg KEY=VALUE`, so Dockerfiles can consume declared `ARG`s during
+   * build — matching how other builders run build steps with the build env.
+   * Only the project's build env is included, never the build container's own
+   * internal environment.
+   */
+  buildArgs?: Record<string, string>;
   span?: Span;
 }
 

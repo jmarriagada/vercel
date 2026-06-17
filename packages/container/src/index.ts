@@ -27,6 +27,8 @@ import {
 
 export const version = 2;
 
+export { startDevServer } from './dev';
+
 function normalizeCommand(command: unknown): string[] | undefined {
   if (typeof command === 'string') {
     return [command];
@@ -75,9 +77,11 @@ async function buildAndPushImage(params: {
   dockerfilePath: string;
   repository: string;
   tag: string;
+  buildArgs?: Record<string, string>;
   parentSpan?: Span;
 }): Promise<string> {
-  const { contextDir, dockerfilePath, repository, tag, parentSpan } = params;
+  const { contextDir, dockerfilePath, repository, tag, buildArgs, parentSpan } =
+    params;
   const engine = selectContainerEngine();
 
   return withSpan(
@@ -150,6 +154,7 @@ async function buildAndPushImage(params: {
           username,
           token,
           repository,
+          buildArgs,
           span: buildSpan,
         };
 
@@ -286,6 +291,12 @@ async function resolveImageHandler(
   const tag = resolveImageTag();
   const contextDir = path.dirname(dockerfilePath);
 
+  // Forward the project's build env to the image build as `--build-arg`s, so
+  // Dockerfiles can consume declared `ARG`s during build — matching how other
+  // builders run build steps with the build env. Only the project's build env
+  // (`meta.buildEnv`) is used, never the build container's own environment.
+  const buildArgs = buildArgsFromEnv(meta?.buildEnv);
+
   span?.setAttributes({
     'container.mode': 'build_and_push',
     'container.repository': repository,
@@ -296,8 +307,25 @@ async function resolveImageHandler(
     dockerfilePath,
     repository,
     tag,
+    buildArgs,
     parentSpan: span,
   });
+}
+
+/** Coerce a build env map to string-only `--build-arg` values. */
+function buildArgsFromEnv(
+  env: Record<string, string | undefined> | undefined
+): Record<string, string> | undefined {
+  if (!env) {
+    return undefined;
+  }
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(env)) {
+    if (typeof value === 'string') {
+      out[key] = value;
+    }
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
 }
 
 export async function build(options: BuildOptions): Promise<BuildResultV2> {
@@ -319,7 +347,10 @@ export async function build(options: BuildOptions): Promise<BuildResultV2> {
       [outputPath]: {
         type: 'Lambda',
         files: {},
-        image,
+        // For `runtime: 'container'`, the OCI image reference is carried in
+        // `handler` (the build-output contract; api-builds surfaces it as
+        // `image` downstream). See vercel/api#76729.
+        handler: image,
         runtime: 'container',
         environment: {},
         ...(command ? { command } : {}),

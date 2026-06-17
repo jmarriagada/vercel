@@ -16,7 +16,7 @@ import {
 } from '../util';
 import { selectStorageDriver } from '../storage-driver';
 import type { BuildPushParams, ContainerEngine } from './types';
-import { TARGET_PLATFORM } from './types';
+import { TARGET_PLATFORM, buildArgFlags } from './types';
 
 async function hasBinary(name: string): Promise<boolean> {
   try {
@@ -281,6 +281,7 @@ export const dockerEngine: ContainerEngine = {
       'build',
       '--platform',
       TARGET_PLATFORM,
+      ...buildArgFlags(params),
       '-t',
       params.imageRef,
       '-f',

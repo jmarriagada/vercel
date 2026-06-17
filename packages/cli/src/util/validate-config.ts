@@ -542,6 +542,14 @@ const getExperimentalServicesV2ServiceConfigSchema = () => ({
       maxLength: 256,
     },
     entrypoint: experimentalServicesV2PathSchema,
+    image: {
+      type: 'string',
+      minLength: 1,
+      maxLength: 256,
+    },
+    command: {
+      oneOf: [{ type: 'string' }, { type: 'array', items: { type: 'string' } }],
+    },
     installCommand: experimentalServicesV2CommandSchema,
     buildCommand: experimentalServicesV2CommandSchema,
     devCommand: experimentalServicesV2CommandSchema,

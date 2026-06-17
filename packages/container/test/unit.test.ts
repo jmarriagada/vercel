@@ -1,8 +1,8 @@
 import type { BuildResultV2Typical } from '@vercel/build-utils';
 import { EventEmitter } from 'node:events';
-import { writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { build } from '../src';
+import { build, startDevServer } from '../src';
 import { __resetStorageDriverCache } from '../src/storage-driver';
 
 const { spawnMock, existsSyncMock } = vi.hoisted(() => ({
@@ -97,6 +97,21 @@ function fakeChildFailure(stderr = '') {
   return child;
 }
 
+/**
+ * Fake long-running child process (e.g. `docker run`) that stays alive until
+ * `.kill()`/emit. Used for dev-server tests where the container must not exit.
+ */
+function fakeRunningChild(pid = 4242) {
+  const child: any = new EventEmitter();
+  child.stdout = new EventEmitter();
+  child.stderr = new EventEmitter();
+  child.stdin = { end: vi.fn() };
+  child.pid = pid;
+  child.exitCode = null;
+  child.kill = vi.fn();
+  return child;
+}
+
 /** Fake child process that emits the given stdout, then exits successfully. */
 function fakeChild(stdout = '') {
   const child: any = new EventEmitter();
@@ -156,7 +171,7 @@ describe('@vercel/container', () => {
         index: {
           type: 'Lambda',
           files: {},
-          image: 'docker.io/library/nginx:1.27',
+          handler: 'docker.io/library/nginx:1.27',
           runtime: 'container',
           environment: {},
         },
@@ -170,7 +185,7 @@ describe('@vercel/container', () => {
     );
 
     expect(result.output.index).toMatchObject({
-      image: 'grycap/cowsay:latest',
+      handler: 'grycap/cowsay:latest',
       runtime: 'container',
     });
   });
@@ -186,7 +201,7 @@ describe('@vercel/container', () => {
     );
 
     expect(result.output.index).toMatchObject({
-      image: 'docker.io/library/nginx:1.27',
+      handler: 'docker.io/library/nginx:1.27',
       command: ['nginx -g daemon off;'],
     });
   });
@@ -204,7 +219,7 @@ describe('@vercel/container', () => {
 
     expect(result.output).toHaveProperty('_svc/api/index');
     expect(result.output['_svc/api/index']).toMatchObject({
-      image: 'docker.io/library/nginx:1.27',
+      handler: 'docker.io/library/nginx:1.27',
       runtime: 'container',
       environment: {},
     });
@@ -215,6 +230,7 @@ describe('@vercel/container', () => {
     engineOverride?: string;
     /** Override the simulated `buildah info` store object. */
     storeInfo?: Record<string, unknown>;
+    meta?: Record<string, unknown>;
   }) {
     if (options?.buildImageEnv) {
       process.env.VERCEL_BUILD_IMAGE = options.buildImageEnv;
@@ -258,13 +274,14 @@ describe('@vercel/container', () => {
       await build({
         ...createBuildOptions({ runtime: 'container' }),
         service: { name: 'api', type: 'web' },
-      })
+        ...(options?.meta ? { meta: options.meta } : {}),
+      } as any)
     );
 
     expect(result.output['_svc/api/index']).toMatchObject({
       type: 'Lambda',
       runtime: 'container',
-      image: `vcr.vercel.com/acme/my-app/api@${digest}`,
+      handler: `vcr.vercel.com/acme/my-app/api@${digest}`,
     });
 
     return spawnMock.mock.calls.map(call => {
@@ -310,6 +327,14 @@ describe('@vercel/container', () => {
     );
     expect(commands.some(c => /\bbuildah\b.*\blogin\b/.test(c))).toBe(true);
     expect(commands.some(c => /\bbuildah\b.*\bpush\b/.test(c))).toBe(true);
+    // Push with zstd compression so server-side VHS conversion is faster.
+    expect(
+      commands.some(
+        c =>
+          /\bbuildah\b.*\bpush\b/.test(c) &&
+          c.includes('--compression-format zstd')
+      )
+    ).toBe(true);
     expect(commands.some(c => c.includes('--registries-conf'))).toBe(true);
     // Defer to /etc/containers/storage.conf (native overlay on /vercel); we
     // must NOT force a --storage-driver.
@@ -318,6 +343,21 @@ describe('@vercel/container', () => {
       commands.some(c => c.includes('--root /vercel/.containers/storage'))
     ).toBe(true);
     expect(commands.some(c => c.startsWith('docker build'))).toBe(false);
+  });
+
+  it('forwards the project build env to the image build as --build-arg', async () => {
+    const commands = await runDockerfileBuild({
+      buildImageEnv: 'al2023',
+      meta: { buildEnv: { MY_BUILD_VAR: 'hello', OTHER: 'world' } },
+    });
+    expect(
+      commands.some(
+        c =>
+          /\bbuildah\b.*\bbuild\b/.test(c) &&
+          c.includes('--build-arg MY_BUILD_VAR=hello') &&
+          c.includes('--build-arg OTHER=world')
+      )
+    ).toBe(true);
   });
 
   it('storage verification is observability-only by default (does not fail the build)', async () => {
@@ -411,7 +451,7 @@ describe('@vercel/container', () => {
     );
 
     expect(result.output['_svc/api/index']).toMatchObject({
-      image: `vcr.vercel.com/acme/my-app/api@${digest}`,
+      handler: `vcr.vercel.com/acme/my-app/api@${digest}`,
     });
   });
 
@@ -547,5 +587,126 @@ describe('@vercel/container', () => {
     expect(
       spawnMock.mock.calls.some(([, args]) => args.includes('build'))
     ).toBe(false);
+  });
+
+  describe('startDevServer', () => {
+    function commandsRun(): string[] {
+      return spawnMock.mock.calls.map(call => {
+        const [cmd, args] = call as [string, string[]];
+        return `${cmd} ${args.join(' ')}`;
+      });
+    }
+
+    it('builds locally (host platform), runs the container, and returns the mapped port', async () => {
+      existsSyncMock.mockReturnValue(true); // Dockerfile present
+      spawnMock.mockImplementation((cmd: string, args: string[]) => {
+        if (cmd === 'docker' && args[0] === 'run') {
+          return fakeRunningChild(4242);
+        }
+        return fakeChild('');
+      });
+      // `run()` (build, image inspect, port) uses the same spawn mock but reads
+      // stdout; provide stdout for inspect/port via a tailored impl.
+      spawnMock.mockImplementation((cmd: string, args: string[]) => {
+        if (cmd === 'docker' && args[0] === 'run') {
+          return fakeRunningChild(4242);
+        }
+        if (cmd === 'docker' && args.includes('inspect')) {
+          return fakeChild('{"3000/tcp":{}}');
+        }
+        if (cmd === 'docker' && args[0] === 'port') {
+          return fakeChild('127.0.0.1:54321\n');
+        }
+        return fakeChild('');
+      });
+
+      const result = await startDevServer({
+        ...createBuildOptions({ runtime: 'container' }),
+        entrypoint: 'apps/svc/Dockerfile',
+        service: { name: 'api', type: 'web' },
+        meta: { isDev: true, env: { FOO: 'bar' } },
+      } as any);
+
+      expect(result).toMatchObject({ port: 54321, pid: 4242 });
+      const commands = commandsRun();
+      // Build for host platform — must NOT pin linux/amd64.
+      expect(
+        commands.some(
+          c => c.startsWith('docker build') && !c.includes('--platform')
+        )
+      ).toBe(true);
+      // Runs the container, publishing the EXPOSE'd port via an --env-file.
+      expect(
+        commands.some(
+          c => c.includes('docker run') && c.includes('-p 127.0.0.1:0:3000')
+        )
+      ).toBe(true);
+      // Env is passed via --env-file (like other builders' cloneEnv): contains
+      // PORT and the orchestrator's meta.env.
+      const runArgs = spawnMock.mock.calls.find(
+        ([cmd, args]) => cmd === 'docker' && (args as string[])[0] === 'run'
+      )?.[1] as string[];
+      const envFileIdx = runArgs.indexOf('--env-file');
+      expect(envFileIdx).toBeGreaterThanOrEqual(0);
+      const envFileContents = readFileSync(runArgs[envFileIdx + 1], 'utf8');
+      expect(envFileContents).toContain('PORT=3000');
+      expect(envFileContents).toContain('FOO=bar');
+      await result!.shutdown!();
+    });
+
+    it('uses a prebuilt image without building', async () => {
+      existsSyncMock.mockReturnValue(false); // no Dockerfile
+      spawnMock.mockImplementation((cmd: string, args: string[]) => {
+        if (cmd === 'docker' && args[0] === 'run') {
+          return fakeRunningChild(99);
+        }
+        if (cmd === 'docker' && args.includes('inspect')) {
+          return fakeChild('null'); // no EXPOSE
+        }
+        if (cmd === 'docker' && args[0] === 'port') {
+          return fakeChild('127.0.0.1:7777\n');
+        }
+        return fakeChild('');
+      });
+
+      const result = await startDevServer({
+        ...createBuildOptions({ image: 'grycap/cowsay:latest' }),
+        service: { name: 'api', type: 'web' },
+        meta: { isDev: true },
+      } as any);
+
+      expect(result).toMatchObject({ port: 7777, pid: 99 });
+      const commands = commandsRun();
+      expect(commands.some(c => c.startsWith('docker build'))).toBe(false);
+      // Falls back to default container port 3000 when no EXPOSE.
+      expect(commands.some(c => c.includes('-p 127.0.0.1:0:3000'))).toBe(true);
+      expect(
+        commands.some(c => c.includes('docker run') && c.includes('cowsay'))
+      ).toBe(true);
+    });
+
+    it('shutdown stops the container', async () => {
+      existsSyncMock.mockReturnValue(false);
+      spawnMock.mockImplementation((cmd: string, args: string[]) => {
+        if (cmd === 'docker' && args[0] === 'run') {
+          return fakeRunningChild(1);
+        }
+        if (cmd === 'docker' && args[0] === 'port') {
+          return fakeChild('127.0.0.1:5000\n');
+        }
+        return fakeChild('');
+      });
+
+      const result = await startDevServer({
+        ...createBuildOptions({ image: 'grycap/cowsay:latest' }),
+        service: { name: 'api', type: 'web' },
+        meta: { isDev: true },
+      } as any);
+
+      await result!.shutdown!();
+      expect(
+        commandsRun().some(c => /^docker stop vercel-dev-api-/.test(c))
+      ).toBe(true);
+    });
   });
 });

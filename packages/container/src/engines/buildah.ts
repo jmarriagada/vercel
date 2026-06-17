@@ -9,9 +9,17 @@ import {
   selectStorageDriver,
 } from '../storage-driver';
 import { formatVcrAuthError } from '../oidc';
-import { DEBUG, debug, info, isBuildContainer, run, toTag } from '../util';
+import {
+  DEBUG,
+  debug,
+  info,
+  isBuildContainer,
+  readString,
+  run,
+  toTag,
+} from '../util';
 import type { BuildPushParams, ContainerEngine } from './types';
-import { TARGET_PLATFORM } from './types';
+import { TARGET_PLATFORM, buildArgFlags } from './types';
 
 async function runBuildah(
   args: string[],
@@ -94,6 +102,7 @@ export const buildahEngine: ContainerEngine = {
       // existing egress.
       '--network',
       'host',
+      ...buildArgFlags(params),
       '-t',
       params.imageRef,
       '-f',
@@ -168,8 +177,20 @@ export const buildahEngine: ContainerEngine = {
   async push(params: BuildPushParams): Promise<string | undefined> {
     const digestDir = mkdtempSync(join(tmpdir(), 'vercel-container-digest-'));
     const digestFile = join(digestDir, 'digest');
+    // Push with zstd compression (OCI media types). VCR supports zstd and it
+    // makes the server-side VHS conversion faster, especially for larger
+    // images. Opt out with VERCEL_VCR_DISABLE_ZSTD=1.
+    const zstdArgs = readString(process.env.VERCEL_VCR_DISABLE_ZSTD)
+      ? []
+      : ['--compression-format', 'zstd', '--compression-level', '3'];
     try {
-      await runBuildah(['push', '--digestfile', digestFile, params.imageRef]);
+      await runBuildah([
+        'push',
+        ...zstdArgs,
+        '--digestfile',
+        digestFile,
+        params.imageRef,
+      ]);
       const digest = readFileSync(digestFile, 'utf8').trim();
       return digest.match(/sha256:[a-f0-9]{64}/)?.[0] ?? (digest || undefined);
     } catch (err) {

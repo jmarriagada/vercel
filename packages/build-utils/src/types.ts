@@ -648,6 +648,8 @@ export interface ExperimentalServiceV2 {
   runtime?: string;
   /** Resolved entrypoint, relative to the service root. */
   entrypoint?: string;
+  /** Command override for `runtime: "container"` services. */
+  command?: string[];
   /** Builder selected by the resolver. */
   builder: Builder;
   installCommand?: string;
@@ -1062,8 +1064,17 @@ export interface ExperimentalServiceV2Config {
   /**
    * Service entrypoint, relative to the service root directory.
    * Can be a file path or a module specification (for Python).
+   * For `runtime: "container"`, a Dockerfile path (built & pushed) or a
+   * prebuilt OCI image reference.
    */
   entrypoint?: string;
+  /**
+   * Prebuilt OCI image reference for `runtime: "container"`. Alternative to a
+   * Dockerfile entrypoint.
+   */
+  image?: string;
+  /** Command override for `runtime: "container"` services. */
+  command?: string | string[];
 
   /* Service-level build setting overrides. */
   installCommand?: string;
