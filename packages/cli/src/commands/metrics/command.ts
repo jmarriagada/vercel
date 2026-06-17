@@ -103,6 +103,15 @@ export const metricsCommand = {
       argument: 'SIZE',
     },
     {
+      name: 'bucket-timezone',
+      shorthand: null,
+      type: String,
+      deprecated: false,
+      description:
+        'IANA timezone for calendar bucket alignment only; does not shift --since/--until or output timestamps (e.g., Europe/Paris)',
+      argument: 'ZONE',
+    },
+    {
       ...projectOption,
       shorthand: 'p',
     },
@@ -135,6 +144,14 @@ export const metricsCommand = {
     {
       name: 'Core Web Vitals (LCP) by route',
       value: `${packageName} metrics vercel.speed_insights_metric.lcp -a p75 --group-by route --since 7d`,
+    },
+    {
+      name: 'Daily pageviews with a Paris-aligned bucket',
+      value: `${packageName} metrics vercel.analytics_pageview.count --since 2026-05-28 --until 2026-05-29 --granularity 1d --bucket-timezone Europe/Paris`,
+    },
+    {
+      name: 'Visitors time series from the top 5 countries',
+      value: `${packageName} metrics vercel.analytics_pageview.count -a unique/visitor_id --group-by country --since 1d --granularity 1h --limit 5`,
     },
     {
       name: 'List available metrics',
