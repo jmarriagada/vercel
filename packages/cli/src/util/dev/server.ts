@@ -97,6 +97,7 @@ import type { ProjectSettings } from '@vercel-internals/types';
 import { treeKill } from '../tree-kill';
 import { ServicesOrchestrator } from './services-orchestrator';
 import { QueueBroker } from './queue-broker';
+import { injectNextDevWebSocketShimIfNeeded } from './next-dev-websocket-shim-injection';
 import { applyOverriddenHeaders, nodeHeadersToFetchHeaders } from './headers';
 import { formatQueryString, parseQueryString } from './parse-query-string';
 import {
@@ -233,6 +234,27 @@ export default class DevServer {
     this.proxy.on('proxyRes', proxyRes => {
       // override "server" header, like production
       proxyRes.headers['server'] = 'Vercel';
+    });
+    this.proxy.on('error', (err, req, res) => {
+      output.debug(
+        `Proxy error for ${req?.url ?? 'unknown request'}: ${errorToString(err)}`
+      );
+
+      if (!res) {
+        return;
+      }
+
+      if ('destroy' in res && typeof res.destroy === 'function') {
+        res.destroy();
+        return;
+      }
+
+      if (res instanceof http.ServerResponse) {
+        if (!res.headersSent) {
+          res.writeHead(502);
+        }
+        res.end();
+      }
     });
 
     this.server = http.createServer(this.devServerHandler);
@@ -2811,6 +2833,8 @@ export default class DevServer {
     const command = devCommand
       .replace(/\$PORT/g, `${port}`)
       .replace(/%PORT%/g, `${port}`);
+
+    injectNextDevWebSocketShimIfNeeded(env, command, this.projectSettings);
 
     output.debug(
       `Starting dev command with parameters: ${JSON.stringify({
