@@ -210,7 +210,7 @@ export const dockerEngine: ContainerEngine = {
           onVercel
             ? 'The `docker` CLI is not available in this build container.'
             : 'Docker CLI was not found on your PATH. Install Docker and make sure ' +
-              'the `docker` command is available so the container image can be built.'
+                'the `docker` command is available so the container image can be built.'
         );
       }
 

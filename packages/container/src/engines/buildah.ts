@@ -38,9 +38,9 @@ export const buildahEngine: ContainerEngine = {
         throw new Error(
           isBuildContainer()
             ? 'The `buildah` CLI is not available in this build container. ' +
-              'Install buildah (via SPAL) in the build image.'
+                'Install buildah (via SPAL) in the build image.'
             : 'Buildah was not found on your PATH. Install buildah or run the build ' +
-              'on Vercel where the build container provides it.'
+                'on Vercel where the build container provides it.'
         );
       }
       throw err;
