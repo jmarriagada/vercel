@@ -10,7 +10,14 @@ import {
   type ChildProcess,
   type SpawnOptions,
 } from 'child_process';
-import { existsSync, readFileSync, statSync, readdirSync, mkdirSync } from 'fs';
+import {
+  existsSync,
+  readFileSync,
+  statSync,
+  readdirSync,
+  mkdirSync,
+  promises as fsPromises,
+} from 'fs';
 import { cpus } from 'os';
 import {
   BuildV2,
@@ -30,8 +37,10 @@ import {
   runPipInstall,
   runPackageJsonScript,
   runShellScript,
-  createDiagnostics,
   generateProjectManifest,
+  manifestPath,
+  FileBlob,
+  Diagnostics,
   getReportedServiceType,
   getNodeVersion,
   debug,
@@ -960,4 +969,21 @@ export const prepareCache: PrepareCache = async ({
   return cacheFiles;
 };
 
-export const diagnostics = createDiagnostics('node');
+const STATIC_BUILD_MANIFEST_RUNTIMES = ['node', 'go', 'rust', 'ruby'] as const;
+
+export const diagnostics: Diagnostics = async ({ workPath }) => {
+  const files: Files = {};
+  await Promise.all(
+    STATIC_BUILD_MANIFEST_RUNTIMES.map(async runtime => {
+      const relPath = manifestPath(runtime);
+      try {
+        const data = await fsPromises.readFile(
+          path.join(workPath, relPath),
+          'utf-8'
+        );
+        files[relPath] = new FileBlob({ data });
+      } catch {}
+    })
+  );
+  return files;
+};
