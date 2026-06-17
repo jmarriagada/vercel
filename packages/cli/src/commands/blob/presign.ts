@@ -242,7 +242,8 @@ export default async function presign(
       operation,
       presignedUrl: presigned.presignedUrl,
       validUntil:
-        'validUntil' in signedToken ? signedToken.validUntil : undefined,
+        ('validUntil' in signedToken ? signedToken.validUntil : undefined) ??
+        validity.validUntil,
     });
     return 0;
   } catch (err) {

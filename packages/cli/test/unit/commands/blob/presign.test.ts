@@ -226,6 +226,44 @@ describe('blob presign', () => {
     ]);
   });
 
+  it('should include validUntil in JSON output when provided tokens and --valid-until are passed', async () => {
+    const exitCode = await presign(
+      client,
+      [
+        'uploads/image.jpg',
+        '--access',
+        'private',
+        '--operation',
+        'put',
+        '--delegation-token',
+        'provided-delegation-token',
+        '--client-signing-token',
+        'provided-client-signing-token',
+        '--valid-until',
+        '1761938300000',
+        '--json',
+      ],
+      testAuth
+    );
+
+    expect(exitCode).toBe(0);
+    expect(mockedBlob.issueSignedToken).not.toHaveBeenCalled();
+    expect(mockedBlob.presignUrl).toHaveBeenCalledWith(
+      {
+        delegationToken: 'provided-delegation-token',
+        clientSigningToken: 'provided-client-signing-token',
+      },
+      expect.objectContaining({
+        validUntil: 1761938300000,
+      })
+    );
+    expect(JSON.parse(client.stdout.getFullOutput())).toEqual({
+      operation: 'put',
+      presignedUrl: 'https://blob.vercel-storage.com/presigned-url',
+      validUntil: 1761938300000,
+    });
+  });
+
   it('should reject upload-only flags on read operations', async () => {
     const exitCode = await presign(
       client,
