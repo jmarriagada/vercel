@@ -30,6 +30,7 @@ import {
 } from './uv';
 import { detectTargetPlatform } from './platform-info';
 import { derivePycPath, type BytecodeCollectionResult } from './compileall';
+import { isNativeLibrary, stripNativeLibraries } from './strip';
 
 const readFile = promisify(fs.readFile);
 
@@ -42,19 +43,49 @@ const readFile = promisify(fs.readFile);
  * - `WHEEL`          – wheel format metadata (installer use only)
  * - `INSTALLER`      – records which tool installed the package
  * - `direct_url.json`– PEP 610 install provenance
+ * - `RECORD(.jws/.p7s)` – PEP 376 manifest, used by pip uninstall/verify only
+ * - `REQUESTED`      – marks an explicitly-requested install (installer use)
+ * - `top_level.txt`  – legacy top-level module list (installer/tooling use)
+ *
+ * `METADATA` and `entry_points.txt` are deliberately NOT stripped: they are
+ * read at runtime by `importlib.metadata` (version lookups, plugin/entry-point
+ * discovery).  License/notice files are kept for redistribution compliance.
  */
 const STRIP_BASENAMES = new Set([
   'py.typed',
   'WHEEL',
   'INSTALLER',
   'direct_url.json',
+  'RECORD',
+  'RECORD.jws',
+  'RECORD.p7s',
+  'REQUESTED',
+  'top_level.txt',
 ]);
 
-function shouldStripVendorFile(filePath: string): boolean {
+/**
+ * File extensions that are never needed at runtime:
+ *
+ * - `.pyc` / `.pyi` – bytecode caches / type stubs
+ * - `.c` / `.pyx` / `.pxd` / `.pxi` – Cython/C build-time sources
+ * - `.h` / `.hpp`  – C/C++ headers shipped for downstream compilation
+ */
+const STRIP_EXTENSIONS = [
+  '.pyc',
+  '.pyi',
+  '.c',
+  '.pyx',
+  '.pxd',
+  '.pxi',
+  '.h',
+  '.hpp',
+];
+
+export function shouldStripVendorFile(filePath: string): boolean {
   const segments = filePath.split(sep);
   if (segments.includes('__pycache__')) return true;
   const name = segments[segments.length - 1] ?? '';
-  if (name.endsWith('.pyc') || name.endsWith('.pyi')) return true;
+  if (STRIP_EXTENSIONS.some(ext => name.endsWith(ext))) return true;
   if (STRIP_BASENAMES.has(name)) return true;
   return false;
 }
@@ -93,6 +124,10 @@ interface PythonDependencyExternalizerOptions {
   pythonPath: string;
   hasCustomCommand: boolean;
   alwaysBundlePackages?: string[];
+  /** Deploy target architecture, used to gate native-library stripping. */
+  targetArch?: string | undefined;
+  /** Whether this is a `vercel dev` build (skips native-library stripping). */
+  isDev?: boolean;
 }
 
 interface DependencyAnalysis {
@@ -113,6 +148,8 @@ export class PythonDependencyExternalizer {
   private pythonPath: string;
   private hasCustomCommand: boolean;
   private alwaysBundlePackages: string[];
+  private targetArch: string | undefined;
+  private isDev: boolean;
 
   // Populated by analyze()
   private sitePackageDirs: string[] = [];
@@ -133,6 +170,8 @@ export class PythonDependencyExternalizer {
     this.pythonPath = options.pythonPath;
     this.hasCustomCommand = options.hasCustomCommand;
     this.alwaysBundlePackages = options.alwaysBundlePackages ?? [];
+    this.targetArch = options.targetArch;
+    this.isDev = options.isDev ?? false;
   }
 
   shouldEnableRuntimeInstall(): boolean {
@@ -172,6 +211,15 @@ export class PythonDependencyExternalizer {
       }
       this.distributions.set(dir, await scanDistributions(dir));
     }
+
+    // Strip debug symbols from native shared libraries in place before
+    // mirroring/sizing so the reduced sizes feed the size-threshold decision.
+    await stripNativeLibraries({
+      sitePackageDirs: this.sitePackageDirs,
+      distributions: this.distributions,
+      targetArch: this.targetArch,
+      isDev: this.isDev,
+    });
 
     this.allVendorFiles = await this.mirrorPackagesIntoVendor({
       vendorDirName: this.vendorDir,
@@ -741,13 +789,18 @@ export class PythonDependencyExternalizer {
           }
           const srcFsPath = join(dir, filePath);
           const bundlePath = join(vendorDirName, filePath).replace(/\\/g, '/');
+          // Native libraries may have been stripped in place, making their
+          // RECORD size stale; force a fresh stat by clearing the size.
+          const effectiveRecordSize = isNativeLibrary(filePath)
+            ? undefined
+            : recordSize;
           pending.push({
             bundlePath,
             srcFsPath,
             // RECORD sizes are bigint; convert to number for FileFsRef.
             recordSize:
-              recordSize !== undefined && recordSize !== null
-                ? Number(recordSize)
+              effectiveRecordSize !== undefined && effectiveRecordSize !== null
+                ? Number(effectiveRecordSize)
                 : undefined,
           });
         }
@@ -824,7 +877,13 @@ export class PythonDependencyExternalizer {
             continue;
           }
 
-          if (recordSize !== undefined && recordSize !== null) {
+          // Native libraries may have been stripped in place, making their
+          // RECORD size stale; stat them for an accurate post-strip size.
+          if (
+            recordSize !== undefined &&
+            recordSize !== null &&
+            !isNativeLibrary(filePath)
+          ) {
             knownSize += Number(recordSize);
           } else {
             statPromises.push(
