@@ -666,6 +666,26 @@ describe('metrics query v2', () => {
       expect(exitCode).toBe(0);
       expect(postedBody?.filter).toBe('http_status ge 500');
     });
+
+    it('should AND repeated filter strings before sending them to API', async () => {
+      mockMetricDetail();
+      mockApiSuccess();
+      client.setArgv(
+        'metrics',
+        'vercel.request.count',
+        '--filter',
+        'http_status ge 500',
+        '-f',
+        "contains(request_path, '/api')"
+      );
+
+      const exitCode = await query(client, new MockTelemetry());
+
+      expect(exitCode).toBe(0);
+      expect(postedBody?.filter).toBe(
+        "(http_status ge 500) and (contains(request_path, '/api'))"
+      );
+    });
   });
 
   describe('API errors', () => {

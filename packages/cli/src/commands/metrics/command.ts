@@ -72,9 +72,9 @@ export const metricsCommand = {
     {
       name: 'filter',
       shorthand: 'f',
-      type: String,
+      type: [String],
       deprecated: false,
-      description: 'OData filter expression',
+      description: 'OData filter expression (repeatable, ANDed together)',
       argument: 'EXPR',
     },
     {
@@ -143,6 +143,10 @@ export const metricsCommand = {
     {
       name: 'Function executions matching a path pattern',
       value: `${packageName} metrics vercel.function_invocation.count -f "contains(request_path, '/api')" --group-by route --since 1h`,
+    },
+    {
+      name: 'Function executions matching multiple filters',
+      value: `${packageName} metrics vercel.function_invocation.count -f "http_status ge 500" -f "contains(request_path, '/api')" --since 1h`,
     },
     {
       name: 'Show schema for a metric prefix',
