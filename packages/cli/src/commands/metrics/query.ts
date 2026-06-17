@@ -321,7 +321,7 @@ export default async function query(
         periodStart: startTime.toISOString(),
         periodEnd: endTime.toISOString(),
         granularity: granResult.duration,
-        timezone: bucketTimezone,
+        bucketTimezone: bucketTimezone,
       })
     );
   }

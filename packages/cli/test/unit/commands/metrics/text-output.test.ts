@@ -344,7 +344,7 @@ describe('text-output', () => {
         periodStart: '2026-02-19T10:00:00.000Z',
         periodEnd: '2026-02-19T10:15:00.000Z',
         granularity: { minutes: 5 },
-        timezone: 'Europe/Paris',
+        bucketTimezone: 'Europe/Paris',
         filter: 'httpStatus ge 500',
         scope: projectScope,
         unit: 'milliseconds',
@@ -379,7 +379,7 @@ describe('text-output', () => {
       const withTimezone = formatMetadataHeader({
         ...base,
         granularity: { days: 1 },
-        timezone: 'Europe/Paris',
+        bucketTimezone: 'Europe/Paris',
       });
       expect(stripAnsi(withTimezone)).toContain('Interval: 1d (Europe/Paris)');
 
@@ -392,7 +392,7 @@ describe('text-output', () => {
       const hourly = formatMetadataHeader({
         ...base,
         granularity: { hours: 1 },
-        timezone: 'Europe/Paris',
+        bucketTimezone: 'Europe/Paris',
       });
       expect(stripAnsi(hourly)).toContain('Interval: 1h');
       expect(stripAnsi(hourly)).not.toContain('Europe/Paris');
@@ -463,7 +463,7 @@ describe('text-output', () => {
 
       expect(normalized).toMatchInlineSnapshot(`
         "> Metric: vercel.request.count sum
-        > Period: 2026-02-19 10:00 to 2026-02-19 10:15
+        > Period: 2026-02-19 10:00 to 2026-02-19 10:15 (UTC)
         > Interval: 5m
         > Project: my-project (my-team)
 

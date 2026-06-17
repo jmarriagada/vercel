@@ -54,7 +54,7 @@ interface MetadataHeaderOptions {
   periodEnd: string;
   granularity: Granularity;
   periodUnique?: number;
-  timezone?: string;
+  bucketTimezone?: string;
   filter?: string;
   scope: Scope;
   projectName?: string;
@@ -75,7 +75,7 @@ export interface FormatTextOptions {
   periodStart: string;
   periodEnd: string;
   granularity: Granularity;
-  timezone?: string;
+  bucketTimezone?: string;
 }
 
 // Use a non-printable delimiter so group keys remain stable without colliding
@@ -702,8 +702,11 @@ export function formatMetadataHeader(opts: MetadataHeaderOptions): string {
       value: `${opts.metric} ${opts.aggregation}`,
     },
     {
+      // Period bounds are always UTC; annotate them so the boundary is
+      // unambiguous when the Interval below reports a different
+      // --bucket-timezone.
       key: 'Period',
-      value: `${formatPeriodBound(opts.periodStart)} to ${formatPeriodBound(opts.periodEnd)}`,
+      value: `${formatPeriodBound(opts.periodStart)} to ${formatPeriodBound(opts.periodEnd)} (UTC)`,
     },
     {
       // Period bounds are always UTC; the timezone only controls calendar
@@ -713,7 +716,7 @@ export function formatMetadataHeader(opts: MetadataHeaderOptions): string {
       key: 'Interval',
       value:
         'days' in opts.granularity
-          ? `${formatGranularity(opts.granularity)} (${opts.timezone ?? 'UTC'})`
+          ? `${formatGranularity(opts.granularity)} (${opts.bucketTimezone ?? 'UTC'})`
           : formatGranularity(opts.granularity),
     },
   ];
@@ -925,7 +928,7 @@ export function formatText(
     periodEnd: opts.periodEnd,
     granularity: opts.granularity,
     periodUnique,
-    timezone: opts.timezone,
+    bucketTimezone: opts.bucketTimezone,
     filter: opts.filter,
     scope: opts.scope,
     projectName: opts.projectName,
