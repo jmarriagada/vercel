@@ -647,16 +647,21 @@ async function writeContainerImage(
   path: string
 ) {
   const dest = join(outputDir, 'functions', `${path}.func`);
-  const image = (containerImage as any).image;
-  if (typeof image !== 'string' || image.length === 0) {
-    throw new Error(`Container image output for "${path}" is missing "image".`);
+  // For `runtime: 'container'`, the OCI image reference is carried in `handler`
+  // (the build-output contract; api-builds surfaces it as `image` downstream).
+  // See vercel/api#76729.
+  const handler = (containerImage as any).handler;
+  if (typeof handler !== 'string' || handler.length === 0) {
+    throw new Error(
+      `Container image output for "${path}" is missing "handler".`
+    );
   }
 
   await fs.mkdirp(dest);
   await fs.writeJSON(
     join(dest, '.vc-config.json'),
     {
-      image,
+      handler,
       runtime: 'container',
       environment: (containerImage as any).environment ?? {},
       ...((containerImage as any).command

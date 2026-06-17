@@ -319,7 +319,10 @@ export async function build(options: BuildOptions): Promise<BuildResultV2> {
       [outputPath]: {
         type: 'Lambda',
         files: {},
-        image,
+        // For `runtime: 'container'`, the OCI image reference is carried in
+        // `handler` (the build-output contract; api-builds surfaces it as
+        // `image` downstream). See vercel/api#76729.
+        handler: image,
         runtime: 'container',
         environment: {},
         ...(command ? { command } : {}),

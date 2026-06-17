@@ -156,7 +156,7 @@ describe('@vercel/container', () => {
         index: {
           type: 'Lambda',
           files: {},
-          image: 'docker.io/library/nginx:1.27',
+          handler: 'docker.io/library/nginx:1.27',
           runtime: 'container',
           environment: {},
         },
@@ -170,7 +170,7 @@ describe('@vercel/container', () => {
     );
 
     expect(result.output.index).toMatchObject({
-      image: 'grycap/cowsay:latest',
+      handler: 'grycap/cowsay:latest',
       runtime: 'container',
     });
   });
@@ -186,7 +186,7 @@ describe('@vercel/container', () => {
     );
 
     expect(result.output.index).toMatchObject({
-      image: 'docker.io/library/nginx:1.27',
+      handler: 'docker.io/library/nginx:1.27',
       command: ['nginx -g daemon off;'],
     });
   });
@@ -204,7 +204,7 @@ describe('@vercel/container', () => {
 
     expect(result.output).toHaveProperty('_svc/api/index');
     expect(result.output['_svc/api/index']).toMatchObject({
-      image: 'docker.io/library/nginx:1.27',
+      handler: 'docker.io/library/nginx:1.27',
       runtime: 'container',
       environment: {},
     });
@@ -264,7 +264,7 @@ describe('@vercel/container', () => {
     expect(result.output['_svc/api/index']).toMatchObject({
       type: 'Lambda',
       runtime: 'container',
-      image: `vcr.vercel.com/acme/my-app/api@${digest}`,
+      handler: `vcr.vercel.com/acme/my-app/api@${digest}`,
     });
 
     return spawnMock.mock.calls.map(call => {
@@ -411,7 +411,7 @@ describe('@vercel/container', () => {
     );
 
     expect(result.output['_svc/api/index']).toMatchObject({
-      image: `vcr.vercel.com/acme/my-app/api@${digest}`,
+      handler: `vcr.vercel.com/acme/my-app/api@${digest}`,
     });
   });
 
