@@ -1,5 +1,5 @@
 import { getContext } from './get-context';
-import type { SpanContext, Spans } from './spans';
+import type { IAnyValue, IKeyValue, SpanContext, Spans } from './spans';
 
 const SCOPE_NAME = 'vercel.functions';
 const INTERNAL_SPAN_KIND = 1;
@@ -11,8 +11,12 @@ const ZERO_SPAN_CONTEXT: SpanContext = {
 
 export interface Instrument {
   createSpan(name: string): Instrument;
+  setAttribute(key: string, value: SpanAttributeValue): Instrument;
+  setAttributes(attributes: Record<string, SpanAttributeValue>): Instrument;
   end(): void;
 }
+
+type SpanAttributeValue = string | number | boolean | null | undefined;
 
 class NoopSpan implements Instrument {
   end() {
@@ -22,6 +26,14 @@ class NoopSpan implements Instrument {
     console.info('[trace] noop child span requested', { name });
     return this;
   }
+  setAttribute(key: string, value: SpanAttributeValue) {
+    console.info('[trace] noop span attribute set', { key, value });
+    return this;
+  }
+  setAttributes(attributes: Record<string, SpanAttributeValue>) {
+    console.info('[trace] noop span attributes set', { attributes });
+    return this;
+  }
 }
 
 class Span implements Instrument {
@@ -29,6 +41,7 @@ class Span implements Instrument {
   private startHrTime = process.hrtime.bigint();
   private ended = false;
   private spanContext: SpanContext;
+  private attributes: IKeyValue[] = [];
 
   constructor(
     readonly name: string,
@@ -60,6 +73,36 @@ class Span implements Instrument {
     return new Span(name, this.spanContext, this.reportSpans);
   }
 
+  setAttribute(key: string, value: SpanAttributeValue) {
+    const attribute = toKeyValue(key, value);
+    const existingAttributeIndex = this.attributes.findIndex(
+      ({ key: attributeKey }) => attributeKey === key
+    );
+
+    if (existingAttributeIndex === -1) {
+      this.attributes.push(attribute);
+    } else {
+      this.attributes[existingAttributeIndex] = attribute;
+    }
+
+    console.info('[trace] span attribute set', {
+      name: this.name,
+      spanId: this.spanContext.spanId,
+      key,
+      value,
+    });
+
+    return this;
+  }
+
+  setAttributes(attributes: Record<string, SpanAttributeValue>) {
+    for (const [key, value] of Object.entries(attributes)) {
+      this.setAttribute(key, value);
+    }
+
+    return this;
+  }
+
   end() {
     if (this.ended) {
       console.warn('[trace] span already ended', {
@@ -85,6 +128,13 @@ class Span implements Instrument {
                   kind: INTERNAL_SPAN_KIND,
                   startTimeUnixNano: this.startTime.toString(),
                   endTimeUnixNano: endedAt.toString(),
+                  attributes: this.attributes,
+                  droppedAttributesCount: 0,
+                  events: [],
+                  droppedEventsCount: 0,
+                  status: { code: 0 },
+                  links: [],
+                  droppedLinksCount: 0,
                 },
               ],
             },
@@ -133,6 +183,28 @@ export function createRootSpan(name: string): Instrument {
     contextKeys: Object.keys(context),
   });
   return new NoopSpan();
+}
+
+function toKeyValue(key: string, value: SpanAttributeValue): IKeyValue {
+  return { key, value: toAnyValue(value) };
+}
+
+function toAnyValue(value: SpanAttributeValue): IAnyValue {
+  if (typeof value === 'string') {
+    return { stringValue: value };
+  }
+
+  if (typeof value === 'boolean') {
+    return { boolValue: value };
+  }
+
+  if (typeof value === 'number') {
+    return Number.isInteger(value)
+      ? { intValue: value }
+      : { doubleValue: value };
+  }
+
+  return { stringValue: null };
 }
 
 function unixTimeNano(): bigint {
