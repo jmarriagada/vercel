@@ -1,12 +1,8 @@
+import { randomBytes } from 'node:crypto';
 import { getContext } from './get-context';
 
 const SCOPE_NAME = '@vercel/functions';
 const INTERNAL_SPAN_KIND = 1;
-const ZERO_SPAN_CONTEXT: SpanContext = {
-  traceId: '00000000000000000000000000000000',
-  spanId: '0000000000000000',
-  traceFlags: 0,
-};
 
 export type Spans = {
   resourceSpans?: Array<{
@@ -38,19 +34,19 @@ export interface SpanContext {
   traceFlags?: number;
 }
 
-export interface IKeyValue {
+interface IKeyValue {
   key: string;
   value: IAnyValue;
 }
 
-export interface IAnyValue {
+interface IAnyValue {
   stringValue?: string | null;
   boolValue?: boolean;
   intValue?: number;
   doubleValue?: number;
 }
 
-export interface Instrument {
+interface Instrument {
   createSpan(name: string): Instrument;
   setAttribute(key: string, value: SpanAttributeValue): Instrument;
   setAttributes(attributes: Record<string, SpanAttributeValue>): Instrument;
@@ -195,14 +191,5 @@ function unixTimeNano(): bigint {
 }
 
 function allocateSpanId(): string {
-  let spanId = '';
-
-  do {
-    spanId = '';
-    for (let i = 0; i < 2; i++) {
-      spanId += ((Math.random() * 2 ** 32) >>> 0).toString(16).padStart(8, '0');
-    }
-  } while (spanId === ZERO_SPAN_CONTEXT.spanId);
-
-  return spanId;
+  return randomBytes(8).toString('hex');
 }
