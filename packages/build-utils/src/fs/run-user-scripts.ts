@@ -353,14 +353,6 @@ export async function getNodeVersion(
 
   const latestNodeVersion = getLatestNodeVersion(availableVersions);
 
-  const packageJsonPackageManagerBunVersion =
-    packageJson?.packageManager?.startsWith('bun@')
-      ? packageJson.packageManager.split('@')[1]
-      : undefined;
-  const hasBunLock =
-    (await fs.pathExists(path.join(destPath, 'bun.lock'))) ||
-    (await fs.pathExists(path.join(destPath, 'bun.lockb')));
-
   // Determine the target runtime
   let targetRuntime: 'node' | 'bun';
   if (packageJsonNodeVersion && packageJsonBunVersion) {
@@ -385,12 +377,7 @@ export async function getNodeVersion(
         `Warning detected "engines": { "node": ... } in \`package.json\` and "bunVersion" in \`vercel.json\`. \`package.json\` takes precedence, using "node".`
       );
     }
-  } else if (
-    packageJsonBunVersion ||
-    config.bunVersion ||
-    packageJsonPackageManagerBunVersion ||
-    hasBunLock
-  ) {
+  } else if (packageJsonBunVersion || config.bunVersion) {
     targetRuntime = 'bun';
   } else {
     // If no target runtime is determined, fallback to the configured node version
@@ -453,15 +440,6 @@ export async function getNodeVersion(
     if (config.bunVersion) {
       // bunVersion is set in vercel.json
       return getSupportedBunVersion(config.bunVersion);
-    }
-    if (packageJsonPackageManagerBunVersion) {
-      // packageManager is set to bun@<version>
-      return getSupportedBunVersion(packageJsonPackageManagerBunVersion);
-    }
-    if (hasBunLock) {
-      // bun.lock or bun.lockb is in the current dir
-      // For now, just hard code to 1.x. Perhaps in the future, configVersion could be used?
-      return getSupportedBunVersion('1.x');
     }
     // default to 1.x as a fallback
     return getSupportedBunVersion('1.x');
