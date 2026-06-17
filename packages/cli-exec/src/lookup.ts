@@ -6,7 +6,7 @@ import type {
   SkippedNodeModules,
 } from './diagnostics';
 import { getEnvPath, prependPathEntries, splitPath } from './envpath';
-import { getErrorMessage } from './errutils';
+import { getErrorMessage, isMissingPathError } from './errutils';
 import {
   getCanonicalPath,
   getCommandBase,
@@ -91,9 +91,9 @@ interface LocalVercelPackage {
 }
 
 /**
- * Classification for a PATH entry that may be a local bin candidate.
+ * Classification for a concrete PATH hit that may be a local bin candidate.
  */
-type LocalBinCandidate = { directory: string } | { reason: string } | null;
+type PathLocalBinCandidate = { directory: string } | { reason: string } | null;
 
 // Cache misses too so repeated calls do not keep rescanning PATH in long-lived
 // processes. Callers can clear the cache to force re-resolution after installs.
@@ -235,60 +235,161 @@ async function findCommandInPath(
   diagnostics: ResolutionDiagnostics
 ): Promise<ResolvedCommand | null> {
   for (const directory of splitPath(pathValue)) {
-    const candidateDirectory = path.isAbsolute(directory)
-      ? directory
-      : path.resolve(cwd, directory);
-    const candidate = path.join(candidateDirectory, command);
+    const candidate = getPathCommandCandidate(directory, command, cwd);
+
     try {
-      await access(
+      const canAccess = await canAccessCommandCandidate(
         candidate,
-        process.platform === 'win32'
-          ? constants.F_OK
-          : constants.F_OK | constants.X_OK
+        localBinSearch,
+        diagnostics
       );
 
-      if (!(await stat(candidate)).isFile()) {
-        continue;
-      }
-
-      let realPath = await realpath(candidate);
-      let source: VercelCliInvocation['source'] = 'path';
-      const localBinCandidate = await getLocalBinCandidate(
-        candidate,
-        localBinSearch.directories
-      );
-
-      if (localBinCandidate) {
-        if ('reason' in localBinCandidate) {
-          diagnostics.skippedLocalBins.push({
-            candidate,
-            reason: localBinCandidate.reason,
-          });
-          continue;
-        }
-
-        const localPackageBinResult = await getLocalVercelPackageBin(
+      if (canAccess) {
+        const resolvedCommand = await resolveCommandCandidate(
           command,
-          localBinCandidate.directory
+          candidate,
+          localBinSearch,
+          diagnostics
         );
 
-        if ('reason' in localPackageBinResult) {
-          diagnostics.skippedLocalBins.push({
-            candidate,
-            reason: localPackageBinResult.reason,
-          });
-          continue;
+        if (resolvedCommand) {
+          return resolvedCommand;
         }
-
-        realPath = localPackageBinResult.binPath;
-        source = 'local-bin';
       }
-
-      return { realPath, source };
-    } catch {}
+    } catch {
+      // The candidate can change between access, stat, and realpath. Treat it
+      // like an unusable PATH entry and keep searching.
+    }
   }
 
   return null;
+}
+
+/**
+ * Builds an absolute candidate path for one PATH entry and command name.
+ */
+function getPathCommandCandidate(
+  directory: string,
+  command: string,
+  cwd: string
+): string {
+  const candidateDirectory = path.isAbsolute(directory)
+    ? directory
+    : path.resolve(cwd, directory);
+
+  return path.join(candidateDirectory, command);
+}
+
+/**
+ * PATH probing treats absent candidates as normal. Permission failures are only
+ * useful when they explain why a local project bin was rejected.
+ */
+async function canAccessCommandCandidate(
+  candidate: string,
+  localBinSearch: LocalBinSearch,
+  diagnostics: ResolutionDiagnostics
+): Promise<boolean> {
+  try {
+    await access(
+      candidate,
+      process.platform === 'win32'
+        ? constants.F_OK
+        : constants.F_OK | constants.X_OK
+    );
+    return true;
+  } catch (error) {
+    if (!isMissingPathError(error)) {
+      await recordInaccessibleLocalBinCandidate(
+        candidate,
+        error,
+        localBinSearch,
+        diagnostics
+      );
+    }
+
+    return false;
+  }
+}
+
+/**
+ * Preserve local-bin access failures as diagnostics. Global PATH entries keep
+ * the usual shell lookup behavior and are ignored when they cannot be used.
+ */
+async function recordInaccessibleLocalBinCandidate(
+  candidate: string,
+  error: unknown,
+  localBinSearch: LocalBinSearch,
+  diagnostics: ResolutionDiagnostics
+) {
+  const localBinCandidate = await classifyPathLocalBinCandidate(
+    candidate,
+    localBinSearch.directories
+  );
+
+  if (!localBinCandidate) {
+    return;
+  }
+
+  recordSkippedLocalBin(
+    diagnostics,
+    candidate,
+    'reason' in localBinCandidate
+      ? localBinCandidate.reason
+      : `local bin is not accessible: ${getErrorMessage(error)}`
+  );
+}
+
+/**
+ * Global candidates can be returned directly. Local bins must resolve through
+ * the installed `vercel` package so a spoofed shim cannot be invoked.
+ */
+async function resolveCommandCandidate(
+  command: string,
+  candidate: string,
+  localBinSearch: LocalBinSearch,
+  diagnostics: ResolutionDiagnostics
+): Promise<ResolvedCommand | null> {
+  if (!(await stat(candidate)).isFile()) {
+    return null;
+  }
+
+  const realPath = await realpath(candidate);
+  const localBinCandidate = await classifyPathLocalBinCandidate(
+    candidate,
+    localBinSearch.directories
+  );
+
+  if (!localBinCandidate) {
+    return { realPath, source: 'path' };
+  }
+
+  if ('reason' in localBinCandidate) {
+    recordSkippedLocalBin(diagnostics, candidate, localBinCandidate.reason);
+    return null;
+  }
+
+  const localPackageBinResult = await getLocalVercelPackageBin(
+    command,
+    localBinCandidate.directory
+  );
+
+  if ('reason' in localPackageBinResult) {
+    recordSkippedLocalBin(diagnostics, candidate, localPackageBinResult.reason);
+    return null;
+  }
+
+  return { realPath: localPackageBinResult.binPath, source: 'local-bin' };
+}
+
+/**
+ * Adds a rejected local bin candidate to lookup diagnostics.
+ */
+function recordSkippedLocalBin(
+  diagnostics: ResolutionDiagnostics,
+  candidate: string,
+  reason: string
+) {
+  diagnostics.skippedLocalBins.push({ candidate, reason });
 }
 
 /**
@@ -311,7 +412,9 @@ function getVercelCommandNames(): string[] {
 }
 
 /**
- * Builds local bin candidates and diagnostics for skipped unsafe directories.
+ * Builds the trusted local `.bin` directories to prepend before scanning PATH.
+ * Unsafe ancestor `node_modules` directories are rejected at this discovery
+ * phase and kept as diagnostics for not-found errors.
  */
 export async function getLocalBinSearch(cwd: string): Promise<LocalBinSearch> {
   const searchRoot = await getCanonicalPath(path.resolve(cwd));
@@ -464,12 +567,14 @@ async function getNodeModulesBinDirectory(
 }
 
 /**
- * Classifies a PATH candidate as trusted local bin, rejected local bin, or PATH.
+ * Classifies a concrete PATH hit after command lookup. This catches local
+ * `node_modules/.bin` entries that arrived from the user's PATH instead of the
+ * trusted local-bin discovery phase above.
  */
-async function getLocalBinCandidate(
+async function classifyPathLocalBinCandidate(
   filePath: string,
   localBinDirectories: string[]
-): Promise<LocalBinCandidate> {
+): Promise<PathLocalBinCandidate> {
   const localBinDirectory = await getLocalBinDirectory(
     filePath,
     localBinDirectories
@@ -649,7 +754,13 @@ async function getDeclaredLocalVercelPackageBin(
   }
 
   if (process.platform !== 'win32' && !isNodeScript(realDeclaredBinPath)) {
-    await access(realDeclaredBinPath, constants.F_OK | constants.X_OK);
+    try {
+      await access(realDeclaredBinPath, constants.F_OK | constants.X_OK);
+    } catch (error) {
+      return {
+        reason: `local vercel package bin is not executable: ${getErrorMessage(error)}`,
+      };
+    }
   }
 
   return { binPath: realDeclaredBinPath };

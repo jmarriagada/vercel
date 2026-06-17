@@ -8,3 +8,15 @@ export function getErrorMessage(error: unknown): string {
 
   return String(error);
 }
+
+/**
+ * Returns whether a filesystem error means the requested path is absent.
+ */
+export function isMissingPathError(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error.code === 'ENOENT' || error.code === 'ENOTDIR')
+  );
+}

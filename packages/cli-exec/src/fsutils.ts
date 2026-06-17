@@ -1,7 +1,7 @@
 import type { Stats } from 'node:fs';
 import { realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
-import { getErrorMessage } from './errutils';
+import { getErrorMessage, isMissingPathError } from './errutils';
 
 /**
  * Result of reading filesystem metadata for a path that may not exist.
@@ -61,18 +61,6 @@ export async function statIfExists(
 
     return { reason: `could not inspect: ${getErrorMessage(error)}` };
   }
-}
-
-/**
- * Returns whether a filesystem error means the requested path is absent.
- */
-function isMissingPathError(error: unknown): boolean {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    'code' in error &&
-    (error.code === 'ENOENT' || error.code === 'ENOTDIR')
-  );
 }
 
 /**

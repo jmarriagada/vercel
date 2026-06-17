@@ -681,6 +681,116 @@ posixOnlyTest('skips unsafe local vercel package.json files', async () => {
 });
 
 posixOnlyTest(
+  'reports inaccessible local bin path candidates as skipped candidates',
+  async () => {
+    const root = createDirectory();
+    const cwd = path.join(root, 'apps', 'web');
+    const globalBinDir = createDirectory();
+    const { cliPath } = writeLocalVercelPackage(
+      root,
+      "process.stdout.write('local');\n"
+    );
+    const globalBinPath = path.join(globalBinDir, getVercelBinName());
+
+    mkdirSync(cwd, { recursive: true });
+    writeExecutable(globalBinPath, {
+      win32: '@echo off\r\nnode -e "process.stdout.write(\'global\')"\r\n',
+      posix: '#!/bin/sh\necho global\n',
+    });
+    chmodSync(cliPath, 0o644);
+
+    expect(await findVercelCli({ cwd, path: globalBinDir })).toEqual({
+      command: await expectedRealPath(globalBinPath),
+      commandArgs: [],
+      source: 'path',
+    });
+
+    await expect(
+      execVercelCli([], { cwd, env: { PATH: '' } })
+    ).rejects.toMatchObject({
+      code: 'VERCEL_CLI_NOT_FOUND',
+      message: expect.stringContaining(
+        `Skipped ${JSON.stringify(
+          path.join(
+            await expectedRealPath(root),
+            'node_modules',
+            '.bin',
+            getVercelBinName()
+          )
+        )}`
+      ),
+    });
+    await expect(
+      execVercelCli([], { cwd, env: { PATH: '' } })
+    ).rejects.toMatchObject({
+      message: expect.stringContaining('local bin is not accessible'),
+    });
+  }
+);
+
+posixOnlyTest(
+  'reports non-executable declared local vercel package bins as skipped candidates',
+  async () => {
+    const root = createDirectory();
+    const cwd = path.join(root, 'apps', 'web');
+    const globalBinDir = createDirectory();
+    const { binPath, cliPath: nodeCliPath } = writeLocalVercelPackage(
+      root,
+      '#!/bin/sh\necho local\n'
+    );
+    const packageDirectory = path.dirname(path.dirname(nodeCliPath));
+    const cliPath = path.join(packageDirectory, 'dist', 'vc');
+    const globalBinPath = path.join(globalBinDir, getVercelBinName());
+
+    mkdirSync(cwd, { recursive: true });
+    writeFileSync(
+      path.join(packageDirectory, 'package.json'),
+      JSON.stringify({ name: 'vercel', bin: { vercel: './dist/vc' } })
+    );
+    writeFileSync(cliPath, '#!/bin/sh\necho local\n');
+    writeExecutable(globalBinPath, {
+      win32: '@echo off\r\nnode -e "process.stdout.write(\'global\')"\r\n',
+      posix: '#!/bin/sh\necho global\n',
+    });
+    rmSync(binPath, { force: true });
+    writeExecutable(binPath, {
+      win32: '@echo off\r\n',
+      posix: '#!/bin/sh\necho shim\n',
+    });
+    chmodSync(cliPath, 0o644);
+
+    expect(await findVercelCli({ cwd, path: globalBinDir })).toEqual({
+      command: await expectedRealPath(globalBinPath),
+      commandArgs: [],
+      source: 'path',
+    });
+
+    await expect(
+      execVercelCli([], { cwd, env: { PATH: '' } })
+    ).rejects.toMatchObject({
+      code: 'VERCEL_CLI_NOT_FOUND',
+      message: expect.stringContaining(
+        `Skipped ${JSON.stringify(
+          path.join(
+            await expectedRealPath(root),
+            'node_modules',
+            '.bin',
+            getVercelBinName()
+          )
+        )}`
+      ),
+    });
+    await expect(
+      execVercelCli([], { cwd, env: { PATH: '' } })
+    ).rejects.toMatchObject({
+      message: expect.stringContaining(
+        'local vercel package bin is not executable'
+      ),
+    });
+  }
+);
+
+posixOnlyTest(
   'skips local vercel packages that resolve outside local node_modules',
   async () => {
     const root = createDirectory();
