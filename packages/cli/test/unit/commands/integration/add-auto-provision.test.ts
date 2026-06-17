@@ -26,6 +26,21 @@ vi.mock('../../../../src/commands/env/pull', () => {
   };
 });
 
+// Skill resolution hits skills.sh and (for agents) spawns `npx skills add`.
+// Stub both so unit tests stay offline; the resolver/normalizer are covered in
+// test/unit/util/integration/skill-suggestion.test.ts.
+vi.mock('../../../../src/util/integration/skill-suggestion', async orig => {
+  const actual =
+    await orig<
+      typeof import('../../../../src/util/integration/skill-suggestion')
+    >();
+  return {
+    ...actual,
+    resolveProductSkill: vi.fn().mockResolvedValue(null),
+    installSkill: vi.fn().mockResolvedValue(true),
+  };
+});
+
 vi.mock(
   '../../../../src/util/integration-resource/connect-resource-to-project',
   () => {

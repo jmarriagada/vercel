@@ -87,7 +87,7 @@ export interface IntegrationProduct {
   resourceLinks?: IntegrationResourceLink[];
   /**
    * A skills.sh link or public SKILL.md URL for this product's agent skill.
-   * Normalized to an `npx skills add` source by `getSkillSuggestion`.
+   * Normalized to an `npx skills add` source by `normalizeSkillSource`.
    */
   agentSkillUrl?: string;
 }
