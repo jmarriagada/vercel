@@ -151,7 +151,7 @@ class Span implements Instrument {
       startTimeUnixNano: this.startTime.toString(),
       endTimeUnixNano: endedAt.toString(),
       durationMs: Number(endedAt - this.startTime) / 1_000_000,
-      payload,
+      payload: JSON.stringify(payload, null, 2),
     });
 
     this.reportSpans(payload);
