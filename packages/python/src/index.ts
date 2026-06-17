@@ -53,6 +53,7 @@ import {
   getUvBinaryOrInstall,
   getUvCacheDir,
   findUvInPath,
+  checkUvBinaryVersion,
 } from './uv';
 import { resolvePythonVersion, pythonVersionString } from './version';
 import { generateProjectManifest } from './diagnostics';
@@ -526,6 +527,8 @@ export const build: BuildVX = async ({
       }`
     );
   }
+
+  checkUvBinaryVersion(uv.getPath());
 
   const venvPath = service?.name
     ? join(workPath, '.vercel', 'python', 'services', service.name, '.venv')

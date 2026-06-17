@@ -8,10 +8,15 @@ import execa from 'execa';
 import fs from 'fs';
 import os from 'os';
 import which from 'which';
+import semver from 'semver';
 import { debug, NowBuildError } from '@vercel/build-utils';
 import { getVenvPythonBin } from './utils';
 
 export const UV_VERSION = '0.10.11';
+// Minimum uv version we require at runtime. We currently require
+// 0.9.25 at least, since it adds `--exclude-newer-package
+// <pkg>=false`.
+export const MIN_UV_VERSION = '0.9.25';
 export const UV_PYTHON_PATH_PREFIX = '/uv/python/';
 export const UV_PYTHON_DOWNLOADS_MODE = 'automatic';
 export const UV_CACHE_DIR_SUBPATH = ['.vercel', 'python', 'cache', 'uv'];
@@ -349,6 +354,44 @@ export async function findUvBinary(pythonPath: string): Promise<string | null> {
   }
 
   return null;
+}
+
+/**
+ * Verify the uv binary at `uvPath` is at least {@link MIN_UV_VERSION}.
+ *
+ * Throws a NowBuildError when uv is older than the minimum.  If the version
+ * can't be determined (exec or parse failure) we don't block — any
+ * version-specific flag failure surfaces later with its own error.
+ */
+export function checkUvBinaryVersion(uvPath: string): void {
+  let output: string;
+  try {
+    output = execFileSync(uvPath, ['--version'], {
+      encoding: 'utf8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+      shell: isWin,
+    }).trim();
+  } catch (err) {
+    debug(
+      `Could not run "${uvPath} --version": ${err instanceof Error ? err.message : String(err)}`
+    );
+    return;
+  }
+
+  // `uv --version` prints e.g. `uv 0.9.25 (<hash> <date>)`.
+  const found = semver.coerce(output);
+  if (!found) {
+    debug(`Could not parse uv version from "${output}"`);
+    return;
+  }
+
+  if (semver.lt(found, MIN_UV_VERSION)) {
+    throw new NowBuildError({
+      code: 'UV_VERSION_TOO_OLD',
+      link: 'https://vercel.link/python-version',
+      message: `Found uv ${found.version} at "${uvPath}", but Vercel requires uv ${MIN_UV_VERSION} or newer. Please upgrade uv: https://docs.astral.sh/uv/getting-started/installation/`,
+    });
+  }
 }
 
 export async function getUvBinaryOrInstall(
