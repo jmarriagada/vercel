@@ -647,18 +647,16 @@ async function writeContainerImage(
   path: string
 ) {
   const dest = join(outputDir, 'functions', `${path}.func`);
-  const handler = (containerImage as any).handler;
-  if (typeof handler !== 'string' || handler.length === 0) {
-    throw new Error(
-      `Container image output for "${path}" is missing "handler".`
-    );
+  const image = (containerImage as any).image;
+  if (typeof image !== 'string' || image.length === 0) {
+    throw new Error(`Container image output for "${path}" is missing "image".`);
   }
 
   await fs.mkdirp(dest);
   await fs.writeJSON(
     join(dest, '.vc-config.json'),
     {
-      handler,
+      image,
       runtime: 'container',
       environment: (containerImage as any).environment ?? {},
       ...((containerImage as any).command

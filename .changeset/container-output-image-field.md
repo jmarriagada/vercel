@@ -1,7 +1,11 @@
 ---
 '@vercel/container': patch
+'@vercel/build-utils': patch
+'vercel': patch
 ---
 
-Emit the OCI image reference as `image` on the container build output instead of
-`handler`. The output no longer sets `handler` for `runtime: 'container'`
-functions.
+Use `image` instead of `handler` for the OCI image reference on container build
+outputs. `@vercel/container` now emits `image`, `ContainerImage` /
+`ContainerImageConfig` expose `image`, and the CLI writes `image` into the
+container function's `.vc-config.json`. No `handler` field is emitted for
+`runtime: 'container'`.
