@@ -191,7 +191,7 @@ function waitUntilIdleTimeout(dbPool: DbPool) {
 
   const requestContext = getContext();
   if (requestContext?.waitUntil) {
-    const span = createRootSpan('@vercel/function waitUntilIdleTimeout');
+    const span = createRootSpan('attachDatabasePool.waitForIdle');
     const waitUntilPromise = promise.finally(() => span.end());
     requestContext.waitUntil(waitUntilPromise);
   } else {
@@ -295,11 +295,6 @@ export function attachDatabasePool(dbPool: DbPool) {
         console.log('MongoDB connection checked out');
       }
       waitUntilIdleTimeout(dbPool);
-    });
-    mongoPool.on!('connectionCheckedIn', () => {
-      if (DEBUG) {
-        console.log('MongoDB connection checked in');
-      }
     });
     return;
   }

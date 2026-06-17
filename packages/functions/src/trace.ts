@@ -1,7 +1,7 @@
 import { getContext } from './get-context';
 import type { IAnyValue, IKeyValue, SpanContext, Spans } from './spans';
 
-const SCOPE_NAME = 'vercel.functions';
+const SCOPE_NAME = '@vercel/functions';
 const INTERNAL_SPAN_KIND = 1;
 const ZERO_SPAN_CONTEXT: SpanContext = {
   traceId: '00000000000000000000000000000000',
@@ -19,19 +19,14 @@ export interface Instrument {
 type SpanAttributeValue = string | number | boolean | null | undefined;
 
 class NoopSpan implements Instrument {
-  end() {
-    console.info('[trace] noop span end');
-  }
-  createSpan(name: string) {
-    console.info('[trace] noop child span requested', { name });
+  end() {}
+  createSpan() {
     return this;
   }
-  setAttribute(key: string, value: SpanAttributeValue) {
-    console.info('[trace] noop span attribute set', { key, value });
+  setAttribute() {
     return this;
   }
-  setAttributes(attributes: Record<string, SpanAttributeValue>) {
-    console.info('[trace] noop span attributes set', { attributes });
+  setAttributes() {
     return this;
   }
 }
@@ -53,23 +48,9 @@ class Span implements Instrument {
       spanId: allocateSpanId(),
       traceFlags: parent.traceFlags,
     };
-    console.info('[trace] span created', {
-      name,
-      traceId: this.spanContext.traceId,
-      spanId: this.spanContext.spanId,
-      parentSpanId: parent.spanId,
-      traceFlags: this.spanContext.traceFlags,
-      startTimeUnixNano: this.startTime.toString(),
-    });
   }
 
   createSpan(name: string) {
-    console.info('[trace] child span requested', {
-      name,
-      parentName: this.name,
-      parentSpanId: this.spanContext.spanId,
-      traceId: this.spanContext.traceId,
-    });
     return new Span(name, this.spanContext, this.reportSpans);
   }
 
@@ -85,13 +66,6 @@ class Span implements Instrument {
       this.attributes[existingAttributeIndex] = attribute;
     }
 
-    console.info('[trace] span attribute set', {
-      name: this.name,
-      spanId: this.spanContext.spanId,
-      key,
-      value,
-    });
-
     return this;
   }
 
@@ -105,10 +79,6 @@ class Span implements Instrument {
 
   end() {
     if (this.ended) {
-      console.warn('[trace] span already ended', {
-        name: this.name,
-        spanId: this.spanContext.spanId,
-      });
       return;
     }
 
@@ -143,23 +113,8 @@ class Span implements Instrument {
       ],
     };
 
-    console.info('[trace] reporting span', {
-      name: this.name,
-      traceId: this.spanContext.traceId,
-      spanId: this.spanContext.spanId,
-      parentSpanId: this.parent.spanId,
-      startTimeUnixNano: this.startTime.toString(),
-      endTimeUnixNano: endedAt.toString(),
-      durationMs: Number(endedAt - this.startTime) / 1_000_000,
-      payload: JSON.stringify(payload, null, 2),
-    });
-
     this.reportSpans(payload);
     this.ended = true;
-    console.info('[trace] span ended', {
-      name: this.name,
-      spanId: this.spanContext.spanId,
-    });
   }
 }
 
@@ -167,21 +122,8 @@ export function createRootSpan(name: string): Instrument {
   const context = getContext();
   const telemetry = context?.telemetry;
   if (telemetry?.reportSpans && telemetry.rootSpanContext) {
-    console.info('[trace] creating root span', {
-      name,
-      rootSpanContext: telemetry.rootSpanContext,
-      hasReportSpans: true,
-      contextKeys: Object.keys(context),
-    });
     return new Span(name, telemetry.rootSpanContext, telemetry.reportSpans);
   }
-  console.warn('[trace] no span context in request context, nooping', {
-    name,
-    hasTelemetry: !!telemetry,
-    hasReportSpans: !!telemetry?.reportSpans,
-    hasRootSpanContext: !!telemetry?.rootSpanContext,
-    contextKeys: Object.keys(context),
-  });
   return new NoopSpan();
 }
 
