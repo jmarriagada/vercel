@@ -297,6 +297,11 @@ export function attachDatabasePool(dbPool: DbPool) {
       }
       waitUntilIdleTimeout(dbPool);
     });
+    mongoPool.on!('connectionCheckedIn', () => {
+      if (DEBUG) {
+        console.log('MongoDB connection checked in');
+      }
+    });
     return;
   }
 
