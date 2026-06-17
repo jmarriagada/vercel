@@ -38,7 +38,9 @@ import {
   runPackageJsonScript,
   runShellScript,
   generateProjectManifest,
+  writeProjectManifest,
   manifestPath,
+  MANIFEST_VERSION,
   FileBlob,
   Diagnostics,
   getReportedServiceType,
@@ -617,7 +619,42 @@ export const build: BuildV2 = async ({
       }
     }
 
-    if (framework?.slug) {
+    if (framework?.slug === 'hugo') {
+      try {
+        const hugoVersionOut = spawnSync('hugo', ['version'], {
+          encoding: 'utf8',
+        });
+        const hugoResolved =
+          hugoVersionOut.status === 0 &&
+          typeof hugoVersionOut.stdout === 'string'
+            ? (hugoVersionOut.stdout.match(/v(\d+(?:\.\d+)*)/)?.[1] ??
+              process.env.HUGO_VERSION ??
+              '0.58.2')
+            : process.env.HUGO_VERSION || '0.58.2';
+        await writeProjectManifest(
+          {
+            version: MANIFEST_VERSION,
+            runtime: 'go',
+            framework: framework.slug,
+            serviceType: service ? getReportedServiceType(service) : undefined,
+            dependencies: [
+              {
+                name: 'hugo',
+                type: 'direct',
+                scopes: ['prod'],
+                resolved: hugoResolved,
+              },
+            ],
+          },
+          entrypointDir,
+          'go'
+        );
+      } catch (err) {
+        debug(
+          `Failed to write hugo manifest: ${err instanceof Error ? err.message : String(err)}`
+        );
+      }
+    } else if (framework?.slug) {
       try {
         await generateProjectManifest({
           workPath: entrypointDir,
