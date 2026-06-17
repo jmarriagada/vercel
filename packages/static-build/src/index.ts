@@ -654,6 +654,41 @@ export const build: BuildV2 = async ({
           `Failed to write hugo manifest: ${err instanceof Error ? err.message : String(err)}`
         );
       }
+    } else if (framework?.slug === 'zola') {
+      try {
+        const zolaVersionOut = spawnSync('zola', ['--version'], {
+          encoding: 'utf8',
+        });
+        const zolaResolved =
+          zolaVersionOut.status === 0 &&
+          typeof zolaVersionOut.stdout === 'string'
+            ? (zolaVersionOut.stdout.trim().split(' ')[1] ??
+              process.env.ZOLA_VERSION ??
+              '')
+            : (process.env.ZOLA_VERSION ?? '');
+        await writeProjectManifest(
+          {
+            version: MANIFEST_VERSION,
+            runtime: 'rust',
+            framework: framework.slug,
+            serviceType: service ? getReportedServiceType(service) : undefined,
+            dependencies: [
+              {
+                name: 'zola',
+                type: 'direct',
+                scopes: ['prod'],
+                resolved: zolaResolved,
+              },
+            ],
+          },
+          entrypointDir,
+          'rust'
+        );
+      } catch (err) {
+        debug(
+          `Failed to write zola manifest: ${err instanceof Error ? err.message : String(err)}`
+        );
+      }
     } else if (framework?.slug) {
       try {
         await generateProjectManifest({
