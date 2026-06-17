@@ -21,11 +21,7 @@ import type {
   AutoProvisionResult,
 } from '../../util/integration/types';
 import { buildSSOLink } from '../../util/integration/build-sso-link';
-import {
-  installSkill,
-  resolveProductSkill,
-  type ResolvedSkill,
-} from '../../util/integration/skill-suggestion';
+import { resolveProductSkill } from '../../util/integration/skill-suggestion';
 import { resolveResourceName } from '../../util/integration/generate-resource-name';
 import {
   ENV_PULL_FAILED_MESSAGE,
@@ -575,30 +571,14 @@ export async function addAutoProvision(
 
   // Resolve the product's Claude Code skill: a publisher-declared one, else a
   // confident skills.sh match for the provider's own org. Null = stay silent.
+  // We only *suggest* the install command — running `npx skills add` is left to
+  // the user/agent so it lands in the right project, with consent.
   const resolvedSkill = await resolveProductSkill(integration, product);
-  let skillResult: (ResolvedSkill & { installed?: boolean }) | undefined;
 
-  if (resolvedSkill) {
-    skillResult = { ...resolvedSkill };
-    if (client.isAgent) {
-      // Agent context: install it directly so the flow is hands-off.
-      if (!options.asJson) {
-        output.log(
-          `Installing the ${chalk.bold(product.name)} Claude Code skill: ${chalk.cyan(resolvedSkill.command)}`
-        );
-      }
-      skillResult.installed = await installSkill(resolvedSkill.id);
-      if (!skillResult.installed && !options.asJson) {
-        output.log(
-          `Could not auto-install the skill. Run it manually: ${chalk.cyan(resolvedSkill.command)}`
-        );
-      }
-    } else if (!options.asJson) {
-      // Human context: suggest, don't run.
-      output.log(
-        `Install the ${chalk.bold(product.name)} Claude Code skill: ${chalk.cyan(resolvedSkill.command)}`
-      );
-    }
+  if (resolvedSkill && !options.asJson) {
+    output.log(
+      `Install the ${chalk.bold(product.name)} Claude Code skill: ${chalk.cyan(resolvedSkill.command)}`
+    );
   }
 
   if (options.asJson) {
@@ -655,7 +635,7 @@ export async function addAutoProvision(
       environments: setupResult.environments,
       envPulled: setupResult.envPulled,
       guideCommand,
-      skill: skillResult ?? null,
+      skill: resolvedSkill ?? null,
       warnings,
     };
 

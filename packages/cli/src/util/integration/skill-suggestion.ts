@@ -1,11 +1,9 @@
-import execa from 'execa';
 import fetch from 'node-fetch';
 import output from '../../output-manager';
 import type { Integration, IntegrationProduct } from './types';
 
 const SEARCH_ENDPOINT = 'https://skills.sh/api/search';
 const SEARCH_TIMEOUT_MS = 3000;
-const INSTALL_TIMEOUT_MS = 120000;
 
 export interface ResolvedSkill {
   /** Canonical `owner/repo@skill` id passed to `npx skills add`. */
@@ -56,20 +54,6 @@ export async function resolveProductSkill(
   }
 
   return null;
-}
-
-/** Run `npx skills add <id>`; returns true on success. Never throws. */
-export async function installSkill(id: string): Promise<boolean> {
-  try {
-    await execa('npx', ['-y', 'skills', 'add', id], {
-      timeout: INSTALL_TIMEOUT_MS,
-      stdio: 'pipe',
-    });
-    return true;
-  } catch (err) {
-    output.debug(`Skill auto-install failed: ${(err as Error).message}`);
-    return false;
-  }
 }
 
 /**
