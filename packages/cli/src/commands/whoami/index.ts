@@ -12,22 +12,21 @@ import output from '../../output-manager';
 import { WhoamiTelemetryClient } from '../../util/telemetry/commands/whoami';
 import { validateJsonOutput } from '../../util/output-format';
 
-type UserinfoResponse = {
-  sub: string;
-  principal_type?: 'app';
-  app?: {
-    id: string;
-    name: string | null;
-  };
-  team: { id: string; slug: string; name: string } | null;
+const WHOAMI_INTROSPECTION_ENV = 'VERCEL_CLI_WHOAMI_INTROSPECTION';
+
+type TokenIntrospectionResponse = {
+  active: boolean;
+  client_id?: string;
+  client_name?: string;
+  sub?: string;
+  subject_type?: 'client' | 'user';
+  team?: { id: string; slug: string; name: string };
 };
 
-type AppPrincipalUserinfoResponse = UserinfoResponse & {
-  principal_type: 'app';
-  app: {
-    id: string;
-    name: string | null;
-  };
+type AppPrincipalIntrospectionResponse = TokenIntrospectionResponse & {
+  active: true;
+  client_id: string;
+  subject_type: 'client';
 };
 
 export default async function whoami(client: Client): Promise<number> {
@@ -62,12 +61,16 @@ export default async function whoami(client: Client): Promise<number> {
   const asJson = formatResult.jsonOutput;
   telemetry.trackCliOptionFormat(parsedArgs.flags['--format']);
 
+  const appPrincipalPromise = isWhoamiIntrospectionEnabled()
+    ? getAppPrincipal(client)
+    : Promise.resolve(null);
+
   let scope: ScopeContext;
   try {
     scope = await getScope(client, { resolveLocalScope: true });
   } catch (error) {
     if (error instanceof InvalidToken) {
-      const authPrincipal = await getAppPrincipal(client);
+      const authPrincipal = await appPrincipalPromise;
       if (authPrincipal) {
         printAppPrincipal(client, authPrincipal, asJson);
         return 0;
@@ -145,18 +148,36 @@ export default async function whoami(client: Client): Promise<number> {
 
 async function getAppPrincipal(
   client: Client
-): Promise<AppPrincipalUserinfoResponse | null> {
+): Promise<AppPrincipalIntrospectionResponse | null> {
+  const token = client.authConfig.token;
+  if (!token) {
+    return null;
+  }
+
   try {
-    const userinfo = await client.fetch<UserinfoResponse>(
-      '/login/oauth/userinfo'
+    const introspection = await client.fetch<TokenIntrospectionResponse>(
+      '/login/oauth/token/introspect',
+      {
+        method: 'POST',
+        useCurrentTeam: false,
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({ token }),
+      }
     );
-    if (userinfo.principal_type !== 'app' || !userinfo.app) {
+    if (
+      !introspection.active ||
+      introspection.subject_type !== 'client' ||
+      !introspection.client_id
+    ) {
       return null;
     }
     return {
-      ...userinfo,
-      principal_type: 'app',
-      app: userinfo.app,
+      ...introspection,
+      active: true,
+      client_id: introspection.client_id,
+      subject_type: 'client',
     };
   } catch {
     return null;
@@ -165,10 +186,10 @@ async function getAppPrincipal(
 
 function printAppPrincipal(
   client: Client,
-  userinfo: AppPrincipalUserinfoResponse,
+  introspection: AppPrincipalIntrospectionResponse,
   asJson: boolean
 ) {
-  const appName = userinfo.app.name ?? userinfo.app.id;
+  const appName = introspection.client_name ?? introspection.client_id;
 
   if (asJson) {
     client.stdout.write(
@@ -176,11 +197,14 @@ function printAppPrincipal(
         {
           principal: {
             type: 'app',
-            id: userinfo.app.id,
-            name: userinfo.app.name,
+            id: introspection.client_id,
+            name: introspection.client_name,
           },
-          app: userinfo.app,
-          team: userinfo.team,
+          app: {
+            id: introspection.client_id,
+            name: introspection.client_name,
+          },
+          team: introspection.team ?? null,
         },
         null,
         2
@@ -188,11 +212,12 @@ function printAppPrincipal(
     );
   } else if (client.stdout.isTTY) {
     output.log(`Logged in as Vercel App: ${chalk.bold(appName)}`);
-    if (userinfo.team) {
+    if (introspection.team) {
       output.log(
-        `Active team: ${chalk.bold(userinfo.team.slug)}${
-          userinfo.team.name && userinfo.team.name !== userinfo.team.slug
-            ? ` (${userinfo.team.name})`
+        `Active team: ${chalk.bold(introspection.team.slug)}${
+          introspection.team.name &&
+          introspection.team.name !== introspection.team.slug
+            ? ` (${introspection.team.name})`
             : ''
         }`
       );
@@ -200,4 +225,9 @@ function printAppPrincipal(
   } else {
     client.stdout.write(`${appName}\n`);
   }
+}
+
+function isWhoamiIntrospectionEnabled(): boolean {
+  const value = process.env[WHOAMI_INTROSPECTION_ENV];
+  return value === '1' || value?.toLowerCase() === 'true';
 }

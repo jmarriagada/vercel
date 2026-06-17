@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { join } from 'path';
 import { outputFile } from 'fs-extra';
 import { client } from '../../../mocks/client';
@@ -7,7 +7,13 @@ import { useTeam } from '../../../mocks/team';
 import { setupTmpDir } from '../../../helpers/setup-unit-fixture';
 import whoami from '../../../../src/commands/whoami';
 
+const WHOAMI_INTROSPECTION_ENV = 'VERCEL_CLI_WHOAMI_INTROSPECTION';
+
 describe('whoami', () => {
+  afterEach(() => {
+    delete process.env[WHOAMI_INTROSPECTION_ENV];
+  });
+
   describe('--help', () => {
     it('tracks telemetry', async () => {
       const command = 'whoami';
@@ -49,7 +55,7 @@ describe('whoami', () => {
     await expect(client.stderr).toOutput(`Active team: ${team.slug}`);
   });
 
-  it('should print the Vercel App principal when the token is not user-backed', async () => {
+  it('should not use token introspection when the feature flag is disabled', async () => {
     client.scenario.get('/v2/user', (_req, res) => {
       res.status(403).json({
         error: {
@@ -58,14 +64,44 @@ describe('whoami', () => {
         },
       });
     });
-    client.scenario.get('/login/oauth/userinfo', (_req, res) => {
-      res.json({
-        sub: 'cl_vercel_agent',
-        principal_type: 'app',
-        app: {
-          id: 'cl_vercel_agent',
-          name: 'Vercel Agent',
+    client.scenario.post('/login/oauth/token/introspect', (_req, res) => {
+      res.status(500).json({
+        error: {
+          code: 'unexpected_introspection',
+          message: 'Introspection should not be called',
         },
+      });
+    });
+
+    const exitCode = await whoami(client);
+
+    expect(exitCode).toEqual(1);
+  });
+
+  it('should print the Vercel App principal when the token is not user-backed', async () => {
+    process.env[WHOAMI_INTROSPECTION_ENV] = '1';
+    let resolveIntrospectionStarted: () => void = () => {};
+    const introspectionStarted = new Promise<void>(resolve => {
+      resolveIntrospectionStarted = resolve;
+    });
+
+    client.scenario.get('/v2/user', async (_req, res) => {
+      await introspectionStarted;
+      res.status(403).json({
+        error: {
+          code: 'forbidden',
+          message: 'Not authorized',
+        },
+      });
+    });
+    client.scenario.post('/login/oauth/token/introspect', (_req, res) => {
+      resolveIntrospectionStarted();
+      res.json({
+        active: true,
+        client_id: 'cl_vercel_agent',
+        client_name: 'Vercel Agent',
+        sub: 'cl_vercel_agent',
+        subject_type: 'client',
         team: {
           id: 'team_vercel',
           slug: 'vercel',
@@ -192,6 +228,7 @@ describe('whoami', () => {
     });
 
     it('outputs Vercel App principal information as JSON', async () => {
+      process.env[WHOAMI_INTROSPECTION_ENV] = '1';
       client.scenario.get('/v2/user', (_req, res) => {
         res.status(403).json({
           error: {
@@ -200,14 +237,13 @@ describe('whoami', () => {
           },
         });
       });
-      client.scenario.get('/login/oauth/userinfo', (_req, res) => {
+      client.scenario.post('/login/oauth/token/introspect', (_req, res) => {
         res.json({
+          active: true,
+          client_id: 'cl_vercel_agent',
+          client_name: 'Vercel Agent',
           sub: 'cl_vercel_agent',
-          principal_type: 'app',
-          app: {
-            id: 'cl_vercel_agent',
-            name: 'Vercel Agent',
-          },
+          subject_type: 'client',
           team: {
             id: 'team_vercel',
             slug: 'vercel',
