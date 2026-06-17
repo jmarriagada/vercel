@@ -42,7 +42,6 @@ import {
 } from './install';
 import {
   PythonDependencyExternalizer,
-  LAMBDA_SIZE_THRESHOLD_BYTES,
   HIVE_LAMBDA_SIZE_BYTES,
   lambdaKnapsack,
   calculateBundleSize,
@@ -1044,15 +1043,11 @@ from vercel_runtime.vc_init import vc_handler
               });
             });
 
-          // Collect bytecode and fill remaining capacity.
-          const pythonOnHiveEnabled =
-            process.env.VERCEL_PYTHON_ON_HIVE === '1' ||
-            process.env.VERCEL_PYTHON_ON_HIVE === 'true';
-          const activeThreshold = pythonOnHiveEnabled
-            ? HIVE_LAMBDA_SIZE_BYTES
-            : LAMBDA_SIZE_THRESHOLD_BYTES;
+          // Collect bytecode and fill remaining capacity.  Compileall only
+          // runs on Hive (see shouldUseCompileAll), so the Hive Lambda size
+          // threshold always applies here.
           const currentSize = await calculateBundleSize(files);
-          let remainingCapacity = activeThreshold - currentSize;
+          let remainingCapacity = HIVE_LAMBDA_SIZE_BYTES - currentSize;
 
           if (pythonVersion.major != null && pythonVersion.minor != null) {
             const appBytecodeInfo = await collectAppBytecodeFiles({
