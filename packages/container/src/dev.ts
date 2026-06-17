@@ -219,22 +219,17 @@ async function resolveDevImage(
 /**
  * Discover the port the container listens on, without modifying the user's
  * Dockerfile:
- *   1. an explicit `config.port` / `config.devPort`, else
- *   2. the image's first `EXPOSE`d port, else
- *   3. fall back to 3000 (the app should honor the injected `PORT`).
+ *   1. the image's first `EXPOSE`d port, else
+ *   2. fall back to 3000.
+ *
+ * Either way we inject `PORT=<this>` into the container, so apps that honor
+ * `process.env.PORT` (the standard Vercel contract) bind the right port; the
+ * `EXPOSE` lookup additionally covers apps that hardcode a port.
  */
 async function resolveContainerPort(
   image: string,
-  config: StartDevServerOptions['config'],
   out: DevOutput
 ): Promise<number> {
-  const configured =
-    readString((config as { port?: unknown }).port) ??
-    readString((config as { devPort?: unknown }).devPort);
-  if (configured && /^\d+$/.test(configured)) {
-    return Number(configured);
-  }
-
   try {
     const { stdout } = await runForwarded(
       'docker',
@@ -313,7 +308,7 @@ export async function startDevServer(
         resolveDevImage(options, out, s)
       );
 
-      const containerPort = await resolveContainerPort(image, config, out);
+      const containerPort = await resolveContainerPort(image, out);
       const containerName = uniqueContainerName(
         options.service?.name ?? 'service'
       );
