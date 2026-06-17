@@ -1,5 +1,5 @@
 import { getContext } from '../get-context';
-import { createRootSpan } from '../trace';
+import { createRootSpan } from '../spans';
 
 const DEBUG = !!process.env.DEBUG;
 
