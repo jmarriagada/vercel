@@ -3,16 +3,20 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { isBuildContainer, readString, run } from './util';
 
-export const BUILDAH_GRAPH_ROOT = '/var/lib/containers/storage';
+// buildah's image store (graphroot) lives under `/vercel`, which is already an
+// XFS-backed cell volume, so it sits off the cell's overlay rootfs and the
+// native `overlay` storage driver doesn't nest. runroot is transient state on
+// tmpfs. These mirror the build image's `/etc/containers/storage.conf`
+// (vercel/api#76567).
+export const BUILDAH_GRAPH_ROOT = '/vercel/.containers/storage';
 export const BUILDAH_RUN_ROOT = '/run/containers/storage';
 
 /**
- * The storage driver we require in the build container. The cell is granted
+ * The storage driver we expect in the build container. The cell is granted
  * privileged-equivalent capabilities (vercel/hive#2310) and the build image's
  * `/etc/containers/storage.conf` points buildah's graphroot at the XFS
- * `/var/lib/containers` cell volume (vercel/api#76567), so the native `overlay`
- * driver works there. `vfs` (slow full-copy) is a fallback we do not want
- * silently.
+ * `/vercel` cell volume, so the native `overlay` driver works there. `vfs`
+ * (slow full-copy) is a fallback we do not want silently.
  */
 export const REQUIRED_BUILD_CONTAINER_DRIVER = 'overlay';
 
@@ -35,18 +39,20 @@ export function __resetStorageDriverCache(): void {
 /**
  * Pick a storage driver for container image builds.
  *
- * The intended steady state in the build cell is the native `overlay` driver on
- * the mounted XFS `/var/lib/containers` volume (configured via the build
- * image's `/etc/containers/storage.conf`). However, that volume is not yet
- * mounted on all cells, and native `overlay` cannot run on the cell's overlay
- * rootfs. So for now we pick a driver that works everywhere: fuse-overlayfs
- * when usable, otherwise vfs. `assertBuildContainerStorage()` reports (without
- * failing) whether we're on the intended overlay+XFS setup.
+ * In the build container we defer to the build image's
+ * `/etc/containers/storage.conf`, which configures the native `overlay` driver
+ * with the graphroot under `/vercel` (an always-mounted XFS cell volume, so
+ * overlay doesn't nest on the cell rootfs) and relies on the cell's privileged
+ * capabilities (vercel/hive#2310). We return `undefined` so we don't pass a
+ * `--storage-driver` flag that would override storage.conf.
+ * `assertBuildContainerStorage()` reports (without failing) whether we actually
+ * came up on overlay+XFS.
  *
- * Set `VERCEL_VCR_DEFER_STORAGE_CONF=1` to instead defer to storage.conf (don't
- * force a `--storage-driver`), once the volume is reliably mounted.
+ * Locally there is no storage.conf, so we pick the best available driver:
+ * fuse-overlayfs when usable, otherwise vfs.
  *
- * `VERCEL_VCR_DOCKER_STORAGE_DRIVER` overrides the choice entirely.
+ * `VERCEL_VCR_DOCKER_STORAGE_DRIVER` overrides the choice entirely (e.g. set it
+ * to `vfs` to force a working driver if overlay can't initialize on a cell).
  */
 export function selectStorageDriver(): Promise<string | undefined> {
   if (!cachedStorageDriver) {
@@ -55,8 +61,8 @@ export function selectStorageDriver(): Promise<string | undefined> {
       if (override) {
         return override;
       }
-      if (readString(process.env.VERCEL_VCR_DEFER_STORAGE_CONF)) {
-        // Defer to /etc/containers/storage.conf (native overlay on the volume).
+      if (isBuildContainer()) {
+        // Defer to /etc/containers/storage.conf (native overlay on /vercel).
         return undefined;
       }
       if ((await hasBinary('fuse-overlayfs')) && existsSync('/dev/fuse')) {
@@ -154,14 +160,13 @@ export async function readBuildahStoreInfo(): Promise<
 
 /**
  * In the build container, report whether buildah came up with the intended
- * storage: native `overlay` driver, graphroot on the mounted
- * `/var/lib/containers` volume, backed by a real (non-overlay) filesystem.
+ * storage: native `overlay` driver, graphroot under `/vercel`
+ * (`/vercel/.containers/storage`), backed by a real (non-overlay) filesystem.
  *
  * This is observability-only by default: on a mismatch it logs loudly but does
- * NOT fail the build, because the volume mount is not yet applied on all cells
- * (it ships via the deployed api-build-containers-loop service, not the pinned
- * build-container image). Set `VERCEL_VCR_STRICT_STORAGE=1` to make a mismatch
- * a hard error once the volume is reliably mounted.
+ * NOT fail the build, so a cell where overlay can't initialize still builds
+ * (falling back via `VERCEL_VCR_DOCKER_STORAGE_DRIVER`). Set
+ * `VERCEL_VCR_STRICT_STORAGE=1` to make a mismatch a hard error.
  *
  * No-op outside the build container.
  */
@@ -237,9 +242,9 @@ export async function assertBuildContainerStorage(
 
   const detail =
     `${summary}\nProblems: ${problems.join('; ')}.\n` +
-    'Expected the native overlay driver on the XFS `/var/lib/containers` ' +
-    'cell volume (requires vercel/hive#2310 capabilities + the ' +
-    '`/var/lib/containers` cell-spec volume from vercel/api#76567).';
+    'Expected the native overlay driver with the graphroot under the XFS ' +
+    '`/vercel` cell volume (requires vercel/hive#2310 capabilities + the ' +
+    'storage.conf from vercel/api#76567).';
 
   if (strict) {
     throw new Error(

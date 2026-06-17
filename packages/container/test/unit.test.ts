@@ -119,7 +119,6 @@ const VCR_ENV_KEYS = [
   'VERCEL_BUILD_IMAGE',
   'VERCEL_CONTAINER_ENGINE',
   'VERCEL_VCR_DOCKER_STORAGE_DRIVER',
-  'VERCEL_VCR_DEFER_STORAGE_CONF',
   'VERCEL_VCR_STRICT_STORAGE',
 ];
 
@@ -228,10 +227,11 @@ describe('@vercel/container', () => {
     stubRegistryFetch(fetchMock);
     vi.stubGlobal('fetch', fetchMock);
     existsSyncMock.mockReturnValue(true);
-    // Simulate `buildah info` reporting the intended store: native overlay on
-    // the mounted XFS volume. Tests can override via `storeInfo`.
+    // Simulate `buildah info` reporting the intended store: native overlay with
+    // the graphroot under the XFS /vercel volume. Tests can override via
+    // `storeInfo`.
     const storeInfo = options?.storeInfo ?? {
-      GraphRoot: '/var/lib/containers/storage',
+      GraphRoot: '/vercel/.containers/storage',
       RunRoot: '/run/containers/storage',
       GraphDriverName: 'overlay',
       GraphStatus: { 'Backing Filesystem': 'xfs' },
@@ -311,21 +311,13 @@ describe('@vercel/container', () => {
     expect(commands.some(c => /\bbuildah\b.*\blogin\b/.test(c))).toBe(true);
     expect(commands.some(c => /\bbuildah\b.*\bpush\b/.test(c))).toBe(true);
     expect(commands.some(c => c.includes('--registries-conf'))).toBe(true);
+    // Defer to /etc/containers/storage.conf (native overlay on /vercel); we
+    // must NOT force a --storage-driver.
+    expect(commands.some(c => c.includes('--storage-driver'))).toBe(false);
     expect(
-      commands.some(c => c.includes('--root /var/lib/containers/storage'))
+      commands.some(c => c.includes('--root /vercel/.containers/storage'))
     ).toBe(true);
     expect(commands.some(c => c.startsWith('docker build'))).toBe(false);
-  });
-
-  it('defers to storage.conf when VERCEL_VCR_DEFER_STORAGE_CONF is set', async () => {
-    process.env.VERCEL_VCR_DEFER_STORAGE_CONF = '1';
-    try {
-      const commands = await runDockerfileBuild({ buildImageEnv: 'al2023' });
-      // Deferring to storage.conf means we don't force a --storage-driver.
-      expect(commands.some(c => c.includes('--storage-driver'))).toBe(false);
-    } finally {
-      delete process.env.VERCEL_VCR_DEFER_STORAGE_CONF;
-    }
   });
 
   it('storage verification is observability-only by default (does not fail the build)', async () => {
@@ -335,7 +327,7 @@ describe('@vercel/container', () => {
       runDockerfileBuild({
         buildImageEnv: 'al2023',
         storeInfo: {
-          GraphRoot: '/var/lib/containers/storage',
+          GraphRoot: '/vercel/.containers/storage',
           RunRoot: '/run/containers/storage',
           GraphDriverName: 'vfs',
           GraphStatus: { 'Backing Filesystem': 'xfs' },
@@ -351,7 +343,7 @@ describe('@vercel/container', () => {
         runDockerfileBuild({
           buildImageEnv: 'al2023',
           storeInfo: {
-            GraphRoot: '/var/lib/containers/storage',
+            GraphRoot: '/vercel/.containers/storage',
             RunRoot: '/run/containers/storage',
             GraphDriverName: 'vfs',
             GraphStatus: { 'Backing Filesystem': 'xfs' },
