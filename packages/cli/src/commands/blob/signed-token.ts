@@ -6,36 +6,14 @@ import { getFlagsSpecification } from '../../util/get-flags-specification';
 import { parseArguments } from '../../util/get-args';
 import { blobOpts, type BlobRWToken } from '../../util/blob/token';
 import { resolveBlobValidUntil } from '../../util/blob/validity';
+import {
+  allowsUploadConstraints,
+  hasUploadConstraintFlags,
+  parseBlobOperations,
+  UPLOAD_CONSTRAINT_FLAGS_ERROR,
+} from '../../util/blob/operations';
 import { BlobSignedTokenTelemetryClient } from '../../util/telemetry/commands/blob';
 import { signedTokenSubcommand } from './command';
-
-const VALID_OPERATIONS = ['get', 'head', 'put', 'delete'] as const;
-type DelegationOperation = (typeof VALID_OPERATIONS)[number];
-
-function isDelegationOperation(value: string): value is DelegationOperation {
-  return (VALID_OPERATIONS as readonly string[]).includes(value);
-}
-
-function parseOperations(
-  operations: string[] | undefined
-): DelegationOperation[] | undefined | null {
-  if (!operations || operations.length === 0) {
-    return undefined;
-  }
-
-  const invalidOperation = operations.find(operation => {
-    return !isDelegationOperation(operation);
-  });
-
-  if (invalidOperation) {
-    output.error(
-      `Invalid operation value: '${invalidOperation}'. Must be one of: get, head, put, delete.`
-    );
-    return null;
-  }
-
-  return operations as DelegationOperation[];
-}
 
 function formatSignedToken(result: blob.IssuedSignedToken): string {
   return `delegationToken=${result.delegationToken}
@@ -77,7 +55,7 @@ export default async function signedToken(
     '--json': asJson,
   } = flags;
 
-  const operations = parseOperations(operationValues);
+  const operations = parseBlobOperations(operationValues);
   if (operations === null) {
     return 1;
   }
@@ -85,6 +63,14 @@ export default async function signedToken(
   const validity = resolveBlobValidUntil({ validUntil, validFor });
   if (validity.error) {
     output.error(validity.error);
+    return 1;
+  }
+
+  if (
+    !allowsUploadConstraints(operations) &&
+    hasUploadConstraintFlags({ allowedContentTypes, maximumSizeInBytes })
+  ) {
+    output.error(UPLOAD_CONSTRAINT_FLAGS_ERROR);
     return 1;
   }
 
@@ -105,8 +91,9 @@ export default async function signedToken(
       pathname,
       operations,
       validUntil: validity.validUntil,
-      allowedContentTypes,
-      maximumSizeInBytes,
+      ...(allowsUploadConstraints(operations)
+        ? { allowedContentTypes, maximumSizeInBytes }
+        : {}),
     });
 
     output.stopSpinner();

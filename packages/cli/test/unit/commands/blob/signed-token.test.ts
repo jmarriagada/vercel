@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as blobModule from '@vercel/blob';
 import signedToken from '../../../../src/commands/blob/signed-token';
 import output from '../../../../src/output-manager';
+import { UPLOAD_CONSTRAINT_FLAGS_ERROR } from '../../../../src/util/blob/operations';
 import { client } from '../../../mocks/client';
 import type { BlobRWToken } from '../../../../src/util/blob/token';
 
@@ -135,6 +136,47 @@ describe('blob signed-token', () => {
     ]);
   });
 
+  it('should allow upload constraints when put is included with other operations', async () => {
+    const exitCode = await signedToken(
+      client,
+      [
+        '--operation',
+        'get',
+        '--operation',
+        'put',
+        '--allowed-content-type',
+        'image/*',
+        '--maximum-size-in-bytes',
+        '1048576',
+      ],
+      testAuth
+    );
+
+    expect(exitCode).toBe(0);
+    expect(mockedBlob.issueSignedToken).toHaveBeenCalledWith({
+      token: 'vercel_blob_rw_test_token_123',
+      pathname: undefined,
+      operations: ['get', 'put'],
+      validUntil: undefined,
+      allowedContentTypes: ['image/*'],
+      maximumSizeInBytes: 1048576,
+    });
+  });
+
+  it('should reject upload constraints on non-put operations', async () => {
+    const exitCode = await signedToken(
+      client,
+      ['--operation', 'get', '--allowed-content-type', 'image/*'],
+      testAuth
+    );
+
+    expect(exitCode).toBe(1);
+    expect(mockedBlob.issueSignedToken).not.toHaveBeenCalled();
+    expect(mockedOutput.error).toHaveBeenCalledWith(
+      UPLOAD_CONSTRAINT_FLAGS_ERROR
+    );
+  });
+
   it('should reject --valid-until with --valid-for', async () => {
     const exitCode = await signedToken(
       client,
@@ -153,6 +195,20 @@ describe('blob signed-token', () => {
     expect(mockedBlob.issueSignedToken).not.toHaveBeenCalled();
     expect(mockedOutput.error).toHaveBeenCalledWith(
       'The --valid-until and --valid-for flags are mutually exclusive. Pass only one.'
+    );
+  });
+
+  it('should reject invalid --valid-for values', async () => {
+    const exitCode = await signedToken(
+      client,
+      ['--operation', 'get', '--valid-for', 'bogus'],
+      testAuth
+    );
+
+    expect(exitCode).toBe(1);
+    expect(mockedBlob.issueSignedToken).not.toHaveBeenCalled();
+    expect(mockedOutput.error).toHaveBeenCalledWith(
+      'Invalid --valid-for value "bogus". Use values like "15m", "1h", or "7d".'
     );
   });
 

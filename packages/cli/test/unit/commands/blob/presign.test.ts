@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as blobModule from '@vercel/blob';
 import presign from '../../../../src/commands/blob/presign';
 import output from '../../../../src/output-manager';
+import { PRESIGN_UPLOAD_ONLY_FLAGS_ERROR } from '../../../../src/util/blob/operations';
 import { client } from '../../../mocks/client';
 import type { BlobRWToken } from '../../../../src/util/blob/token';
 
@@ -264,6 +265,92 @@ describe('blob presign', () => {
     });
   });
 
+  it('should include validUntil in JSON output when provided tokens and --valid-for are passed', async () => {
+    const now = 1761930000000;
+    const dateNowSpy = vi.spyOn(Date, 'now').mockReturnValue(now);
+
+    const exitCode = await presign(
+      client,
+      [
+        'uploads/image.jpg',
+        '--access',
+        'private',
+        '--operation',
+        'put',
+        '--delegation-token',
+        'provided-delegation-token',
+        '--client-signing-token',
+        'provided-client-signing-token',
+        '--valid-for',
+        '30m',
+        '--json',
+      ],
+      testAuth
+    );
+
+    dateNowSpy.mockRestore();
+
+    expect(exitCode).toBe(0);
+    expect(mockedBlob.issueSignedToken).not.toHaveBeenCalled();
+    expect(mockedBlob.presignUrl).toHaveBeenCalledWith(
+      {
+        delegationToken: 'provided-delegation-token',
+        clientSigningToken: 'provided-client-signing-token',
+      },
+      expect.objectContaining({
+        validUntil: now + 30 * 60 * 1000,
+      })
+    );
+    expect(JSON.parse(client.stdout.getFullOutput())).toEqual({
+      operation: 'put',
+      presignedUrl: 'https://blob.vercel-storage.com/presigned-url',
+      validUntil: now + 30 * 60 * 1000,
+    });
+  });
+
+  it('should generate a presigned delete URL with if-match', async () => {
+    const exitCode = await presign(
+      client,
+      [
+        'uploads/image.jpg',
+        '--access',
+        'private',
+        '--operation',
+        'delete',
+        '--if-match',
+        '"etag"',
+        '--json',
+      ],
+      testAuth
+    );
+
+    expect(exitCode).toBe(0);
+    expect(mockedBlob.issueSignedToken).toHaveBeenCalledWith({
+      token: 'vercel_blob_rw_test_token_123',
+      pathname: 'uploads/image.jpg',
+      operations: ['delete'],
+      validUntil: undefined,
+    });
+    expect(mockedBlob.presignUrl).toHaveBeenCalledWith(
+      {
+        delegationToken: 'delegation-token',
+        clientSigningToken: 'client-signing-token',
+      },
+      {
+        operation: 'delete',
+        pathname: 'uploads/image.jpg',
+        access: 'private',
+        validUntil: undefined,
+        ifMatch: '"etag"',
+      }
+    );
+    expect(JSON.parse(client.stdout.getFullOutput())).toEqual({
+      operation: 'delete',
+      presignedUrl: 'https://blob.vercel-storage.com/presigned-url',
+      validUntil: 1761938400000,
+    });
+  });
+
   it('should reject upload-only flags on read operations', async () => {
     const exitCode = await presign(
       client,
@@ -282,7 +369,22 @@ describe('blob presign', () => {
     expect(exitCode).toBe(1);
     expect(mockedBlob.issueSignedToken).not.toHaveBeenCalled();
     expect(mockedOutput.error).toHaveBeenCalledWith(
-      'The flags --allowed-content-type, --maximum-size-in-bytes, --allow-overwrite, --add-random-suffix, and --cache-control-max-age can only be used with --operation put.'
+      PRESIGN_UPLOAD_ONLY_FLAGS_ERROR
+    );
+  });
+
+  it('should reject invalid --valid-for values', async () => {
+    const exitCode = await presign(
+      client,
+      ['my-file.txt', '--access', 'public', '--valid-for', 'bogus'],
+      testAuth
+    );
+
+    expect(exitCode).toBe(1);
+    expect(mockedBlob.issueSignedToken).not.toHaveBeenCalled();
+    expect(mockedBlob.presignUrl).not.toHaveBeenCalled();
+    expect(mockedOutput.error).toHaveBeenCalledWith(
+      'Invalid --valid-for value "bogus". Use values like "15m", "1h", or "7d".'
     );
   });
 
