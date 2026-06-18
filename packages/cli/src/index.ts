@@ -59,7 +59,9 @@ import getGlobalPathConfig from './util/config/global-path';
 import { getDefaultAuthConfig, defaultGlobalConfig } from '@vercel/cli-config';
 import * as ERRORS from './util/errors-ts';
 import { APIError } from './util/errors-ts';
-import getUpdateCommand from './util/get-update-command';
+import getUpdateCommand, {
+  getUpdatePackageName,
+} from './util/get-update-command';
 import { executeUpgrade } from './util/upgrade';
 import {
   canAutoUpdate,
@@ -1295,9 +1297,9 @@ const main = async () => {
 
 main()
   .then(async exitCode => {
-    if (SHOULD_CHECK_FOR_UPDATES && !isNativeBinaryInstall()) {
+    if (SHOULD_CHECK_FOR_UPDATES) {
       const latest = getLatestVersion({
-        pkg,
+        pkg: { ...pkg, name: getUpdatePackageName() },
       });
       if (latest) {
         const changelog = `https://github.com/vercel/vercel/releases/tag/vercel%40${latest}`;

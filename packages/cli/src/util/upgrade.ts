@@ -2,6 +2,11 @@ import { spawn, execFile } from 'child_process';
 import { promisify } from 'util';
 import { tmpdir } from 'os';
 import { getUpdateCommandInfo } from './get-update-command';
+import {
+  getNativeInstallMethod,
+  isNativeBinaryInstall,
+} from './native-install';
+import { executeStandaloneUpgrade } from './native-upgrade';
 import pkg from './pkg';
 import output from '../output-manager';
 
@@ -33,6 +38,14 @@ async function getInstalledVersion(): Promise<string | undefined> {
  * upgrade was actually available.
  */
 export async function executeUpgrade(targetVersion?: string): Promise<number> {
+  if (
+    isNativeBinaryInstall() &&
+    process.platform !== 'win32' &&
+    getNativeInstallMethod() === 'standalone'
+  ) {
+    return executeStandaloneUpgrade(targetVersion);
+  }
+
   const { command: updateCommand, global } = await getUpdateCommandInfo();
   const [command, ...args] = updateCommand.split(' ');
 
