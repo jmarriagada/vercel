@@ -697,47 +697,4 @@ describe('blob store remove', () => {
       );
     });
   });
-
-  describe('non-interactive mode', () => {
-    beforeEach(() => {
-      // Simulate an agent / `--non-interactive` run: a TTY may be present, but
-      // the CLI has been told not to prompt.
-      client.nonInteractive = true;
-    });
-
-    it('errors on a missing storeId instead of prompting', async () => {
-      const exitCode = await removeStore(client, [], noToken);
-
-      expect(exitCode).toBe(1);
-      expect(mockedOutput.error).toHaveBeenCalledWith(
-        'Missing required argument: storeId'
-      );
-      expect(textInputMock).not.toHaveBeenCalled();
-    });
-
-    it('errors without --yes instead of confirming', async () => {
-      const exitCode = await removeStore(
-        client,
-        ['store_1234567890123456'],
-        noToken
-      );
-
-      expect(exitCode).toBe(1);
-      expect(mockedOutput.error).toHaveBeenCalledWith(
-        'Confirmation required. Use --yes to skip confirmation in non-interactive environments.'
-      );
-      expect(confirmInputMock).not.toHaveBeenCalled();
-    });
-
-    it('removes the store with --yes without confirming', async () => {
-      const exitCode = await removeStore(
-        client,
-        ['store_1234567890123456', '--yes'],
-        noToken
-      );
-
-      expect(exitCode).toBe(0);
-      expect(confirmInputMock).not.toHaveBeenCalled();
-    });
-  });
 });

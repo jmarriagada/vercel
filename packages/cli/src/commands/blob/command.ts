@@ -359,7 +359,7 @@ export const deleteStoreSubcommand = {
       required: false,
     },
   ],
-  options: [yesOption, nonInteractiveOption],
+  options: [yesOption],
   examples: [],
 } as const;
 
@@ -368,7 +368,7 @@ export const emptyStoreSubcommand = {
   aliases: [],
   description: 'Delete all blobs in a Blob store',
   arguments: [],
-  options: [yesOption, nonInteractiveOption],
+  options: [yesOption],
   examples: [],
 } as const;
 
