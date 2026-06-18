@@ -1091,6 +1091,7 @@ from vercel_runtime.vc_init import vc_handler
     architecture: target.architecture,
     environment: lambdaEnv,
     supportsResponseStreaming: true,
+    supportsMultiPayloads: true,
   });
 
   // Write project manifest for diagnostics (best-effort, never fails the build).
