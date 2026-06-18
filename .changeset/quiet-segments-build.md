@@ -1,5 +1,5 @@
 ---
-'vercel': patch
+'vercel': minor
 ---
 
 Add `vercel flags segments` commands for listing, inspecting, creating, updating, and deleting feature flag segments.

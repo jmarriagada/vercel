@@ -99,6 +99,13 @@ export default async function segmentsRm(
     }
 
     if (!skipConfirmation) {
+      if (!client.stdin.isTTY) {
+        output.error(
+          'Missing required flag --yes. Use --yes to skip the confirmation prompt in non-interactive mode.'
+        );
+        return 1;
+      }
+
       if (client.nonInteractive) {
         outputAgentError(
           client,

@@ -1,5 +1,9 @@
 import { randomBytes } from 'node:crypto';
 import deepEqual from 'fast-deep-equal';
+import {
+  FLAG_CONDITION_LIST_COMPARATORS,
+  FLAG_CONDITION_RHS_OPTIONAL_COMPARATORS,
+} from './comparators';
 import type {
   SegmentComparator,
   SegmentCondition,
@@ -44,18 +48,15 @@ const OPERATOR_ALIASES: Record<string, SegmentComparator> = {
   startswith: 'startsWith',
   'starts-with': 'startsWith',
   startsWith: 'startsWith',
-  '!startswith': '!startsWith',
-  '!starts-with': '!startsWith',
-  '!startsWith': '!startsWith',
   endswith: 'endsWith',
   'ends-with': 'endsWith',
   endsWith: 'endsWith',
-  '!endswith': '!endsWith',
-  '!ends-with': '!endsWith',
-  '!endsWith': '!endsWith',
   contains: 'contains',
   '!contains': '!contains',
+  'does-not-contain': '!contains',
+  notcontains: '!contains',
   'not-contains': '!contains',
+  notContains: '!contains',
   exists: 'ex',
   ex: 'ex',
   '!exists': '!ex',
@@ -69,22 +70,14 @@ const OPERATOR_ALIASES: Record<string, SegmentComparator> = {
   '<': 'lt',
   lte: 'lte',
   '<=': 'lte',
-  regex: 'regex',
-  '!regex': '!regex',
-  'not-regex': '!regex',
-  before: 'before',
-  after: 'after',
 };
 
-const LIST_OPERATORS = new Set<SegmentComparator>([
-  'oneOf',
-  '!oneOf',
-  'containsAllOf',
-  'containsAnyOf',
-  'containsNoneOf',
-]);
-
-const RHS_OPTIONAL_OPERATORS = new Set<SegmentComparator>(['ex', '!ex']);
+const LIST_OPERATORS = new Set<SegmentComparator>(
+  FLAG_CONDITION_LIST_COMPARATORS
+);
+const RHS_OPTIONAL_OPERATORS = new Set<SegmentComparator>(
+  FLAG_CONDITION_RHS_OPTIONAL_COMPARATORS
+);
 
 function shortId(prefix: string): string {
   const alphabet =
@@ -415,13 +408,9 @@ function parseConditionValue(
 ): SegmentConditionValue {
   const trimmed = input.trim();
 
-  if (comparator === 'regex' || comparator === '!regex') {
-    return parseRegexValue(trimmed);
-  }
-
   if (LIST_OPERATORS.has(comparator)) {
     return {
-      type: 'list/inline',
+      type: 'list',
       items: trimmed
         .split(',')
         .map(value => value.trim())
@@ -431,27 +420,6 @@ function parseConditionValue(
   }
 
   return parseScalarValue(trimmed);
-}
-
-function parseRegexValue(input: string): SegmentConditionValue {
-  if (!input.startsWith('/')) {
-    return {
-      type: 'regex',
-      pattern: input,
-      flags: '',
-    };
-  }
-
-  const lastSlash = input.lastIndexOf('/');
-  if (lastSlash === 0) {
-    throw new Error('Regex segment rule must include a pattern');
-  }
-
-  return {
-    type: 'regex',
-    pattern: input.slice(1, lastSlash),
-    flags: input.slice(lastSlash + 1),
-  };
 }
 
 function parseScalarValue(value: string): string | number | boolean {

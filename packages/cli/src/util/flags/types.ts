@@ -1,4 +1,5 @@
 import type { JSONValue } from '@vercel-internals/types';
+import type { FlagConditionComparator } from './comparators';
 
 export type FlagKind = 'boolean' | 'string' | 'number' | 'json';
 
@@ -172,30 +173,7 @@ export interface CreateSdkKeyRequest {
   label?: string;
 }
 
-export type SegmentComparator =
-  | 'eq'
-  | '!eq'
-  | 'oneOf'
-  | '!oneOf'
-  | 'containsAllOf'
-  | 'containsAnyOf'
-  | 'containsNoneOf'
-  | 'startsWith'
-  | '!startsWith'
-  | 'endsWith'
-  | '!endsWith'
-  | 'contains'
-  | '!contains'
-  | 'ex'
-  | '!ex'
-  | 'gt'
-  | 'gte'
-  | 'lt'
-  | 'lte'
-  | 'regex'
-  | '!regex'
-  | 'before'
-  | 'after';
+export type SegmentComparator = FlagConditionComparator;
 
 export type SegmentListItem = {
   value: string | number;

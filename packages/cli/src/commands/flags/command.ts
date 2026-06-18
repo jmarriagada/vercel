@@ -668,8 +668,7 @@ export const segmentsCreateSubcommand = {
       shorthand: null,
       type: String,
       deprecated: false,
-      description:
-        'Natural language hint describing who belongs in the segment',
+      description: 'Hint describing who belongs in the segment',
       argument: 'TEXT',
     },
     {
@@ -764,7 +763,7 @@ export const segmentsUpdateSubcommand = {
       shorthand: null,
       type: String,
       deprecated: false,
-      description: 'New natural language hint for the segment',
+      description: 'New hint for the segment',
       argument: 'TEXT',
     },
     {

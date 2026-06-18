@@ -160,6 +160,28 @@ describe('flags segments', () => {
         value: 'me@company.com',
       });
     });
+
+    it('normalizes contains aliases to the API comparator id', async () => {
+      client.setArgv(
+        'flags',
+        'segments',
+        'create',
+        'non-gmail-users',
+        '--label',
+        'Non Gmail users',
+        '--rule',
+        'user.email:not-contains:gmail.com'
+      );
+
+      const exitCode = await flags(client);
+
+      expect(exitCode).toEqual(0);
+      expect(segmentsList[2].data.rules?.[0].conditions[0]).toMatchObject({
+        lhs: { type: 'entity', kind: 'user', attribute: 'email' },
+        cmp: '!contains',
+        rhs: 'gmail.com',
+      });
+    });
   });
 
   describe('update', () => {
@@ -215,9 +237,60 @@ describe('flags segments', () => {
         rhs: '@company.com',
       });
     });
+
+    it('removes list-style rules stored by the API', async () => {
+      segmentsList[0].data.rules = [
+        ...(segmentsList[0].data.rules ?? []),
+        {
+          id: 'rule_plan_list',
+          conditions: [
+            {
+              lhs: { type: 'entity', kind: 'user', attribute: 'plan' },
+              cmp: 'oneOf',
+              rhs: {
+                type: 'list',
+                items: [{ value: 'pro' }, { value: 'enterprise' }],
+              },
+            },
+          ],
+          outcome: { type: 'all' },
+        },
+      ];
+
+      client.setArgv(
+        'flags',
+        'segments',
+        'update',
+        'beta-users',
+        '--remove',
+        'rule:user.plan:in:pro,enterprise'
+      );
+
+      const exitCode = await flags(client);
+
+      expect(exitCode).toEqual(0);
+      expect(segmentsList[0].data.rules).toHaveLength(1);
+      expect(segmentsList[0].data.rules?.[0].id).toEqual('rule_plan');
+    });
   });
 
   describe('rm', () => {
+    it('requires --yes when stdin is not a TTY', async () => {
+      client.setArgv('flags', 'segments', 'rm', 'staff');
+
+      const exitCode = await flags(client);
+
+      expect(exitCode).toEqual(1);
+      expect(client.stderr.getFullOutput()).toContain(
+        'Missing required flag --yes'
+      );
+      expect(confirmMock).not.toHaveBeenCalled();
+      expect(segmentsList.map(segment => segment.slug)).toEqual([
+        'beta-users',
+        'staff',
+      ]);
+    });
+
     it('deletes a segment with --yes', async () => {
       client.setArgv('flags', 'segments', 'rm', 'staff', '--yes');
 

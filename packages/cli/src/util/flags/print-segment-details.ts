@@ -1,6 +1,7 @@
 import chalk from 'chalk';
 import output from '../../output-manager';
 import formatDate from '../format-date';
+import { formatFlagConditionComparator } from './comparators';
 import type {
   Segment,
   SegmentCondition,
@@ -118,46 +119,7 @@ function formatCondition(condition: SegmentCondition): string {
       : 'segment';
   const rhs =
     condition.rhs === undefined ? '' : ` ${formatValue(condition.rhs)}`;
-  return `${lhs} ${formatComparator(condition.cmp)}${rhs}`;
-}
-
-function formatComparator(cmp: string): string {
-  switch (cmp) {
-    case 'eq':
-      return 'equals';
-    case '!eq':
-      return 'does not equal';
-    case 'oneOf':
-      return 'is one of';
-    case '!oneOf':
-      return 'is not one of';
-    case 'startsWith':
-      return 'starts with';
-    case '!startsWith':
-      return 'does not start with';
-    case 'endsWith':
-      return 'ends with';
-    case '!endsWith':
-      return 'does not end with';
-    case '!contains':
-      return 'does not contain';
-    case 'ex':
-      return 'exists';
-    case '!ex':
-      return 'does not exist';
-    case 'gt':
-      return 'is greater than';
-    case 'gte':
-      return 'is greater than or equal to';
-    case 'lt':
-      return 'is less than';
-    case 'lte':
-      return 'is less than or equal to';
-    case '!regex':
-      return 'does not match regex';
-    default:
-      return cmp;
-  }
+  return `${lhs} ${formatFlagConditionComparator(condition.cmp)}${rhs}`;
 }
 
 function formatValue(value: SegmentConditionValue): string {
