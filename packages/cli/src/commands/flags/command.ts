@@ -750,9 +750,6 @@ export const flagsCommand = {
   name: 'flags',
   aliases: [],
   description: 'Manage feature flags for a Vercel project',
-  // Hidden during initial rollout. Will be unhidden once the feature is
-  // generally available and public documentation is published.
-  hidden: true,
   arguments: [],
   subcommands: [
     listSubcommand,
