@@ -34,6 +34,12 @@ export default async function removeStore(
     flags: { '--yes': yes },
   } = parsedArgs;
 
+  // Only prompt when there's an interactive terminal AND the user hasn't opted
+  // out — either explicitly via `--non-interactive` or because an agent was
+  // auto-detected (agents often run with a pseudo-TTY, so `isTTY` can't be
+  // trusted on its own).
+  const canPrompt = client.stdin.isTTY && !client.nonInteractive;
+
   let storeId: string | undefined = storeIdArg;
 
   if (!storeId) {
@@ -41,7 +47,7 @@ export default async function removeStore(
   }
 
   if (!storeId) {
-    if (!client.stdin.isTTY) {
+    if (!canPrompt) {
       output.error('Missing required argument: storeId');
       return 1;
     }
@@ -82,7 +88,7 @@ export default async function removeStore(
     );
 
     if (!yes) {
-      if (!client.stdin.isTTY) {
+      if (!canPrompt) {
         output.error(
           'Confirmation required. Use --yes to skip confirmation in non-interactive environments.'
         );

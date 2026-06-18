@@ -44,6 +44,12 @@ export default async function emptyStore(
     flags: { '--yes': yes },
   } = parsedArgs;
 
+  // Only prompt when there's an interactive terminal AND the user hasn't opted
+  // out — either explicitly via `--non-interactive` or because an agent was
+  // auto-detected (agents often run with a pseudo-TTY, so `isTTY` can't be
+  // trusted on its own).
+  const canPrompt = client.stdin.isTTY && !client.nonInteractive;
+
   telemetryClient.trackCliFlagYes(yes);
 
   const storeId = getStoreIdFromAuth(auth);
@@ -87,7 +93,7 @@ export default async function emptyStore(
     const message = `Are you sure you want to delete all files in ${label}?${projectsInfo} This action cannot be undone.`;
 
     if (!yes) {
-      if (!client.stdin.isTTY) {
+      if (!canPrompt) {
         output.error(
           'Missing --yes flag. This is a destructive operation, use --yes to confirm.'
         );

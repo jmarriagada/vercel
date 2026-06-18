@@ -463,6 +463,25 @@ describe('blob list-stores', () => {
     });
   });
 
+  describe('non-interactive mode', () => {
+    beforeEach(() => {
+      // Simulate an agent / `--non-interactive` run: a TTY may be present
+      // (stdin/stdout both report `isTTY`), but the CLI has been told not to
+      // prompt, so it should print the table instead of the select prompt.
+      client.nonInteractive = true;
+    });
+
+    it('prints the table instead of prompting to select a store', async () => {
+      const exitCode = await listStores(client, []);
+
+      expect(exitCode).toBe(0);
+      expect(selectInputMock).not.toHaveBeenCalled();
+      expect(mockedOutput.print).toHaveBeenCalledWith(
+        expect.stringContaining('my-store')
+      );
+    });
+  });
+
   describe('error cases', () => {
     it('should return 1 when argument parsing fails', async () => {
       const exitCode = await listStores(client, ['--invalid-flag']);

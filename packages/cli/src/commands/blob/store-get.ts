@@ -38,13 +38,19 @@ export default async function getStore(
     args: [storeIdArg],
   } = parsedArgs;
 
+  // Only prompt when there's an interactive terminal AND the user hasn't opted
+  // out — either explicitly via `--non-interactive` or because an agent was
+  // auto-detected (agents often run with a pseudo-TTY, so `isTTY` can't be
+  // trusted on its own).
+  const canPrompt = client.stdin.isTTY && !client.nonInteractive;
+
   let storeId: string | undefined = storeIdArg;
   if (!storeId) {
     storeId = getStoreIdFromAuth(rwToken) ?? undefined;
   }
 
   if (!storeId) {
-    if (!client.stdin.isTTY) {
+    if (!canPrompt) {
       output.error('Missing required argument: storeId');
       return 1;
     }

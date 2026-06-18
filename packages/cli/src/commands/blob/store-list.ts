@@ -72,6 +72,12 @@ export default async function listStores(
   const jsonOutput = parsedArgs.flags['--json'] ?? false;
   const noProjects = parsedArgs.flags['--no-projects'] ?? false;
 
+  // Only prompt (interactive store selection) when there's an interactive
+  // terminal AND the user hasn't opted out — either explicitly via
+  // `--non-interactive` or because an agent was auto-detected (agents often run
+  // with a pseudo-TTY, so `isTTY` can't be trusted on its own).
+  const canPrompt = client.stdin.isTTY && !client.nonInteractive;
+
   const telemetryClient = new BlobListStoresTelemetryClient({
     opts: {
       store: client.telemetryEventStore,
@@ -157,7 +163,7 @@ export default async function listStores(
       : `Blob stores:`;
     output.log(header);
 
-    if (!client.stdin.isTTY || !client.stdout.isTTY) {
+    if (!canPrompt || !client.stdout.isTTY) {
       output.print(
         table(buildTableRows(stores, noProjects), { hsep: 3 }).replace(
           /^/gm,

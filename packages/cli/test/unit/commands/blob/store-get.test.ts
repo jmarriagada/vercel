@@ -650,6 +650,40 @@ describe('blob store get', () => {
     });
   });
 
+  describe('non-interactive mode', () => {
+    beforeEach(() => {
+      // Simulate an agent / `--non-interactive` run: a TTY may be present, but
+      // the CLI has been told not to prompt.
+      client.nonInteractive = true;
+    });
+
+    it('errors on a missing storeId instead of prompting', async () => {
+      const exitCode = await getStore(client, [], noToken);
+
+      expect(exitCode).toBe(1);
+      expect(mockedOutput.error).toHaveBeenCalledWith(
+        'Missing required argument: storeId'
+      );
+      expect(textInputMock).not.toHaveBeenCalled();
+      expect(client.fetch).not.toHaveBeenCalled();
+    });
+
+    it('uses a provided storeId without prompting', async () => {
+      const exitCode = await getStore(
+        client,
+        ['store_provided_12345678'],
+        noToken
+      );
+
+      expect(exitCode).toBe(0);
+      expect(textInputMock).not.toHaveBeenCalled();
+      expect(client.fetch).toHaveBeenCalledWith(
+        '/v1/storage/stores/store_provided_12345678',
+        { method: 'GET', accountId: 'org_123' }
+      );
+    });
+  });
+
   describe('spinner and output behavior', () => {
     it('should show spinner during retrieval and stop on success', async () => {
       const exitCode = await getStore(

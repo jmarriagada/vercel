@@ -324,6 +324,25 @@ describe('blob empty-store', () => {
     });
   });
 
+  describe('non-interactive mode', () => {
+    beforeEach(() => {
+      // Simulate an agent / `--non-interactive` run: a TTY may be present, but
+      // the CLI has been told not to prompt.
+      client.nonInteractive = true;
+    });
+
+    it('errors without --yes instead of confirming', async () => {
+      const exitCode = await emptyStore(client, [], fullToken);
+
+      expect(exitCode).toBe(1);
+      expect(mockedOutput.error).toHaveBeenCalledWith(
+        'Missing --yes flag. This is a destructive operation, use --yes to confirm.'
+      );
+      expect(confirmInputMock).not.toHaveBeenCalled();
+      expect(mockedBlob.del).not.toHaveBeenCalled();
+    });
+  });
+
   describe('error cases', () => {
     it('should return 1 when argument parsing fails', async () => {
       const exitCode = await emptyStore(client, ['--invalid-flag'], fullToken);

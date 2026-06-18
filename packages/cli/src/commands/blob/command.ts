@@ -28,7 +28,7 @@ const accessOption = {
   choices: ['public', 'private'],
 } as const;
 
-import { yesOption } from '../../util/arg-common';
+import { yesOption, nonInteractiveOption } from '../../util/arg-common';
 
 const environmentOption = {
   name: 'environment',
@@ -330,6 +330,7 @@ export const createStoreSubcommand = {
     },
     yesOption,
     environmentOption,
+    nonInteractiveOption,
   ],
   examples: [
     {
@@ -358,7 +359,7 @@ export const deleteStoreSubcommand = {
       required: false,
     },
   ],
-  options: [yesOption],
+  options: [yesOption, nonInteractiveOption],
   examples: [],
 } as const;
 
@@ -367,7 +368,7 @@ export const emptyStoreSubcommand = {
   aliases: [],
   description: 'Delete all blobs in a Blob store',
   arguments: [],
-  options: [yesOption],
+  options: [yesOption, nonInteractiveOption],
   examples: [],
 } as const;
 
@@ -381,7 +382,7 @@ export const getStoreInfoSubcommand = {
       required: false,
     },
   ],
-  options: [],
+  options: [nonInteractiveOption],
   examples: [],
 } as const;
 
@@ -413,6 +414,7 @@ export const listStoresSubcommand = {
       deprecated: false,
       description: 'Hide the Projects column (table output only)',
     },
+    nonInteractiveOption,
   ],
   examples: [
     {
@@ -470,6 +472,7 @@ export const blobCommand = {
         'Blob store id, with or without the "store_" prefix (must be passed together with --oidc-token)',
       argument: 'String',
     },
+    nonInteractiveOption,
   ],
   examples: [],
 } as const;
