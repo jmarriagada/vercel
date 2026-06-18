@@ -17,6 +17,7 @@ import {
   rm,
   mkdir,
   realpath,
+  symlink,
 } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import type { IncomingMessage } from 'node:http';
@@ -40,8 +41,23 @@ interface VercelJson {
   [key: string]: unknown;
 }
 
-const loadVercelJson = async (fixtureSource: string) => {
-  const vercelJsonPath = join(fixtureSource, 'vercel.json');
+interface FixtureMetadata {
+  pathToProject?: string;
+  skipLambdaExecution?: boolean;
+}
+
+const loadFixtureMetadata = async (fixtureSource: string) => {
+  const fixtureJsonPath = join(fixtureSource, 'fixture.json');
+  try {
+    const content = await readFile(fixtureJsonPath, 'utf-8');
+    return JSON.parse(content) as FixtureMetadata;
+  } catch {
+    return null;
+  }
+};
+
+const loadVercelJson = async (projectSource: string) => {
+  const vercelJsonPath = join(projectSource, 'vercel.json');
   try {
     const content = await readFile(vercelJsonPath, 'utf-8');
     return JSON.parse(content) as VercelJson;
@@ -107,9 +123,7 @@ const getWorkDir = async (fixtureName: string, fixtureSource: string) => {
 };
 
 describe('successful builds', async () => {
-  const fixtures = (await readdir(join(__dirname, 'fixtures'))).filter(
-    fixtureName => fixtureName.includes('')
-  );
+  const fixtures = await readdir(join(__dirname, 'fixtures'));
   for (const fixtureName of fixtures) {
     // Windows is just too slow to build these fixtures
     it.skipIf(process.platform === 'win32')(
@@ -117,7 +131,11 @@ describe('successful builds', async () => {
       async () => {
         // Copy entire fixture to work dir so no parent node_modules can interfere
         const fixtureSource = join(__dirname, 'fixtures', fixtureName);
-        const vercelJson = await loadVercelJson(fixtureSource);
+        const fixtureMetadata = await loadFixtureMetadata(fixtureSource);
+        const projectSource = fixtureMetadata?.pathToProject
+          ? join(fixtureSource, fixtureMetadata.pathToProject)
+          : fixtureSource;
+        const vercelJson = await loadVercelJson(projectSource);
         const config = getFixtureConfig(vercelJson);
 
         const { workDir, lambdaOutputDir } = await getWorkDir(
@@ -126,10 +144,13 @@ describe('successful builds', async () => {
         );
 
         const repoRootPath = workDir;
+        const projectPath = fixtureMetadata?.pathToProject
+          ? join(workDir, fixtureMetadata.pathToProject)
+          : workDir;
         // If vercel.json specifies rootDirectory, use it as the workPath
         const workPath = vercelJson?.rootDirectory
-          ? join(workDir, vercelJson.rootDirectory)
-          : workDir;
+          ? join(projectPath, vercelJson.rootDirectory)
+          : projectPath;
 
         const result = (await build({
           files: {},
@@ -178,11 +199,13 @@ describe('successful builds', async () => {
           }
         }
 
-        await expect(
-          extractAndExecuteLambda(lambda, lambdaOutputDir, USE_DEBUG_DIR)
-        ).resolves.toBeUndefined();
+        if (!fixtureMetadata?.skipLambdaExecution) {
+          await expect(
+            extractAndExecuteLambda(lambda, lambdaOutputDir, USE_DEBUG_DIR)
+          ).resolves.toBeUndefined();
+        }
       },
-      30000
+      50000
     ); // copying fixture and running npm install so it takes a while
   }
 
@@ -233,6 +256,107 @@ it.skipIf(process.platform === 'win32')(
         repoRootPath: workDir,
       })
     ).resolves.toBeDefined();
+  },
+  30000
+);
+
+it.skipIf(process.platform === 'win32')(
+  'traces CJS packages imported through pnpm workspace symlinks',
+  async () => {
+    const root = await realpath(
+      await mkdtemp(join(tmpdir(), 'pnpm-cjs-shim-'))
+    );
+    const workPath = join(root, 'api');
+    const packageStorePath = join(
+      root,
+      'node_modules/.pnpm/@nestjs+common@1.0.0/node_modules/@nestjs/common'
+    );
+
+    await mkdir(packageStorePath, { recursive: true });
+    await mkdir(join(workPath, 'node_modules/@nestjs'), { recursive: true });
+    await writeFile(
+      join(workPath, 'package.json'),
+      JSON.stringify({
+        name: 'api',
+        type: 'module',
+        dependencies: { '@nestjs/common': '1.0.0' },
+      })
+    );
+    await writeFile(
+      join(workPath, 'server.ts'),
+      [
+        '// @ts-ignore - fixture package has no type declarations',
+        "import { marker } from '@nestjs/common';",
+        "import { readFileSync } from 'node:fs';",
+        '',
+        "if (process.env.NEVER_READ_IGNORED_FILE) readFileSync(new URL('./ignored.txt', import.meta.url));",
+        '',
+        'export default function handler(_req, res) {',
+        '  res.end(marker);',
+        '}',
+      ].join('\n')
+    );
+    await writeFile(join(workPath, 'ignored.txt'), 'ignore me');
+    await writeFile(
+      join(packageStorePath, 'package.json'),
+      JSON.stringify({
+        name: '@nestjs/common',
+        version: '1.0.0',
+        main: 'index.js',
+      })
+    );
+    await writeFile(
+      join(packageStorePath, 'index.js'),
+      "module.exports = { marker: 'pnpm-cjs-ok' };\n"
+    );
+    await symlink(
+      '../../../node_modules/.pnpm/@nestjs+common@1.0.0/node_modules/@nestjs/common',
+      join(workPath, 'node_modules/@nestjs/common')
+    );
+
+    try {
+      const result = (await build({
+        files: {},
+        workPath,
+        config: {
+          ...defaultConfig,
+          excludeFiles: 'ignored.txt',
+          projectSettings: {
+            ...defaultConfig.projectSettings,
+            installCommand: 'true',
+            buildCommand: 'echo build',
+          },
+        },
+        meta,
+        entrypoint: 'server.ts',
+        repoRootPath: workPath,
+      })) as BuildResultV2Typical;
+
+      const lambda = result.output.index as unknown as NodejsLambda;
+      const lambdaFiles = Object.keys(lambda.files ?? {});
+      expect(lambdaFiles.some(file => file.startsWith('..'))).toBe(false);
+      expect(lambdaFiles).not.toContain('ignored.txt');
+      expect(lambdaFiles).toEqual(
+        expect.arrayContaining([
+          expect.stringContaining(
+            'node_modules/.pnpm/@nestjs+common@1.0.0/node_modules/@nestjs/common/index.js'
+          ),
+        ])
+      );
+
+      const lambdaOutputDir = await realpath(
+        await mkdtemp(join(tmpdir(), 'pnpm-cjs-lambda-'))
+      );
+      try {
+        await expect(
+          extractAndExecuteLambda(lambda, lambdaOutputDir)
+        ).resolves.toBeUndefined();
+      } finally {
+        await rm(lambdaOutputDir, { recursive: true, force: true });
+      }
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   },
   30000
 );
@@ -324,11 +448,6 @@ it('prefixes emitted service route sources with routePrefix', async () => {
   expect(result.routes).toEqual(
     expect.arrayContaining([
       expect.objectContaining({
-        src: pathToRegexp('/api/js/user/:id').regexp.source,
-        dest: '/_svc/js-api/index',
-        methods: ['GET'],
-      }),
-      expect.objectContaining({
         src: '^/api/js(?:/(.*))?$',
         dest: '/_svc/js-api/index',
       }),
@@ -396,7 +515,6 @@ it('does not rewrite non-service route outputs', async () => {
   })) as BuildResultV2Typical;
 
   const lambda = result.output.index as unknown as NodejsLambda;
-  expect(result.output['/user/:id']).toBeDefined();
   expect(result.output['_svc/js-api/index']).toBeUndefined();
   expect(lambda.handler).toBe('index.mjs');
 }, 30000);
@@ -432,6 +550,94 @@ it('strips service route prefixes for express apps at runtime', async () => {
 
   expect(response.status).toBe(200);
   expect(readLambdaResponseBody(response)).toBe('Hello World');
+}, 30000);
+
+it('emits crons[] and a dispatcher shim for a schedule-triggered service', async () => {
+  const fixtureName = '20-cron-default-export';
+  const fixtureSource = join(__dirname, 'fixtures', fixtureName);
+  const { workDir } = await getWorkDir(fixtureName, fixtureSource);
+
+  const result = (await build({
+    files: {},
+    workPath: workDir,
+    config: {
+      ...defaultConfig,
+      serviceName: 'cleanup',
+    },
+    meta,
+    entrypoint: 'index.mjs',
+    repoRootPath: workDir,
+    service: {
+      name: 'cleanup',
+      type: 'job',
+      trigger: 'schedule',
+      schedule: '0 0 * * *',
+    },
+  })) as BuildResultV2Typical;
+
+  // Build result includes the cron entry the CLI/orchestrator consumes.
+  expect(result.crons).toEqual([
+    expect.objectContaining({
+      path: '/_svc/cleanup/crons/index/cron',
+      schedule: '0 0 * * *',
+    }),
+  ]);
+
+  // Lambda is mounted at the internal service path.
+  const lambda = getServiceLambda(result, 'cleanup');
+  expect(lambda).toBeDefined();
+
+  // Lambda handler points at the dispatcher shim, not the user file.
+  expect(lambda.handler).toContain('__vc_cron_dispatch');
+
+  // The dispatcher shim is in the lambda bundle and embeds the route
+  // table inline (not via lambda env, since AWS Lambda rejects env var
+  // names with leading underscores).
+  expect(lambda.files).toBeDefined();
+  const dispatcherFileKey = Object.keys(lambda.files!).find(k =>
+    k.endsWith('__vc_cron_dispatch.mjs')
+  );
+  expect(dispatcherFileKey).toBeDefined();
+  const dispatcherFile = lambda.files![dispatcherFileKey!] as unknown as {
+    data: Buffer | string;
+  };
+  const dispatcherSource =
+    typeof dispatcherFile.data === 'string'
+      ? dispatcherFile.data
+      : dispatcherFile.data.toString('utf-8');
+  expect(dispatcherSource).toContain(
+    `JSON.parse('{"/_svc/cleanup/crons/index/cron":"default"}')`
+  );
+  expect(lambda.environment.__VC_CRON_ROUTES).toBeUndefined();
+
+  // No catchall route — cron services only respond at their internal cron path.
+  const hasCatchall = result.routes?.some(
+    r => typeof r.src === 'string' && r.src.includes('(.*)')
+  );
+  expect(hasCatchall).toBe(false);
+}, 60000);
+
+it('rejects entrypoints with named-function (module:function) syntax', async () => {
+  const fixtureName = '01-express-index-ts-esm';
+  const fixtureSource = join(__dirname, 'fixtures', fixtureName);
+  const { workDir } = await getWorkDir(fixtureName, fixtureSource);
+
+  await expect(
+    build({
+      files: {},
+      workPath: workDir,
+      config: {
+        ...defaultConfig,
+        // fs-detectors sets `handlerFunction` from `entrypoint:
+        // "file.ts:foo"` colon syntax. JS-land has no precedent for
+        // named-function entrypoints — the guard rejects it loudly.
+        handlerFunction: 'someHandler',
+      },
+      meta,
+      entrypoint: 'src/server.ts',
+      repoRootPath: workDir,
+    })
+  ).rejects.toThrow(/Named-function entrypoints are not supported/);
 }, 30000);
 
 it('strips service route prefixes for hono apps at runtime', async () => {

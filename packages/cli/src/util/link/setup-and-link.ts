@@ -1,10 +1,12 @@
 import chalk from 'chalk';
 import { remove } from 'fs-extra';
 import { join, basename } from 'path';
+import { LocalFileSystemDetector, getWorkspaces } from '@vercel/fs-detectors';
 import type {
   ProjectLinkResult,
   ProjectSettings,
   Org,
+  Team,
 } from '@vercel-internals/types';
 import {
   getLinkedProject,
@@ -13,9 +15,11 @@ import {
   VERCEL_DIR_README,
   VERCEL_DIR_PROJECT,
 } from '../projects/link';
+import { linkRepoProject } from './repo';
 import createProject from '../projects/create-project';
 import type Client from '../client';
 import { printError } from '../error';
+import pull from '../../commands/env/pull';
 import { parseGitConfig, pluckRemoteUrls } from '../create-git-meta';
 import {
   selectAndParseRemoteUrl,
@@ -23,7 +27,7 @@ import {
 } from '../git/connect-git-provider';
 
 import toHumanPath from '../humanize-path';
-import { isDirectory } from '../config/global-path';
+import { isDirectory } from '../fs';
 import selectOrg from '../input/select-org';
 import inputProject from '../input/input-project';
 import { validateRootDirectory } from '../validate-paths';
@@ -37,12 +41,14 @@ import { CantParseJSONFile, isAPIError } from '../errors-ts';
 import output from '../../output-manager';
 import { detectProjects } from '../projects/detect-projects';
 import readConfig from '../config/read-config';
+import { findSourceVercelConfigFile } from '../compile-vercel-config';
 import { frameworkList } from '@vercel/frameworks';
 import {
   vercelAuth,
   type VercelAuthSetting,
   DEFAULT_VERCEL_AUTH_SETTING,
 } from '../input/vercel-auth';
+import { printAlignedLabel } from '../output/print-aligned-label';
 import {
   displayConfiguredServicesSetup,
   getServicesSetupState,
@@ -50,19 +56,393 @@ import {
   toProjectRootDirectory,
   type InferredServicesChoice,
 } from './services-setup';
+import searchProjectAcrossTeams from '../projects/search-project-across-teams';
+import type { CrossTeamMatch } from '../projects/search-project-across-teams';
 
 export interface SetupAndLinkOptions {
   autoConfirm?: boolean;
   forceDelete?: boolean;
   link?: ProjectLinkResult;
   successEmoji?: EmojiLabel;
-  setupMsg?: string;
   projectName?: string;
   /** When true, avoid prompts and return action_required payload when scope/project choice is needed */
   nonInteractive?: boolean;
   pullEnv?: boolean;
   /** When true, indicates the project is being created from v0 (grants V0Builder permissions) */
   v0?: boolean;
+  /** When true, search matching projects across teams before standard linking flow */
+  searchAcrossTeams?: boolean;
+  /**
+   * When true with an explicit `projectName`, bail out instead of running
+   * `setupAndLink`. Use for user-supplied `--project <NAME_OR_ID>` so typos
+   * fail fast rather than creating a new project.
+   */
+  failIfNotFound?: boolean;
+}
+
+function formatMatchReason(match: CrossTeamMatch): string {
+  if (match.reason === 'repo-root') {
+    return chalk.gray('(linked by git)');
+  }
+  return chalk.gray('(folder name)');
+}
+
+function formatCrossTeamMatch(match: CrossTeamMatch): string {
+  return `${chalk.bold(match.org.slug)}/${match.project.name} ${formatMatchReason(
+    match
+  )}`;
+}
+
+function formatMatchSource(match: CrossTeamMatch): string {
+  return match.reason === 'repo-root' ? 'Git repository' : 'Folder name';
+}
+
+const CHECKBOX_INSTRUCTIONS = [
+  '\n  ',
+  chalk.dim('('),
+  chalk.cyan('<space>'),
+  chalk.dim(' select, '),
+  chalk.cyan('<enter>'),
+  chalk.dim(' confirm, '),
+  chalk.cyan('<a>'),
+  chalk.dim(' toggle all, '),
+  chalk.cyan('<i>'),
+  chalk.dim(' invert)'),
+].join('');
+
+function printCrossTeamSearchScope({
+  searchedTeamSlugs,
+}: {
+  searchedTeamSlugs: string[];
+}): void {
+  if (searchedTeamSlugs.length > 0) {
+    output.print(
+      `  ${chalk.dim(
+        `Searched ${searchedTeamSlugs.length} ${
+          searchedTeamSlugs.length === 1 ? 'team' : 'teams'
+        }`
+      )}\n`
+    );
+  }
+}
+
+function isErrnoException(err: unknown): err is NodeJS.ErrnoException {
+  return (
+    err instanceof Error && typeof (err as { code?: unknown }).code === 'string'
+  );
+}
+
+// Detect whether `cwd` is a workspace root (monorepo with multiple packages).
+// If the filesystem can't be read (ENOENT/EACCES/ENOTDIR), treat it as a
+// single-app project rather than crashing the CLI.
+async function hasWorkspaces(cwd: string): Promise<boolean> {
+  try {
+    const fs = new LocalFileSystemDetector(cwd);
+    const workspaces = await getWorkspaces({ fs });
+    return workspaces.length > 0;
+  } catch (err) {
+    if (
+      isErrnoException(err) &&
+      err.code &&
+      ['ENOENT', 'EACCES', 'ENOTDIR'].includes(err.code)
+    ) {
+      output.debug(`getWorkspaces failed for ${cwd}: ${err}`);
+      return false;
+    }
+    throw err;
+  }
+}
+
+/**
+ * Decides whether to prompt the user for a project root directory.
+ *
+ * Returns true if any of:
+ *  - the user explicitly chose "Choose a different root directory" via the
+ *    inferred-services picker
+ *  - the directory is a workspace (monorepo with multiple packages)
+ *  - framework detection at the root finds nothing — covers nested-monolith
+ *    layouts like `repo/app/package.json` where the app lives in a subdir
+ *
+ * Returns false only for single-app projects with a framework detected at
+ * the root — that's the fast-path the no-prompt optimization targets.
+ */
+export async function shouldPromptForRootDirectory(opts: {
+  path: string;
+  servicesChoice: InferredServicesChoice | null;
+}): Promise<boolean> {
+  if (opts.servicesChoice?.type === 'project-directory') {
+    return true;
+  }
+  if (await hasWorkspaces(opts.path)) {
+    return true;
+  }
+  try {
+    const detected = await detectProjects(opts.path);
+    const frameworksAtRoot = detected.get('') ?? [];
+    return frameworksAtRoot.length === 0;
+  } catch (err) {
+    output.debug(`detectProjects failed at root: ${err}`);
+    // Safer to prompt than to silently misconfigure.
+    return true;
+  }
+}
+
+async function maybePullEnvAfterLink(
+  client: Client,
+  path: string,
+  autoConfirm: boolean,
+  pullEnv: boolean
+): Promise<void> {
+  if (!pullEnv || !client.stdin.isTTY || client.nonInteractive) {
+    return;
+  }
+
+  output.print('\n');
+
+  const pullEnvConfirmed =
+    autoConfirm ||
+    (await client.input.confirm(
+      'Pull development environment variables into .env.local?',
+      true
+    ));
+
+  if (!pullEnvConfirmed) {
+    return;
+  }
+
+  const originalCwd = client.cwd;
+  try {
+    client.cwd = path;
+    const args = autoConfirm ? ['--yes'] : [];
+    const exitCode = await pull(client, args, 'vercel-cli:link');
+
+    if (exitCode !== 0) {
+      output.error(
+        'Failed to pull environment variables. You can run `vc env pull` manually.'
+      );
+    }
+  } catch (_error) {
+    output.error(
+      'Failed to pull environment variables. You can run `vc env pull` manually.'
+    );
+  } finally {
+    client.cwd = originalCwd;
+  }
+}
+
+async function linkCrossTeamMatch({
+  client,
+  path,
+  match,
+  successEmoji,
+  autoConfirm,
+  pullEnv,
+}: {
+  client: Client;
+  path: string;
+  match: CrossTeamMatch;
+  successEmoji: EmojiLabel;
+  autoConfirm: boolean;
+  pullEnv: boolean;
+}): Promise<ProjectLinkResult> {
+  client.config.currentTeam =
+    match.org.type === 'team' ? match.org.id : undefined;
+
+  if (match.reason === 'repo-root' && match.repo) {
+    await linkRepoProject(client, path, {
+      project: match.project,
+      orgId: match.org.id,
+      orgSlug: match.org.slug,
+      remoteName: match.repo.remoteName,
+      successEmoji,
+    });
+    await maybePullEnvAfterLink(client, path, autoConfirm, pullEnv);
+    return {
+      status: 'linked',
+      org: match.org,
+      project: match.project,
+      repoRoot: match.repo.rootPath,
+    };
+  }
+
+  await linkFolderToProject(
+    client,
+    path,
+    { projectId: match.project.id, orgId: match.org.id },
+    match.project.name,
+    match.org.slug,
+    successEmoji,
+    autoConfirm,
+    pullEnv
+  );
+  return { status: 'linked', org: match.org, project: match.project };
+}
+
+async function promptForLimitedTeams(
+  client: Client,
+  teams: Team[]
+): Promise<Team[]> {
+  if (teams.length === 0) {
+    return [];
+  }
+
+  return await client.input.checkbox<Team>({
+    message: 'Select teams that require SSO',
+    instructions: CHECKBOX_INSTRUCTIONS,
+    choices: teams.map(team => ({
+      name: team.name ? `${team.name} (${team.slug})` : team.slug,
+      value: team,
+    })),
+  });
+}
+
+async function searchSelectedLimitedTeams({
+  client,
+  path,
+  projectName,
+  gitProjectName,
+  teams,
+}: {
+  client: Client;
+  path: string;
+  projectName: string;
+  gitProjectName?: string;
+  teams: Team[];
+}): Promise<CrossTeamMatch[]> {
+  const selectedTeams = await promptForLimitedTeams(client, teams);
+  if (selectedTeams.length === 0) {
+    return [];
+  }
+
+  output.spinner('Searching selected teams that require SSO…', 1000);
+  try {
+    const result = await searchProjectAcrossTeams(client, projectName, path, {
+      teams: selectedTeams,
+      skipLimited: false,
+      gitProjectName,
+    });
+    printCrossTeamSearchScope({
+      searchedTeamSlugs: result.searchedTeamSlugs,
+    });
+    return result.matches;
+  } catch (err) {
+    output.debug(`Selected team search requiring SSO failed: ${err}`);
+    return [];
+  } finally {
+    output.stopSpinner();
+  }
+}
+
+async function linkCrossTeamMatches({
+  client,
+  path,
+  matches,
+  successEmoji,
+  autoConfirm,
+  nonInteractive,
+  pullEnv,
+}: {
+  client: Client;
+  path: string;
+  matches: CrossTeamMatch[];
+  successEmoji: EmojiLabel;
+  autoConfirm: boolean;
+  nonInteractive: boolean;
+  pullEnv: boolean;
+}): Promise<ProjectLinkResult | null> {
+  if (matches.length === 0) {
+    return null;
+  }
+
+  if (matches.length === 1) {
+    const match = matches[0];
+
+    if (autoConfirm || nonInteractive) {
+      return await linkCrossTeamMatch({
+        client,
+        path,
+        match,
+        successEmoji,
+        autoConfirm,
+        pullEnv,
+      });
+    }
+
+    output.print('\n');
+    output.print(`  ${chalk.bold('Found existing project')}\n`);
+    if (match.reason === 'repo-root') {
+      printAlignedLabel('Project', `${match.org.slug}/${match.project.name}`);
+      printAlignedLabel('Source', formatMatchSource(match));
+    } else {
+      printAlignedLabel('Project', `${match.org.slug}/${match.project.name}`);
+    }
+    const confirmed = await client.input.confirm(
+      match.reason === 'repo-root'
+        ? 'Link repository to project?'
+        : 'Link directory to project?',
+      true
+    );
+    if (confirmed) {
+      return await linkCrossTeamMatch({
+        client,
+        path,
+        match,
+        successEmoji,
+        autoConfirm,
+        pullEnv,
+      });
+    }
+    return null;
+  }
+
+  const currentTeamMatch = matches.find(
+    match => match.org.id === client.config.currentTeam
+  );
+
+  if (autoConfirm && currentTeamMatch) {
+    return await linkCrossTeamMatch({
+      client,
+      path,
+      match: currentTeamMatch,
+      successEmoji,
+      autoConfirm,
+      pullEnv,
+    });
+  }
+
+  if (nonInteractive) {
+    return null;
+  }
+
+  const choices = matches.map(match => ({
+    name: formatCrossTeamMatch(match),
+    value: match as CrossTeamMatch | null,
+  }));
+  choices.push({
+    name: 'Not one of these projects',
+    value: null,
+  });
+
+  output.print('\n');
+  printAlignedLabel('Projects', `${matches.length} matches across teams`);
+  const selected = await client.input.select<CrossTeamMatch | null>({
+    message: 'Which project?',
+    choices,
+    default: currentTeamMatch ?? undefined,
+  });
+
+  if (!selected) {
+    return null;
+  }
+
+  return await linkCrossTeamMatch({
+    client,
+    path,
+    match: selected,
+    successEmoji,
+    autoConfirm,
+    pullEnv,
+  });
 }
 
 export default async function setupAndLink(
@@ -73,14 +453,16 @@ export default async function setupAndLink(
     forceDelete = false,
     link,
     successEmoji = 'link',
-    setupMsg = 'Set up',
-    projectName = basename(path),
+    projectName,
     nonInteractive = false,
     pullEnv = true,
     v0,
+    searchAcrossTeams = false,
   }: SetupAndLinkOptions
 ): Promise<ProjectLinkResult> {
   const { config } = client;
+  const gitProjectName = projectName;
+  projectName = projectName ?? basename(path);
 
   if (!isDirectory(path)) {
     output.error(`Expected directory but found file: ${path}`);
@@ -108,25 +490,105 @@ export default async function setupAndLink(
     return { status: 'error', exitCode: 1, reason: 'HEADLESS' };
   }
 
-  const shouldStartSetup =
-    autoConfirm ||
-    nonInteractive ||
-    (await client.input.confirm(
-      `${setupMsg} ${chalk.cyan(`“${toHumanPath(path)}”`)}?`,
-      true
-    ));
+  // The command invocation carries setup intent; show the local target as state.
+  output.print('\n');
+  printAlignedLabel('Directory', toHumanPath(path));
+  output.print('\n');
 
-  if (!shouldStartSetup) {
-    output.print(`Canceled. Project not set up.\n`);
-    return { status: 'not_linked', org: null, project: null };
+  let skipAutoDetect = false;
+  if (searchAcrossTeams) {
+    // Search for existing projects across all teams
+    let crossTeamMatches: CrossTeamMatch[] = [];
+    let searchedTeamSlugs: string[] = [];
+    let skippedLimitedTeams: Team[] = [];
+    output.spinner('Searching for existing projects…', 1000);
+    try {
+      const searchResult = await searchProjectAcrossTeams(
+        client,
+        projectName,
+        path,
+        {
+          autoConfirm,
+          nonInteractive,
+          gitProjectName,
+        }
+      );
+      crossTeamMatches = searchResult.matches;
+      searchedTeamSlugs = searchResult.searchedTeamSlugs;
+      skippedLimitedTeams = searchResult.skippedLimitedTeams;
+    } catch (err) {
+      output.debug(`Cross-team search failed: ${err}`);
+    } finally {
+      output.stopSpinner();
+    }
+
+    if (
+      crossTeamMatches.length > 0 &&
+      searchedTeamSlugs.length > 1 &&
+      !autoConfirm &&
+      !nonInteractive
+    ) {
+      printCrossTeamSearchScope({
+        searchedTeamSlugs,
+      });
+    }
+
+    const linkedMatch = await linkCrossTeamMatches({
+      client,
+      path,
+      matches: crossTeamMatches,
+      successEmoji,
+      autoConfirm,
+      nonInteractive,
+      pullEnv,
+    });
+    if (linkedMatch) {
+      return linkedMatch;
+    }
+
+    if (!autoConfirm && !nonInteractive && skippedLimitedTeams.length > 0) {
+      if (crossTeamMatches.length === 0) {
+        printAlignedLabel(
+          'Searched',
+          `${searchedTeamSlugs.length} ${
+            searchedTeamSlugs.length === 1 ? 'team' : 'teams'
+          } available without SSO`
+        );
+        output.print('  No matching projects found\n');
+      }
+      const limitedTeamMatches = await searchSelectedLimitedTeams({
+        client,
+        path,
+        projectName,
+        gitProjectName,
+        teams: skippedLimitedTeams,
+      });
+      const linkedLimitedMatch = await linkCrossTeamMatches({
+        client,
+        path,
+        matches: limitedTeamMatches,
+        successEmoji,
+        autoConfirm,
+        nonInteractive,
+        pullEnv,
+      });
+      if (linkedLimitedMatch) {
+        return linkedLimitedMatch;
+      }
+      if (limitedTeamMatches.length === 0) {
+        output.print('  No matching projects found in the selected teams.\n');
+      }
+      skipAutoDetect =
+        skipAutoDetect ||
+        crossTeamMatches.length > 0 ||
+        limitedTeamMatches.length > 0;
+    } else if (crossTeamMatches.length > 0) {
+      skipAutoDetect = true;
+    }
   }
 
   try {
-    org = await selectOrg(
-      client,
-      'Which scope should contain your project?',
-      autoConfirm
-    );
+    org = await selectOrg(client, 'Which team?', autoConfirm);
   } catch (err: unknown) {
     if (isAPIError(err)) {
       if (err.code === 'NOT_AUTHORIZED') {
@@ -149,7 +611,8 @@ export default async function setupAndLink(
       client,
       org,
       projectName,
-      autoConfirm
+      autoConfirm,
+      skipAutoDetect
     );
   } catch (err) {
     if (
@@ -184,6 +647,8 @@ export default async function setupAndLink(
 
   config.currentTeam = org.type === 'team' ? org.id : undefined;
   const rootServicesSetup = await getServicesSetupState(path);
+  const configFileName =
+    (await findSourceVercelConfigFile(path)) ?? 'vercel.json';
 
   try {
     let settings: ProjectSettings = {};
@@ -207,7 +672,10 @@ export default async function setupAndLink(
     // 2. Inferred services layout at the repo root -> prompt for deployment mode.
     // 3. Standard framework setup flow.
     if (rootServicesSetup.hasConfiguredServices) {
-      displayConfiguredServicesSetup(rootServicesSetup.detectServicesResult);
+      displayConfiguredServicesSetup(
+        rootServicesSetup.detectServicesResult,
+        configFileName
+      );
       settings.framework = 'services';
     } else if (rootInferredServicesChoice?.type === 'services') {
       settings.framework = 'services';
@@ -224,16 +692,28 @@ export default async function setupAndLink(
           rootInferredServicesChoice.selectedPath
         );
       } else {
-        rootDirectory = await inputRootDirectory(client, path, autoConfirm);
-        if (
-          rootDirectory &&
-          !(await validateRootDirectory(path, join(path, rootDirectory)))
-        ) {
-          return {
-            status: 'error',
-            exitCode: 1,
-            reason: 'INVALID_ROOT_DIRECTORY',
-          };
+        // Prompt for a root directory when the user explicitly asked for one
+        // via the inferred-services picker, or — in the standard flow — when
+        // this is a workspace (monorepo with multiple packages), or when no
+        // framework is detected at the root (nested monolith layouts like
+        // `repo/app/package.json`). For single-app projects with a framework
+        // at the root we skip the prompt entirely.
+        const shouldPromptRoot = await shouldPromptForRootDirectory({
+          path,
+          servicesChoice: rootInferredServicesChoice,
+        });
+        if (shouldPromptRoot) {
+          rootDirectory = await inputRootDirectory(client, path, autoConfirm);
+          if (
+            rootDirectory &&
+            !(await validateRootDirectory(path, join(path, rootDirectory)))
+          ) {
+            return {
+              status: 'error',
+              exitCode: 1,
+              reason: 'INVALID_ROOT_DIRECTORY',
+            };
+          }
         }
       }
 
@@ -259,7 +739,8 @@ export default async function setupAndLink(
 
       if (selectedRootServicesSetup?.hasConfiguredServices) {
         displayConfiguredServicesSetup(
-          selectedRootServicesSetup.detectServicesResult
+          selectedRootServicesSetup.detectServicesResult,
+          configFileName
         );
         settings.framework = 'services';
       } else if (selectedRootInferredServicesChoice?.type === 'services') {
@@ -313,7 +794,8 @@ export default async function setupAndLink(
             {},
             framework,
             autoConfirm,
-            localConfigurationOverrides
+            localConfigurationOverrides,
+            configFileName
           );
         }
       }
@@ -323,7 +805,7 @@ export default async function setupAndLink(
     let changeAdditionalSettings = false;
     if (!autoConfirm) {
       changeAdditionalSettings = await client.input.confirm(
-        'Do you want to change additional project settings?',
+        'Customize advanced settings?',
         false
       );
     }
@@ -357,7 +839,8 @@ export default async function setupAndLink(
       org.slug,
       successEmoji,
       autoConfirm,
-      false // don't prompt to pull env for newly created projects
+      false, // don't prompt to pull env for newly created projects
+      'Created'
     );
 
     await connectGitRepository(client, path, project, autoConfirm, org);
@@ -399,12 +882,11 @@ export async function connectGitRepository(
       return;
     }
 
+    output.print('\n');
+
     const shouldConnect =
       autoConfirm ||
-      (await client.input.confirm(
-        `Detected a repository. Connect it to this project?`,
-        true
-      ));
+      (await client.input.confirm(`Connect detected Git repository?`, true));
 
     if (!shouldConnect) {
       return;

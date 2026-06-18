@@ -1,29 +1,43 @@
 import type { HasField, Route } from '@vercel/routing-utils';
 import {
+  isScheduleTriggeredService,
+  isExperimentalService,
+} from '@vercel/build-utils';
+import {
   getOwnershipGuard,
   normalizeRoutePrefix,
   scopeRouteSourceToOwnership,
 } from '@vercel/routing-utils';
-import {
-  type DetectServicesOptions,
-  type DetectServicesResult,
-  type InferredServicesResult,
-  type ResolvedServicesResult,
-  type Service,
-  type ServicesConfig,
-  type ServicesRoutes,
+import type {
+  DetectEntrypointFn,
+  DetectServicesOptions,
+  DetectServicesResult,
+  ExperimentalServices,
+  ExperimentalServicesV2,
+  ExperimentalService,
+  InferredServicesConfig,
+  InferredServicesResult,
+  ResolvedServicesResult,
+  Service,
+  ServiceDetectionError,
+  ServiceDetectionWarning,
+  ServicesRoutes,
 } from './types';
 import {
-  getInternalServiceCronPath,
+  getInternalServiceCronPathPrefix,
   getInternalServiceFunctionPath,
-  getInternalServiceWorkerPath,
   isFrontendFramework,
   isRouteOwningBuilder,
   isStaticBuild,
   readVercelConfig,
 } from './utils';
+import type { DetectorFilesystem } from '../detectors/filesystem';
 import { resolveAllConfiguredServices } from './resolve';
+import { resolveAllConfiguredServicesV2 } from './resolve-v2';
 import { autoDetectServices } from './auto-detect';
+import { detectRailwayServices } from './detect-railway';
+import { detectRenderServices } from './detect-render';
+import { detectProcfileServices } from './detect-procfile';
 
 // don't apply subdomain rewrites on preview urls
 const PREVIEW_DOMAIN_MISSING: HasField = [
@@ -36,6 +50,7 @@ function emptyRoutes(): ServicesRoutes {
     hostRewrites: [],
     rewrites: [],
     defaults: [],
+    fallbacks: [],
     crons: [],
     workers: [],
   };
@@ -48,6 +63,7 @@ function withResolvedResult(
   return {
     services: resolved.services,
     source: resolved.source,
+    useImplicitEnvInjection: resolved.useImplicitEnvInjection,
     routes: resolved.routes,
     errors: resolved.errors,
     warnings: resolved.warnings,
@@ -60,11 +76,21 @@ function withResolvedResult(
  * This lets us define the conventions of how we'd like the services configuration
  * to look like.
  */
-function toInferredLayoutConfig(services: ServicesConfig): ServicesConfig {
-  const inferredConfig: ServicesConfig = {};
+function toInferredLayoutConfig(
+  services: InferredServicesConfig
+): InferredServicesConfig {
+  const inferredConfig: InferredServicesConfig = {};
 
   for (const [name, service] of Object.entries(services)) {
-    const serviceConfig: ServicesConfig[string] = {};
+    const serviceConfig: InferredServicesConfig[string] = {};
+
+    if (service.type) {
+      serviceConfig.type = service.type;
+    }
+
+    if (typeof service.root === 'string') {
+      serviceConfig.root = service.root;
+    }
 
     if (typeof service.entrypoint === 'string') {
       serviceConfig.entrypoint = service.entrypoint;
@@ -79,22 +105,42 @@ function toInferredLayoutConfig(services: ServicesConfig): ServicesConfig {
       serviceConfig.framework = service.framework;
     }
 
+    if (typeof service.buildCommand === 'string') {
+      serviceConfig.buildCommand = service.buildCommand;
+    }
+
+    if (typeof service.runtime === 'string') {
+      serviceConfig.runtime = service.runtime;
+    }
+
     inferredConfig[name] = serviceConfig;
   }
 
   return inferredConfig;
 }
 
+interface PlatformDetectResult {
+  services: ExperimentalServices | null;
+  errors: ServiceDetectionError[];
+  warnings: ServiceDetectionWarning[];
+}
+
 /**
  * Detect and resolve services within a project.
  *
- * Reads vercel.json and resolves `experimentalServices` into Service objects.
+ * Reads vercel.json and resolves configured services into Service objects.
  * Returns an error if no services are configured.
  */
 export async function detectServices(
   options: DetectServicesOptions
 ): Promise<DetectServicesResult> {
-  const { fs, workPath } = options;
+  const {
+    fs,
+    workPath,
+    detectEntrypoint,
+    configuredServices: providedConfiguredServices,
+    configuredServicesType: providedConfiguredServicesType,
+  } = options;
 
   // Scope filesystem to workPath if provided
   const scopedFs = workPath ? fs.chdir(workPath) : fs;
@@ -107,71 +153,84 @@ export async function detectServices(
     return withResolvedResult({
       services: [],
       source: 'configured',
+      useImplicitEnvInjection: true,
       routes: emptyRoutes(),
       errors: [configError],
       warnings: [],
     });
   }
 
-  const configuredServices = vercelConfig?.experimentalServices;
-  const hasConfiguredServices =
-    configuredServices && Object.keys(configuredServices).length > 0;
+  const hasProvidedConfiguredServices =
+    providedConfiguredServices &&
+    Object.keys(providedConfiguredServices).length > 0;
 
-  // Try auto-detection
-  if (!hasConfiguredServices) {
-    const autoResult = await autoDetectServices({ fs: scopedFs });
+  // `experimentalServicesV2` dispatch
+  const experimentalServicesV2 =
+    hasProvidedConfiguredServices &&
+    providedConfiguredServicesType === 'experimentalServicesV2'
+      ? (providedConfiguredServices as ExperimentalServicesV2)
+      : hasProvidedConfiguredServices
+        ? undefined
+        : vercelConfig?.experimentalServicesV2;
+  if (
+    experimentalServicesV2 &&
+    Object.keys(experimentalServicesV2).length > 0
+  ) {
+    const result = await resolveAllConfiguredServicesV2(
+      experimentalServicesV2,
+      scopedFs
+    );
+    return withResolvedResult({
+      services: result.services,
+      source: 'configured',
+      // V2 uses explicit `bindings`, so no implicit `{NAME}_URL` injection.
+      useImplicitEnvInjection: false,
+      // V2 routes are explicitly carried per-service to output them separately.
+      routes: emptyRoutes(),
+      errors: result.errors,
+      warnings: [],
+    });
+  }
 
-    if (autoResult.errors.length > 0) {
-      return withResolvedResult({
-        services: [],
-        source: 'auto-detected',
-        routes: emptyRoutes(),
-        errors: autoResult.errors,
-        warnings: [],
-      });
-    }
+  const experimentalServicesV1 = hasProvidedConfiguredServices
+    ? (providedConfiguredServices as ExperimentalServices)
+    : vercelConfig?.experimentalServices;
+  const hasExperimentalServicesV1 =
+    experimentalServicesV1 && Object.keys(experimentalServicesV1).length > 0;
 
-    if (autoResult.services) {
-      const result = await resolveAllConfiguredServices(
-        autoResult.services,
-        scopedFs,
-        'generated'
-      );
-      const routes = generateServicesRoutes(result.services);
-      const resolved: ResolvedServicesResult = {
-        services: result.services,
-        source: 'auto-detected',
-        routes,
-        errors: result.errors,
-        warnings: [],
-      };
-      const rootWebFrameworkServices = result.services.filter(
-        service =>
-          service.type === 'web' &&
-          service.routePrefix === '/' &&
-          typeof service.framework === 'string'
-      );
-      const inferred =
-        result.errors.length === 0 &&
-        rootWebFrameworkServices.length === 1 &&
-        result.services.length > 1
-          ? {
-              source: 'layout' as const,
-              config: toInferredLayoutConfig(autoResult.services),
-              services: result.services,
-              warnings: [],
-            }
-          : null;
-      return withResolvedResult(resolved, inferred);
+  // Try auto-detection of services.
+  // Priority: Railway > Render > Procfile > blessed layouts.
+  // Any hard error (.errors) from detection will result into
+  // exit from detection and return of the error
+  // back to the user
+  if (!hasExperimentalServicesV1) {
+    const detectors: Array<{
+      detect: (options: {
+        fs: DetectorFilesystem;
+        detectEntrypoint?: DetectEntrypointFn;
+      }) => Promise<PlatformDetectResult>;
+      source: InferredServicesResult['source'];
+    }> = [
+      { detect: detectRailwayServices, source: 'railway' },
+      { detect: detectRenderServices, source: 'render' },
+      { detect: detectProcfileServices, source: 'procfile' },
+      { detect: autoDetectServices, source: 'layout' },
+    ];
+
+    for (const { detect, source } of detectors) {
+      const detectResult = await detect({ fs: scopedFs, detectEntrypoint });
+      const match = await tryResolveInferred(detectResult, source, scopedFs);
+      if (match) return match;
     }
 
     return withResolvedResult({
       services: [],
       source: 'auto-detected',
+      useImplicitEnvInjection: true,
       routes: emptyRoutes(),
       errors: [
         {
-          code: 'NO_SERVICES_CONFIGURED',
+          code: 'NO_EXPERIMENTAL_SERVICES_CONFIGURED',
           message:
             'No services configured. Add `experimentalServices` to vercel.json.',
         },
@@ -182,7 +241,7 @@ export async function detectServices(
 
   // Resolve configured services from vercel.json
   const result = await resolveAllConfiguredServices(
-    configuredServices,
+    experimentalServicesV1,
     scopedFs,
     'configured'
   );
@@ -193,10 +252,112 @@ export async function detectServices(
   return withResolvedResult({
     services: result.services,
     source: 'configured',
+    // experimentalServices uses the legacy `{NAME}_URL` injection.
+    useImplicitEnvInjection: true,
     routes,
     errors: result.errors,
     warnings: [],
   });
+}
+
+/**
+ * Try to resolve a platform detect result into a DetectServicesResult.
+ *
+ * Returns a result if the detector matched (found services or had errors),
+ * or null to signal the caller should try the next detector.
+ *
+ * Railway and Render are suggestion-only:
+ * they populate `inferred` for the CLI/UI to propose writing to vercel.json.
+ *
+ * Layout-based detection produces a real resolved output as well instead, because
+ * it's based on our convention that we support. This is gated under a flag (env/feature)
+ * but it's in use.
+ */
+async function tryResolveInferred(
+  detectResult: PlatformDetectResult,
+  source: InferredServicesResult['source'],
+  scopedFs: DetectorFilesystem
+): Promise<DetectServicesResult | null> {
+  if (detectResult.errors.length > 0) {
+    return withResolvedResult({
+      services: [],
+      source: 'auto-detected',
+      useImplicitEnvInjection: true,
+      routes: emptyRoutes(),
+      errors: detectResult.errors,
+      warnings: detectResult.warnings,
+    });
+  }
+
+  if (!detectResult.services) {
+    return null;
+  }
+
+  const result = await resolveAllConfiguredServices(
+    detectResult.services,
+    scopedFs,
+    'generated'
+  );
+
+  let shouldInfer: boolean;
+
+  // For layout-based detection we need to take care about a specific edgecase,
+  // where we ensure that only 1 framework is mounted at the root and at the same
+  // time we really have multi services layout. This will prevent triggering the
+  // setup for of (root + backend) layout, when it's only really (root) with frontend.
+  if (source === 'layout') {
+    const rootWebFrameworkServices = result.services.filter(
+      service =>
+        service.type === 'web' &&
+        service.routePrefix === '/' &&
+        typeof service.framework === 'string'
+    );
+    shouldInfer =
+      result.errors.length === 0 &&
+      rootWebFrameworkServices.length === 1 &&
+      result.services.length > 1;
+  } else {
+    shouldInfer = result.errors.length === 0 && result.services.length > 0;
+  }
+
+  const inferred: InferredServicesResult | null = shouldInfer
+    ? {
+        source,
+        config: toInferredLayoutConfig(detectResult.services),
+        services: result.services,
+        warnings: detectResult.warnings,
+      }
+    : null;
+
+  // Layout-based detection result can actually be used as is,
+  // because the convention is controlled by us. So we produce "resolved"
+  // result as well in addition to inferred
+  if (source === 'layout' && shouldInfer) {
+    const routes = generateServicesRoutes(result.services);
+    return withResolvedResult(
+      {
+        services: result.services,
+        source: 'auto-detected',
+        useImplicitEnvInjection: true,
+        routes,
+        errors: result.errors,
+        warnings: detectResult.warnings,
+      },
+      inferred
+    );
+  }
+
+  return withResolvedResult(
+    {
+      services: [],
+      source: 'auto-detected',
+      useImplicitEnvInjection: true,
+      routes: emptyRoutes(),
+      errors: result.errors,
+      warnings: detectResult.warnings,
+    },
+    inferred
+  );
 }
 
 /**
@@ -219,18 +380,22 @@ export async function detectServices(
  * Builders that provide their own routing (`@vercel/next`, `@vercel/backends`,
  * Build Output API builders, etc.) are not given synthetic routes here.
  *
- * - Worker services:
- *   Internal queue callback routes under `/_svc/{serviceName}/workers/{entry}/{handler}`
- *   that rewrite to `/_svc/{serviceName}/index`.
+ * - Worker and queue-triggered job services:
+ *   Use private path routing. The generated function is not publicly accessible.
  *
- * - Cron services:
+ * - Schedule-triggered job services:
  *   Internal cron callback routes under `/_svc/{serviceName}/crons/{entry}/{handler}`
  *   that rewrite to `/_svc/{serviceName}/index`.
  */
-export function generateServicesRoutes(services: Service[]): ServicesRoutes {
+export function generateServicesRoutes(allServices: Service[]): ServicesRoutes {
+  // Route generation only applies to `experimentalServices`, V2 carries
+  // its own per-service route tables to be applied later.
+  const services = allServices.filter(isExperimentalService);
+
   const hostRewrites: Route[] = [];
   const rewrites: Route[] = [];
   const defaults: Route[] = [];
+  const fallbacks: Route[] = [];
   const crons: Route[] = [];
   const workers: Route[] = [];
 
@@ -238,7 +403,7 @@ export function generateServicesRoutes(services: Service[]): ServicesRoutes {
   // so more specific routes match before broader ones.
   const sortedWebServices = services
     .filter(
-      (s): s is Service & { routePrefix: string } =>
+      (s): s is ExperimentalService & { routePrefix: string } =>
         s.type === 'web' && typeof s.routePrefix === 'string'
     )
     .sort((a, b) => b.routePrefix.length - a.routePrefix.length);
@@ -282,13 +447,12 @@ export function generateServicesRoutes(services: Service[]): ServicesRoutes {
     if (isStaticBuild(service)) {
       // Static/SPA service: serve index.html for client-side routing
       if (routePrefix === '/') {
-        defaults.push({ handle: 'filesystem' });
-        defaults.push({
+        fallbacks.push({
           src: scopeRouteSourceToOwnership('/(.*)', ownershipGuard),
           dest: '/index.html',
         });
       } else {
-        rewrites.push({
+        fallbacks.push({
           src: scopeRouteSourceToOwnership(
             `^/${normalizedPrefix}(?:/.*)?$`,
             ownershipGuard
@@ -320,45 +484,25 @@ export function generateServicesRoutes(services: Service[]): ServicesRoutes {
     }
   }
 
-  const workerServices = services.filter(s => s.type === 'worker');
-  for (const service of workerServices) {
-    const workerEntrypoint =
-      service.entrypoint || service.builder.src || 'index';
-    const workerPath = getInternalServiceWorkerPath(
-      service.name,
-      workerEntrypoint
-    );
+  const cronServices = services.filter(isScheduleTriggeredService);
+  for (const service of cronServices) {
+    const cronPrefix = getInternalServiceCronPathPrefix(service.name);
     const functionPath = getInternalServiceFunctionPath(service.name);
-    workers.push({
-      src: `^${escapeRegex(workerPath)}$`,
+    crons.push({
+      src: `^${escapeRegex(cronPrefix)}/.*$`,
       dest: functionPath,
       check: true,
     });
   }
 
-  const cronServices = services.filter(s => s.type === 'cron');
-  for (const service of cronServices) {
-    const cronEntrypoint = service.entrypoint || service.builder.src || 'index';
-    const cronPath = getInternalServiceCronPath(
-      service.name,
-      cronEntrypoint,
-      service.handlerFunction || 'cron'
-    );
-    const functionPath = getInternalServiceFunctionPath(service.name);
-    crons.push({
-      src: `^${escapeRegex(cronPath)}$`,
-      dest: functionPath,
-      check: true,
-    });
-  }
-  return { hostRewrites, rewrites, defaults, crons, workers };
+  return { hostRewrites, rewrites, defaults, fallbacks, crons, workers };
 }
 
 function escapeRegex(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-function getWebRoutePrefixes(services: Service[]): string[] {
+function getWebRoutePrefixes(services: ExperimentalService[]): string[] {
   const unique = new Set<string>();
   for (const service of services) {
     if (service.type !== 'web' || typeof service.routePrefix !== 'string') {
@@ -389,7 +533,7 @@ function getExplicitHostPrefixNegativeLookahead(
   return `(?!(?:${explicitPrefixes.join('|')})(?:/|$))`;
 }
 
-function getHostCondition(service: Service): HasField | undefined {
+function getHostCondition(service: ExperimentalService): HasField | undefined {
   if (service.type !== 'web') {
     return undefined;
   }

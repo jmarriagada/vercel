@@ -3,6 +3,7 @@ import {
   forceOption,
   formatOption,
   jsonOption,
+  projectOption,
   yesOption,
 } from '../../util/arg-common';
 
@@ -25,13 +26,6 @@ export const initSubcommand = {
       type: Boolean,
       deprecated: false,
       description: 'Retain build cache when using "--force"',
-    },
-    {
-      name: 'public',
-      shorthand: 'p',
-      type: Boolean,
-      deprecated: false,
-      description: 'Deployment is public (`/_src`) is exposed)',
     },
     {
       name: 'env',
@@ -108,6 +102,7 @@ export const initSubcommand = {
     formatOption,
     jsonOption,
     confirmOption,
+    projectOption,
   ],
   examples: [
     {
@@ -145,6 +140,14 @@ export const continueSubcommand = {
       description:
         'Compress the deployment code into an archive before uploading it',
     },
+    {
+      name: 'error',
+      shorthand: null,
+      type: String,
+      argument: 'MESSAGE',
+      deprecated: false,
+      description: 'Mark the deployment as errored with a message',
+    },
   ],
   examples: [
     {
@@ -177,13 +180,6 @@ export const deployCommand = {
       type: Boolean,
       deprecated: false,
       description: 'Retain build cache when using "--force"',
-    },
-    {
-      name: 'public',
-      shorthand: 'p',
-      type: Boolean,
-      deprecated: false,
-      description: 'Deployment is public (`/_src`) is exposed)',
     },
     {
       name: 'env',
@@ -308,6 +304,7 @@ export const deployCommand = {
     formatOption,
     jsonOption,
     confirmOption,
+    projectOption,
   ],
   examples: [
     {

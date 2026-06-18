@@ -3,9 +3,7 @@ import { outputFile } from 'fs-extra';
 import { closeSync, openSync, readSync } from 'fs';
 import { resolve } from 'path';
 import type Client from '../../util/client';
-import { emoji, prependEmoji } from '../../util/emoji';
 import param from '../../util/output/param';
-import stamp from '../../util/output/stamp';
 import { getCommandName, getCommandNamePlain } from '../../util/pkg-name';
 import {
   type EnvRecordsSource,
@@ -28,12 +26,15 @@ import { getFlagsSpecification } from '../../util/get-flags-specification';
 import { printError } from '../../util/error';
 import parseTarget from '../../util/parse-target';
 import { getLinkedProject } from '../../util/projects/link';
+import { isAPIError } from '../../util/errors-ts';
+import { performDeviceCodeFlow } from '../login/future';
 import {
   buildCommandWithYes,
   getPreservedArgsForEnvPull,
   outputActionRequired,
   outputAgentError,
 } from '../../util/agent-output';
+import { printAlignedLabel } from '../../util/output/print-aligned-label';
 
 const CONTENTS_PREFIX = '# Created by Vercel CLI\n';
 
@@ -41,7 +42,13 @@ function readHeadSync(path: string, length: number) {
   const buffer = Buffer.alloc(length);
   const fd = openSync(path, 'r');
   try {
-    readSync(fd, buffer, 0, buffer.length, null);
+    readSync(
+      fd,
+      buffer as unknown as NodeJS.ArrayBufferView,
+      0,
+      buffer.length,
+      null
+    );
   } finally {
     closeSync(fd);
   }
@@ -103,6 +110,7 @@ export default async function pull(
   telemetryClient.trackCliFlagYes(skipConfirmation);
   telemetryClient.trackCliOptionGitBranch(gitBranch);
   telemetryClient.trackCliOptionEnvironment(opts['--environment']);
+  telemetryClient.trackCliOptionId(opts['--id']);
 
   const link = await getLinkedProject(client);
   if (link.status === 'error') {
@@ -143,6 +151,8 @@ export default async function pull(
   client.config.currentTeam =
     link.org.type === 'team' ? link.org.id : undefined;
 
+  const deploymentId = opts['--id'];
+
   const environment =
     parseTarget({
       flagName: 'environment',
@@ -157,7 +167,8 @@ export default async function pull(
     link,
     gitBranch,
     client.cwd,
-    source
+    source,
+    deploymentId
   );
 
   return 0;
@@ -171,7 +182,8 @@ export async function envPullCommandLogic(
   link: ProjectLinked,
   gitBranch: string | undefined,
   cwd: string,
-  source: EnvRecordsSource
+  source: EnvRecordsSource,
+  deploymentId?: string
 ) {
   const fullPath = resolve(cwd, filename);
   const head = tryReadHeadSync(fullPath, Buffer.byteLength(CONTENTS_PREFIX));
@@ -213,24 +225,27 @@ export async function envPullCommandLogic(
   const downloadMessage = gitBranch
     ? `Downloading \`${chalk.cyan(
         environment
-      )}\` Environment Variables for ${projectSlugLink} and any overrides for branch ${chalk.cyan(
+      )}\` environment variables for ${projectSlugLink} and any overrides for branch ${chalk.cyan(
         gitBranch
       )}`
     : `Downloading \`${chalk.cyan(
         environment
-      )}\` Environment Variables for ${projectSlugLink}`;
+      )}\` environment variables for ${projectSlugLink}`;
 
   output.log(downloadMessage);
 
-  const pullStamp = stamp();
   output.spinner('Downloading');
 
-  const records = (
-    await pullEnvRecords(client, link.project.id, source, {
-      target: environment || 'development',
-      gitBranch,
-    })
-  ).env;
+  const pullId = deploymentId || link.project.id;
+  const pullResult = await pullEnvRecordsForEnvPull(client, pullId, source, {
+    target: environment || 'development',
+    gitBranch,
+  });
+  // When pulling by deployment ID, use buildEnv which always contains the full
+  // set of env vars. The `env` dict may only contain decryption keys when large
+  // env encryption is active (the actual values are in an encrypted blob for
+  // Lambda runtime use).
+  const records = deploymentId ? pullResult.buildEnv : pullResult.env;
 
   let deltaString = '';
   let oldEnv;
@@ -267,21 +282,83 @@ export async function envPullCommandLogic(
   if (filename === '.env.local') {
     // When the file is `.env.local`, we also add it to `.gitignore`
     // to avoid accidentally committing it to git.
-    // We use '.env*.local' to match the default .gitignore from
+    // We use '.env*' to match the default .gitignore from
     // create-next-app template. See:
-    // https://github.com/vercel/next.js/blob/06abd634899095b6cc28e6e8315b1e8b9c8df939/packages/create-next-app/templates/app/js/gitignore#L28
+    // https://github.com/vercel/next.js/commit/09a385669b3757ef59065138901eb3084d35d418
     const rootPath = link.repoRoot ?? cwd;
-    isGitIgnoreUpdated = await addToGitIgnore(rootPath, '.env*.local');
+    isGitIgnoreUpdated = await addToGitIgnore(rootPath, '.env*');
   }
 
-  output.print(
-    `${prependEmoji(
-      `${exists ? 'Updated' : 'Created'} ${chalk.bold(filename)} file ${
-        isGitIgnoreUpdated ? 'and added it to .gitignore' : ''
-      } ${chalk.gray(pullStamp())}`,
-      emoji('success')
-    )}\n`
+  output.print('\n');
+  printAlignedLabel(
+    exists ? 'Updated' : 'Created',
+    `${filename} file${isGitIgnoreUpdated ? ' and added it to .gitignore' : ''}`,
+    { gutter: '✓' }
   );
+}
+
+async function pullEnvRecordsForEnvPull(
+  client: Client,
+  pullId: string,
+  source: EnvRecordsSource,
+  options: { target: string; gitBranch?: string }
+) {
+  try {
+    return await pullEnvRecords(client, pullId, source, options);
+  } catch (error) {
+    if (!isAPIError(error) || error.code !== 'challenge_required') {
+      throw error;
+    }
+
+    const refreshToken = client.authConfig.refreshToken;
+    if (!refreshToken || client.authConfig.tokenSource || !client.stdin.isTTY) {
+      throw error;
+    }
+
+    output.stopSpinner();
+    output.log('Sensitive Environment Variables require fresh authentication.');
+
+    const acrValues = getAcrValuesFromWWWAuthenticate(error.wwwAuthenticate);
+    if (!acrValues) {
+      throw error;
+    }
+
+    const tokens = await performDeviceCodeFlow(client, {
+      refreshToken,
+      acrValues,
+    });
+    if (!tokens) {
+      throw error;
+    }
+
+    client.updateAuthConfig({
+      token: tokens.access_token,
+      userId: undefined,
+      expiresAt: Math.floor(Date.now() / 1000) + tokens.expires_in,
+    });
+    client.persistAuthConfig();
+
+    output.spinner('Downloading');
+    return await pullEnvRecords(client, pullId, source, options);
+  }
+}
+
+export function getAcrValuesFromWWWAuthenticate(header: string | undefined) {
+  if (!header) {
+    return;
+  }
+
+  const bearerIndex = header.toLowerCase().indexOf('bearer');
+  if (bearerIndex === -1) {
+    return;
+  }
+
+  const bearerChallenge = header.slice(bearerIndex + 'bearer'.length);
+  const match = bearerChallenge.match(
+    /(?:^|[,\s])acr_values=(?:"((?:\\.|[^"\\])*)"|([^,\s]+))/i
+  );
+
+  return match?.[1]?.replace(/\\(.)/g, '$1') ?? match?.[2];
 }
 
 function escapeValue(value: string | undefined) {

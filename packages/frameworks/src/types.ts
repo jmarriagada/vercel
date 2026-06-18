@@ -54,7 +54,8 @@ export interface SettingValue {
 
 export type Setting = SettingValue | SettingPlaceholder;
 
-export type Redirect = Rewrite & {
+export type Redirect = Omit<Rewrite, 'destination'> & {
+  destination: string;
   statusCode?: number;
   permanent?: boolean;
 };
@@ -85,7 +86,7 @@ export interface Framework {
   darkModeLogo?: string;
   /**
    * A URL to a screenshot of the demo
-   * @example "https://assets.vercel.com/image/upload/v1647366075/front/import/nextjs.png"
+   * @example "https://py8fhxnkzwtsqdo9.public.blob.vercel-storage.com/front/import/nextjs.png"
    */
   screenshot?: string;
   /**

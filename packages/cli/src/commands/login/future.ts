@@ -4,10 +4,9 @@ import * as open from 'open';
 import { eraseLines } from 'ansi-escapes';
 import { KNOWN_AGENTS } from '@vercel/detect-agent';
 import type Client from '../../util/client';
-import { autoInstallAgentTooling } from '../../util/agent/auto-install-agentic';
+import { autoInstallVercelPlugin } from '../../util/agent/auto-install-agentic';
 import { printError } from '../../util/error';
 import { updateCurrentTeamAfterLogin } from '../../util/login/update-current-team-after-login';
-import getGlobalPathConfig from '../../util/config/global-path';
 import { getCommandName } from '../../util/pkg-name';
 import { emoji } from '../../util/emoji';
 import hp from '../../util/humanize-path';
@@ -39,9 +38,12 @@ export interface DeviceCodeTokens {
  */
 export async function performDeviceCodeFlow(
   client: Client,
-  options?: { teamId?: string }
+  options?: { teamId?: string; refreshToken?: string; acrValues?: string }
 ): Promise<DeviceCodeTokens | null> {
-  const deviceAuthorizationResponse = await deviceAuthorizationRequest();
+  const deviceAuthorizationResponse = await deviceAuthorizationRequest({
+    refresh_token: options?.refreshToken,
+    acr_values: options?.acrValues,
+  });
 
   o.debug(
     `'Device Authorization response:', ${await deviceAuthorizationResponse.clone().text()}`
@@ -212,6 +214,7 @@ export async function login(
 
   client.updateAuthConfig({
     token: tokens.access_token,
+    userId: undefined,
     expiresAt: Math.floor(Date.now() / 1000) + tokens.expires_in,
     refreshToken: tokens.refresh_token,
   });
@@ -223,10 +226,10 @@ export async function login(
     await updateCurrentTeamAfterLogin(client);
   }
 
-  client.writeToAuthConfigFile();
+  client.persistAuthConfig();
   client.writeToConfigFile();
 
-  o.debug(`Saved credentials in "${hp(getGlobalPathConfig())}"`);
+  o.debug(`Saved credentials in "${hp(client.getGlobalPathConfig())}"`);
 
   o.print(`
   ${chalk.cyan('Congratulations!')} You are now signed in.
@@ -238,7 +241,7 @@ export async function login(
 
   telemetry.trackState('success');
 
-  await autoInstallAgentTooling(client);
+  await autoInstallVercelPlugin(client);
 
   return 0;
 }

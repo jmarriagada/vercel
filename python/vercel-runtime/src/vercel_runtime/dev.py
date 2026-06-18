@@ -19,9 +19,9 @@ from vercel_runtime.routing import (
     strip_service_route_prefix,
 )
 from vercel_runtime.workers import (
-    bootstrap_worker_service_app,
     is_worker_service,
-    prepare_celery_environment,
+    maybe_bootstrap_worker_service_app,
+    prepare_worker_environment,
 )
 
 if TYPE_CHECKING:
@@ -397,7 +397,7 @@ def _setup_apps() -> None:
     variable_name = os.environ["VERCEL_DEV_VARIABLE_NAME"]
 
     _setup_server_log_routing()
-    prepare_celery_environment()
+    prepare_worker_environment()
 
     mod = import_module(module_name, entry_abs)
 
@@ -406,8 +406,10 @@ def _setup_apps() -> None:
         return
 
     if is_worker_service():
-        _asgi_user_app = cast("ASGI", bootstrap_worker_service_app(mod))
-        return
+        worker_app = maybe_bootstrap_worker_service_app(mod)
+        if worker_app is not None:
+            _asgi_user_app = cast("ASGI", worker_app)
+            return
 
     app_name, user_app = resolve_app(mod, module_name, variable_name)
     try:
@@ -432,6 +434,14 @@ def _wrap_django_static(app: WSGIApplication) -> WSGIApplication:
     # STATIC_URL are served from source directories via Django's staticfiles
     # finders, without needing collectstatic to have been run.
     try:
+        from django.conf import (  # noqa: PLC0415  # pyright: ignore[reportMissingImports, reportMissingTypeStubs]
+            settings as django_settings,  # pyright: ignore[reportUnknownVariableType, reportMissingTypeStubs]
+        )
+
+        installed = getattr(django_settings, "INSTALLED_APPS", [])  # pyright: ignore[reportUnknownArgumentType]
+        if "django.contrib.staticfiles" not in installed:
+            return app
+
         from django.contrib.staticfiles.handlers import (  # noqa: PLC0415  # pyright: ignore[reportMissingImports, reportMissingTypeStubs]
             StaticFilesHandler,  # pyright: ignore[reportUnknownVariableType]
         )
@@ -456,10 +466,10 @@ def _handle_manifest(app: WSGIApplication) -> WSGIApplication | None:
     """
     import os  # noqa: PLC0415
 
-    from django import (  # noqa: PLC0415  # pyright: ignore[reportMissingImports]
+    from django import (  # noqa: PLC0415  # pyright: ignore[reportMissingImports, reportMissingTypeStubs]
         VERSION as DJANGO_VERSION,  # pyright: ignore[reportUnknownVariableType]
     )
-    from django.conf import (  # noqa: PLC0415  # pyright: ignore[reportMissingImports]
+    from django.conf import (  # noqa: PLC0415  # pyright: ignore[reportMissingImports, reportMissingTypeStubs]
         settings as django_settings,  # pyright: ignore[reportUnknownVariableType, reportMissingTypeStubs]
     )
     from django.utils.module_loading import (  # noqa: PLC0415  # pyright: ignore[reportMissingImports, reportMissingTypeStubs]
@@ -512,7 +522,8 @@ def _handle_manifest(app: WSGIApplication) -> WSGIApplication | None:
 
     # Override the storage backend so {% static %} produces unhashed URLs
     plain = "django.contrib.staticfiles.storage.StaticFilesStorage"
-    if DJANGO_VERSION >= (5, 0):
+    django_major_version = cast("int", DJANGO_VERSION[0])
+    if django_major_version >= 5:
         storages = {**storages, "staticfiles": {"BACKEND": plain}}
         django_settings.STORAGES = storages  # pyright: ignore[reportAttributeAccessIssue]
     else:

@@ -8,10 +8,9 @@ import chalk from 'chalk';
 import ua from './ua';
 import processDeployment from './deploy/process-deployment';
 import { responseError } from './error';
-import stamp from './output/stamp';
 import { APIError, BuildError } from './errors-ts';
 import printIndications from './print-indications';
-import type { GitMetadata, Org } from '@vercel-internals/types';
+import type { GitMetadata, Org, Project } from '@vercel-internals/types';
 import type { VercelConfig } from './dev/types';
 import type Client from './client';
 import { type FetchOptions, isJSONObject } from './client';
@@ -34,7 +33,6 @@ export interface CreateOptions {
   // Latest
   name: string;
   project?: string;
-  wantsPublic: boolean;
   prebuilt?: boolean;
   vercelOutputDir?: string;
   rootDirectory?: string | null;
@@ -56,6 +54,7 @@ export interface CreateOptions {
   agentName?: string;
   manual?: boolean;
   jsonOutput?: boolean;
+  linkedProject?: Project;
 }
 
 export interface RemoveOptions {
@@ -115,7 +114,6 @@ export default class Now {
       prebuilt = false,
       vercelOutputDir,
       rootDirectory,
-      wantsPublic,
       meta,
       gitMetadata,
       regions,
@@ -125,7 +123,6 @@ export default class Now {
       forceNew = false,
       withCache = false,
       target = null,
-      deployStamp,
       projectSettings,
       skipAutoDetectionConfirmation,
       noWait,
@@ -134,19 +131,18 @@ export default class Now {
       agentName,
       manual,
       jsonOutput = false,
+      linkedProject,
     }: CreateOptions,
     org: Org,
     isSettingUpProject: boolean,
     archive?: ArchiveFormat
   ) {
     const hashes: any = {};
-    const uploadStamp = stamp();
 
     const requestBody = {
       ...nowConfig,
       env,
       build,
-      public: wantsPublic || nowConfig.public,
       name,
       project,
       meta,
@@ -162,14 +158,16 @@ export default class Now {
     // Ignore specific items from vercel.json
     delete requestBody.scope;
     delete requestBody.github;
+    // `public` is no longer part of `VercelConfig`, but a user's
+    // vercel.json may still contain a stale value that must be stripped
+    // before sending to the API.
+    delete (requestBody as Record<string, unknown>).public;
 
     const deployment = await processDeployment({
       now: this,
       agent: this._client.agent,
       path,
       requestBody,
-      uploadStamp,
-      deployStamp,
       quiet,
       force: forceNew,
       withCache,
@@ -186,6 +184,7 @@ export default class Now {
       bulkRedirectsPath: nowConfig.bulkRedirectsPath,
       manual,
       jsonOutput,
+      linkedProject,
     });
 
     if (deployment && deployment.warnings) {

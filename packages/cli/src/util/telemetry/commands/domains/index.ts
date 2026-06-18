@@ -34,6 +34,27 @@ export class DomainsTelemetryClient
     });
   }
 
+  trackCliSubcommandCheck(actual: string) {
+    this.trackCliSubcommand({
+      subcommand: 'check',
+      value: actual,
+    });
+  }
+
+  trackCliSubcommandPrice(actual: string) {
+    this.trackCliSubcommand({
+      subcommand: 'price',
+      value: actual,
+    });
+  }
+
+  trackCliSubcommandSearch(actual: string) {
+    this.trackCliSubcommand({
+      subcommand: 'search',
+      value: actual,
+    });
+  }
+
   trackCliSubcommandRemove(actual: string) {
     this.trackCliSubcommand({
       subcommand: 'remove',

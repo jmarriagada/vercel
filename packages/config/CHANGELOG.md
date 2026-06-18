@@ -1,5 +1,65 @@
 # @vercel/router-sdk
 
+## 0.5.3
+
+### Patch Changes
+
+- fd26487: Remove deprecated `public` from deployment test fixtures and helpers, and stop the CLI from sending the removed `public` field on deploy (including the `--public` flag).
+
+## 0.5.2
+
+### Patch Changes
+
+- Updated dependencies [90a7cc1]
+  - @vercel/routing-utils@6.3.0
+
+## 0.5.1
+
+### Patch Changes
+
+- 6495585: [services] drop top-level `env` support for the new `service-ref` shape for services.
+
+## 0.5.0
+
+### Minor Changes
+
+- 4fc110b: [services] add preDeployCommand for experimentalServices
+
+## 0.4.0
+
+### Minor Changes
+
+- d874af6: Add support for env vars injection that reference other services in `services` with an explicit `env` configuration.
+
+## 0.3.0
+
+### Minor Changes
+
+- c56f851: Upgrade to TypeScript 5.9
+
+### Patch Changes
+
+- Updated dependencies [c56f851]
+  - @vercel/routing-utils@6.2.0
+
+## 0.2.1
+
+### Patch Changes
+
+- [experimental-services] add new job service type support ([#15944](https://github.com/vercel/vercel/pull/15944))
+
+## 0.2.0
+
+### Minor Changes
+
+- Add root to experimentalServices to set a service's working directory. ([#15929](https://github.com/vercel/vercel/pull/15929))
+
+## 0.1.1
+
+### Patch Changes
+
+- Add `mount` support for experimental services across config validation and service resolution. ([#15882](https://github.com/vercel/vercel/pull/15882))
+
 ## 0.1.0
 
 ### Minor Changes

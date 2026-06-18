@@ -33,6 +33,8 @@ import {
   debug,
   cloneEnv,
   getProvidedRuntime,
+  execCommand,
+  getReportedServiceType,
 } from '@vercel/build-utils';
 
 const TMP = tmpdir();
@@ -47,12 +49,16 @@ import {
 
 import { GO_CANDIDATE_ENTRYPOINTS, detectGoEntrypoint } from './entrypoint';
 
+export { detectEntrypoint, detectGoEntrypoint } from './entrypoint';
+
 import {
   buildStandaloneServer,
   startStandaloneDevServer,
 } from './standalone-server';
 
-export { shouldServe };
+import { generateProjectManifest, diagnostics } from './diagnostics';
+
+export { shouldServe, diagnostics };
 
 // in order to allow the user to have `main.go`,
 // we need our `main.go` to be called something else
@@ -117,7 +123,14 @@ type UndoActions = {
 export const version = 3;
 
 export async function build(options: BuildOptions) {
-  const { files, config, workPath, meta = {} } = options;
+  const {
+    files,
+    config,
+    workPath,
+    meta = {},
+    service,
+    registerPreDeploy,
+  } = options;
   let { entrypoint } = options;
 
   const goPath = await getWriteableDirectory();
@@ -248,6 +261,17 @@ export async function build(options: BuildOptions) {
       workPath,
     });
 
+    // Emit the manifest after resolving the Go version but before building the handler
+    // injects the @vercel/go-bridge.
+    const goModJson = goModPath ? await go.modEditJson(goModPath) : null;
+    await generateProjectManifest({
+      workPath,
+      goModJson,
+      resolvedGoVersion: go.resolvedVersion,
+      framework: config.framework ?? undefined,
+      serviceType: service ? getReportedServiceType(service) : undefined,
+    });
+
     const outDir = await getWriteableDirectory();
     const buildOptions: BuildHandlerOptions = {
       downloadPath,
@@ -278,6 +302,19 @@ export async function build(options: BuildOptions) {
       supportsWrapper: true,
       environment: {},
     });
+
+    const preDeployCommand = config?.preDeployCommand;
+    if (registerPreDeploy && typeof preDeployCommand === 'string') {
+      const capturedEnv = { ...env };
+      const capturedCwd = workPath;
+      registerPreDeploy(async () => {
+        debug(`Running pre-deploy command: \`${preDeployCommand}\``);
+        await execCommand(preDeployCommand, {
+          env: capturedEnv,
+          cwd: capturedCwd,
+        });
+      });
+    }
 
     return {
       output: lambda,
@@ -358,6 +395,25 @@ async function buildHandlerWithGoMod({
         from: goSumPath,
       });
     }
+  }
+
+  // Detect vendored dependencies by checking for vendor/modules.txt,
+  // the canonical marker created by `go mod vendor`
+  const vendorModulesPath = join(
+    goModDirname || entrypointDirname,
+    'vendor',
+    'modules.txt'
+  );
+  const isVendored = await pathExists(vendorModulesPath);
+  if (isVendored) {
+    debug('Detected vendor directory in project');
+
+    const vendorModulesBackup = vendorModulesPath + '.bak';
+    await copy(vendorModulesPath, vendorModulesBackup);
+    undo.fileActions.push({
+      to: vendorModulesPath,
+      from: vendorModulesBackup,
+    });
   }
 
   const entrypointArr = entrypoint.split(posix.sep);
@@ -442,10 +498,26 @@ async function buildHandlerWithGoMod({
   debug('Tidy `go.mod` file...');
   try {
     // ensure go.mod up-to-date
-    await go.mod();
+    // When vendored, use -e to tolerate errors from private modules that
+    // cannot be resolved from the network. The vendor directory will be
+    // regenerated afterward to maintain consistency.
+    await go.mod({ tolerateErrors: isVendored });
   } catch (err) {
     console.error('failed to `go mod tidy`');
     throw err;
+  }
+
+  // If the project uses vendored dependencies, regenerate the vendor
+  // directory after go.mod has been rewritten by writeGoMod() and tidied.
+  // This ensures vendor/modules.txt is consistent with the modified go.mod.
+  if (isVendored) {
+    debug('Regenerating vendor directory after go.mod rewrite...');
+    try {
+      await go.vendor();
+    } catch (err) {
+      console.error('failed to `go mod vendor`');
+      throw err;
+    }
   }
 
   debug('Running `go build`...');
@@ -454,7 +526,7 @@ async function buildHandlerWithGoMod({
   try {
     const src = [join(baseGoModPath, MAIN_GO_FILENAME)];
 
-    await go.build(src, destPath);
+    await go.build(src, destPath, { vendorMode: isVendored });
   } catch (err) {
     console.error('failed to `go build`');
     throw err;
@@ -696,7 +768,14 @@ async function writeGoMod({
         /^(replace .+=>\s*)(.+)$/gm,
         (orig, replaceStmt, replacePath) => {
           if (replacePath.startsWith('.')) {
-            return replaceStmt + join(goModRelPath, replacePath);
+            let newPath = join(goModRelPath, replacePath);
+            // path.join() strips the './' prefix when goModRelPath is
+            // empty.  Go requires replacement paths without a version to
+            // start with './' or '../', so restore the prefix when needed.
+            if (!newPath.startsWith('.') && !newPath.startsWith('/')) {
+              newPath = './' + newPath;
+            }
+            return replaceStmt + newPath;
           }
           return orig;
         }

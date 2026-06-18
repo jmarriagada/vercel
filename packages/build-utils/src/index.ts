@@ -14,6 +14,9 @@ import download, {
   DownloadedFiles,
   isSymbolicLink,
   isDirectory,
+  isExternalSymlink,
+  isExternalSymlinkTarget,
+  getSymlinkTarget,
 } from './fs/download';
 import getWriteableDirectory from './fs/get-writable-directory';
 import glob, { GlobOptions } from './fs/glob';
@@ -57,7 +60,10 @@ import debug from './debug';
 import getIgnoreFilter from './get-ignore-filter';
 import { getPlatformEnv } from './get-platform-env';
 import { getPrefixedEnvVars } from './get-prefixed-env-vars';
-import { getServiceUrlEnvVars } from './get-service-url-env-vars';
+import {
+  getServiceUrlEnvVars,
+  getExperimentalServiceUrlEnvVars,
+} from './get-service-url-env-vars';
 import { cloneEnv } from './clone-env';
 import { hardLinkDir } from './hard-link-dir';
 import { validateNpmrc } from './validate-npmrc';
@@ -109,11 +115,15 @@ export {
   getPlatformEnv,
   getPrefixedEnvVars,
   getServiceUrlEnvVars,
+  getExperimentalServiceUrlEnvVars,
   streamToBuffer,
   streamToBufferChunks,
   debug,
   isSymbolicLink,
   isDirectory,
+  isExternalSymlink,
+  isExternalSymlinkTarget,
+  getSymlinkTarget,
   getLambdaOptionsFromFunction,
   sanitizeConsumerName,
   scanParentDirs,
@@ -132,6 +142,14 @@ export { getOsRelease, getProvidedRuntime } from './os';
 
 export * from './should-serve';
 export * from './schemas';
+export {
+  DEFAULT_MAX_DURATION_LIMIT,
+  SKIP_MAX_DURATION_LIMIT_ENV,
+  getMaxDurationLimit,
+  getMaxDurationSchema,
+} from './max-duration';
+export * from './package-manifest';
+export { generateProjectManifest } from './node-diagnostics';
 export * from './types';
 export * from './errors';
 
@@ -140,6 +158,7 @@ export * from './trace';
 export { NODE_VERSIONS } from './fs/node-version';
 
 export { getInstalledPackageVersion } from './get-installed-package-version';
+export { isPackageInstalled } from './is-package-installed';
 
 export { defaultCachePathGlob } from './default-cache-path-glob';
 
@@ -162,6 +181,8 @@ export {
 } from './framework-helpers';
 
 export * from './python';
+export * from './node-entrypoint';
+export * from './service-path-utils';
 
 export {
   getEncryptedEnv,
@@ -172,10 +193,7 @@ export {
   getLambdaPreloadScripts,
   type BytecodeCachingOptions,
 } from './process-serverless/get-lambda-preload-scripts';
-export {
-  getLambdaSupportsStreaming,
-  type SupportsStreamingResult,
-} from './process-serverless/get-lambda-supports-streaming';
+export { getLambdaSupportsStreaming } from './process-serverless/get-lambda-supports-streaming';
 
 export {
   streamToDigestAsync,
@@ -188,6 +206,12 @@ export {
   getBuildResultMetadata,
   type BuildResultMetadata,
 } from './collect-build-result/get-build-result-metadata';
+export {
+  validateBuildResult,
+  SUPPORTED_AL2023_RUNTIMES,
+  type ValidateBuildResultParams,
+  type ValidateBuildResultResult,
+} from './collect-build-result/validate-build-result';
 export { getLambdaByOutputPath } from './collect-build-result/get-lambda-by-output-path';
 export { isRouteMiddleware } from './collect-build-result/is-route-middleware';
 export { getPrerenderChain } from './collect-build-result/get-prerender-chain';
@@ -195,3 +219,69 @@ export {
   streamWithExtendedPayload,
   type ExtendedBodyData,
 } from './collect-build-result/stream-with-extended-payload';
+
+export { collectUncompressedSize } from './collect-uncompressed-size';
+
+export {
+  finalizeLambda,
+  type CreateZipResult,
+  type CreateZipFn,
+  type FinalizeLambdaParams,
+  type FinalizeLambdaResult,
+  type TraceFn,
+} from './finalize-lambda';
+
+export {
+  validateLambdaSize,
+  validateUncompressedLambdaSize,
+  FunctionSizeError,
+  MAX_LAMBDA_SIZE,
+  MAX_LAMBDA_UNCOMPRESSED_SIZE,
+  validateEnvWrapperSupport,
+  ENV_WRAPPER_SUPPORTED_FAMILIES,
+} from './validate-lambda-size';
+
+export { validateFrameworkVersion } from './deserialize/validate-framework-version';
+export { hydrateFilesMap } from './deserialize/hydrate-files-map';
+export { createFunctionsIterator } from './deserialize/create-functions-iterator';
+export { maybeReadJSON } from './deserialize/maybe-read-json';
+export {
+  deserializeBuildOutput,
+  validateDeploymentId,
+} from './deserialize/deserialize-build-output';
+export type {
+  DeserializeBuildOutputConfig,
+  DeserializeBuildOutputResult,
+  DeserializeBuildOutputPathOverride,
+  DeserializeBuildOutputOptions,
+  DeserializeBuildOutputLambdaOptions,
+  GroupLambdasOptions,
+  DeserializeBuildOutputSerializedConfig,
+  DeserializeBuildOutputSerializedPrerender,
+} from './deserialize/deserialize-build-output-types';
+
+export {
+  deserializeLambda,
+  type DeserializeLambdaOptions,
+} from './deserialize/deserialize-lambda';
+export { deserializeEdgeFunction } from './deserialize/deserialize-edge-function';
+export type {
+  Properties,
+  SerializedLambda,
+  SerializedNodejsLambda,
+  SerializedEdgeFunction,
+  SerializedFileFsRef,
+  SerializedPrerender,
+} from './deserialize/serialized-types';
+
+export { validateRegularFile } from './collect-build-result/validate-regular-file';
+export { validatePrerender } from './collect-build-result/validate-prerender';
+export { getContentType } from './collect-build-result/get-content-type';
+export {
+  fileToBuildOutputFile,
+  type BuildOutputFile,
+} from './collect-build-result/file-to-build-output-file';
+export {
+  prerenderToBuildOutputFile,
+  type ExtendedPayload,
+} from './collect-build-result/prerender-to-build-output-file';

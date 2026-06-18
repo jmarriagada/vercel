@@ -1,5 +1,113 @@
 # @vercel/frameworks
 
+## 3.29.0
+
+### Minor Changes
+
+- 3d8df16: Add bun preset.
+
+### Patch Changes
+
+- 2fd14e0: Replace placeholder Eve framework logos with the official triangle mark used in Eve docs.
+- 68c2fd7: Graduate Eve from experimental frameworks so detection and deploys no longer require `VERCEL_USE_EXPERIMENTAL_FRAMEWORKS`.
+
+## 3.28.1
+
+### Patch Changes
+
+- 4421ad9: Allow the Node framework preset to work without a `package.json`. The `node`
+  framework is now detected from a `server.*` entrypoint alone, and the
+  `@vercel/backends` builder defaults the module format to ESM (`"module"`) when
+  no `package.json` is present instead of erroring with "Unable to resolve format".
+
+## 3.28.0
+
+### Minor Changes
+
+- 4bd58f2: Add Eve as an experimental framework declaration alongside Ash.
+
+### Patch Changes
+
+- b98053e: Change label for Sanity v2
+
+## 3.27.0
+
+### Minor Changes
+
+- c0f1229: Update Sanity branding (new tagline, dark mode logo, demo URL) and broaden framework detection to cover Sanity v3, v4, and v5 via the `sanity` package. Move the legacy v2 entry to its own `sanity-v2` slug (with the example moved to `examples/sanity-v2`).
+
+### Patch Changes
+
+- Updated dependencies [fddeb55]
+  - @vercel/error-utils@2.2.0
+
+## 3.26.1
+
+### Patch Changes
+
+- 0dbb8e5: Detect TanStack Start projects without requiring a top-level `nitro` dependency by matching Start packages directly.
+
+## 3.26.0
+
+### Minor Changes
+
+- 51785a6: Add Ash framework preset
+
+## 3.25.1
+
+### Patch Changes
+
+- c95a7ca: Move framework import screenshots from Cloudinary (`assets.vercel.com`) to Vercel Blob. The four affected entries (Next.js, Nuxt, SvelteKit, SvelteKit legacy) now point at `https://py8fhxnkzwtsqdo9.public.blob.vercel-storage.com/front/import/*.png`. Same images, different host — consumers see no behavior change.
+
+## 3.25.0
+
+### Minor Changes
+
+- c56f851: Upgrade to TypeScript 5.9
+
+### Patch Changes
+
+- Updated dependencies [c56f851]
+  - @vercel/error-utils@2.1.0
+
+## 3.24.2
+
+### Patch Changes
+
+- 09d9000: Fix the frameworks demo URL public-access test to check the public `/_logs` route instead of looking up alias hosts through the deployments API.
+
+## 3.24.1
+
+### Patch Changes
+
+- Add actix framework preset ([#15752](https://github.com/vercel/vercel/pull/15752))
+
+## 3.24.0
+
+### Minor Changes
+
+- Support configuration via vercel.toml ([#15750](https://github.com/vercel/vercel/pull/15750))
+
+### Patch Changes
+
+- remove experimental flag on node preset ([#15628](https://github.com/vercel/vercel/pull/15628))
+
+## 3.23.0
+
+### Minor Changes
+
+- Add Mastra framework preset ([#15076](https://github.com/vercel/vercel/pull/15076))
+
+## 3.22.0
+
+### Minor Changes
+
+- Simplify and streamline python builder logic ([#15696](https://github.com/vercel/vercel/pull/15696))
+
+### Patch Changes
+
+- Switch to using smol-toml for toml parsing ([#15730](https://github.com/vercel/vercel/pull/15730))
+
 ## 3.21.1
 
 ### Patch Changes

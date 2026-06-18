@@ -30,6 +30,9 @@ import {
   detectPackageManager,
   BUILDER_INSTALLER_STEP,
   BUILDER_COMPILE_STEP,
+  createDiagnostics,
+  generateProjectManifest,
+  getReportedServiceType,
   type TriggerEvent,
 } from '@vercel/build-utils';
 import { Route, RouteWithHandle, RouteWithSrc } from '@vercel/routing-utils';
@@ -44,6 +47,7 @@ import { Sema } from 'async-sema';
 import escapeStringRegexp from 'escape-string-regexp';
 import findUp from 'find-up';
 import {
+  copy,
   lstat,
   pathExists,
   readdir,
@@ -274,6 +278,7 @@ export const build: BuildV2 = async buildOptions => {
   const nodeVersion = await getNodeVersion(entryPath, undefined, config, meta);
   const {
     cliType,
+    lockfilePath,
     lockfileVersion,
     packageJsonPackageManager,
     turboSupportsCorepackHome,
@@ -577,6 +582,24 @@ export const build: BuildV2 = async buildOptions => {
     await buildCallback(buildOptions);
   }
 
+  try {
+    await generateProjectManifest({
+      workPath,
+      nodeVersion,
+      cliType,
+      lockfilePath,
+      lockfileVersion,
+      framework: config.framework ?? undefined,
+      serviceType: buildOptions.service
+        ? getReportedServiceType(buildOptions.service)
+        : undefined,
+    });
+  } catch (err) {
+    debug(
+      `Failed to write next manifest: ${err instanceof Error ? err.message : String(err)}`
+    );
+  }
+
   let buildOutputVersion: undefined | number;
 
   try {
@@ -589,6 +612,28 @@ export const build: BuildV2 = async buildOptions => {
   }
 
   if (buildOutputVersion) {
+    // Files generated into public/ after `next build` (e.g. service workers
+    // from Serwist) won't be in .vercel/output/static/ yet because Next.js
+    // only copies public/ at build-start.  Sync any missing files now so
+    // they are included in the deploy.
+    const publicDir = path.join(entryPath, 'public');
+    const staticOutputDir = path.join(
+      entryPath,
+      outputDirectory,
+      'output/static'
+    );
+
+    if (await pathExists(publicDir)) {
+      const publicFiles = await glob('**/*', publicDir);
+      for (const fileName of Object.keys(publicFiles)) {
+        const destPath = path.join(staticOutputDir, fileName);
+        if (!(await pathExists(destPath))) {
+          const srcPath = publicFiles[fileName].fsPath;
+          await copy(srcPath, destPath);
+        }
+      }
+    }
+
     return {
       buildOutputPath: path.join(entryPath, outputDirectory, 'output'),
       buildOutputVersion,
@@ -1132,7 +1177,7 @@ export const build: BuildV2 = async buildOptions => {
             ]
           : []),
       ],
-      framework: { version: nextVersion },
+      framework: { slug: 'nextjs', version: nextVersion },
       ...(deploymentId && { deploymentId }),
     };
   }
@@ -1736,6 +1781,7 @@ export const build: BuildV2 = async buildOptions => {
         base: baseDir,
         cache: nftCache,
         processCwd: entryPath,
+        moduleSyncCatchall: true,
       });
       result.esmFileList.forEach(file => result.fileList.add(file));
 
@@ -2954,16 +3000,19 @@ export const build: BuildV2 = async buildOptions => {
                   ]),
           ]),
     ],
-    framework: { version: nextVersion },
+    framework: { slug: 'nextjs', version: nextVersion },
     ...(deploymentId && { deploymentId }),
   };
 };
+
+const packageManifestDiagnostics = createDiagnostics('node');
 
 export const diagnostics: Diagnostics = async ({
   config,
   entrypoint,
   workPath,
   repoRootPath,
+  ...rest
 }) => {
   const entryDirectory = path.dirname(entrypoint);
   const entryPath = path.join(workPath, entryDirectory);
@@ -2976,6 +3025,13 @@ export const diagnostics: Diagnostics = async ({
   );
 
   return {
+    ...(await packageManifestDiagnostics({
+      config,
+      entrypoint,
+      workPath,
+      repoRootPath,
+      ...rest,
+    })),
     // Collect output in `.next/diagnostics`
     ...(await glob(
       '*',

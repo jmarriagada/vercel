@@ -1,4 +1,4 @@
-import { afterEach, describe, it, expect } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 import fs from 'fs-extra';
 import path from 'path';
 import { tmpdir } from 'os';
@@ -9,9 +9,28 @@ import {
   lambdaKnapsack,
   LAMBDA_SIZE_THRESHOLD_BYTES,
   LAMBDA_EPHEMERAL_STORAGE_BYTES,
+  HIVE_LAMBDA_SIZE_BYTES,
 } from '../src/dependency-externalizer';
 import { classifyPackages, parseUvLock } from '@vercel/python-analysis';
 import { FileFsRef, FileBlob } from '@vercel/build-utils';
+import { detectTargetPlatform } from '../src/platform-info';
+import {
+  UV_VERSION,
+  UV_BINARY_CHECKSUM,
+  downloadUvBinaryForTarget,
+} from '../src/uv';
+
+// Mock getVenvSitePackagesDirs to avoid needing a real Python venv in
+// analyze() tests. Returns an empty array so mirrorPackagesIntoVendor
+// produces no vendor files and the bundle size comes solely from the
+// files passed to analyze().
+vi.mock('../src/install', async () => {
+  const actual = await vi.importActual('../src/install');
+  return {
+    ...actual,
+    getVenvSitePackagesDirs: vi.fn().mockResolvedValue([]),
+  };
+});
 
 describe('dependency externalizer support', () => {
   describe('shouldEnableRuntimeInstall', () => {
@@ -146,11 +165,64 @@ describe('dependency externalizer support', () => {
       const size = await calculateBundleSize({});
       expect(size).toBe(0);
     });
+
+    it('uses pre-populated size on FileFsRef without stat', async () => {
+      // FileFsRef with a pre-populated size should be used directly
+      // without hitting the filesystem, so we can use a non-existent path.
+      const files = {
+        'file1.txt': new FileFsRef({
+          fsPath: '/nonexistent/file1.txt',
+          size: 100,
+        }),
+        'file2.txt': new FileFsRef({
+          fsPath: '/nonexistent/file2.txt',
+          size: 200,
+        }),
+      };
+
+      const size = await calculateBundleSize(files);
+      expect(size).toBe(300);
+    });
+
+    it('mixes pre-populated and stat-based sizes', async () => {
+      const tempDir = path.join(tmpdir(), `size-mixed-${Date.now()}`);
+      fs.mkdirSync(tempDir, { recursive: true });
+
+      const filePath = path.join(tempDir, 'real.txt');
+      fs.writeFileSync(filePath, 'a'.repeat(50));
+
+      const files = {
+        'pre-sized.txt': new FileFsRef({
+          fsPath: '/nonexistent/pre-sized.txt',
+          size: 150,
+        }),
+        'real.txt': new FileFsRef({ fsPath: filePath }),
+      };
+
+      try {
+        const size = await calculateBundleSize(files);
+        expect(size).toBe(200);
+      } finally {
+        fs.removeSync(tempDir);
+      }
+    });
   });
 
   describe('Lambda size constants', () => {
-    it('LAMBDA_SIZE_THRESHOLD_BYTES is 245 MB', () => {
+    it('LAMBDA_SIZE_THRESHOLD_BYTES is 245 MB by default', () => {
       expect(LAMBDA_SIZE_THRESHOLD_BYTES).toBe(245 * 1024 * 1024);
+    });
+
+    it('LAMBDA_SIZE_THRESHOLD_BYTES is 240 MB when otel layer is present', async () => {
+      process.env.VERCEL_DEPLOYMENT_HAS_OTEL_LAYER = '1';
+      try {
+        vi.resetModules();
+        const mod = await import('../src/dependency-externalizer');
+        expect(mod.LAMBDA_SIZE_THRESHOLD_BYTES).toBe(240 * 1024 * 1024);
+      } finally {
+        delete process.env.VERCEL_DEPLOYMENT_HAS_OTEL_LAYER;
+        vi.resetModules();
+      }
     });
 
     it('LAMBDA_EPHEMERAL_STORAGE_BYTES is 500 MB', () => {
@@ -160,6 +232,16 @@ describe('dependency externalizer support', () => {
     it('ephemeral storage limit is greater than the bundle size threshold', () => {
       expect(LAMBDA_EPHEMERAL_STORAGE_BYTES).toBeGreaterThan(
         LAMBDA_SIZE_THRESHOLD_BYTES
+      );
+    });
+
+    it('HIVE_LAMBDA_SIZE_BYTES is 1 GB', () => {
+      expect(HIVE_LAMBDA_SIZE_BYTES).toBe(1 * 1024 * 1024 * 1024);
+    });
+
+    it('Hive limit is greater than the ephemeral storage limit', () => {
+      expect(HIVE_LAMBDA_SIZE_BYTES).toBeGreaterThan(
+        LAMBDA_EPHEMERAL_STORAGE_BYTES
       );
     });
   });
@@ -822,5 +904,209 @@ version = "8.1.7"
       const result = lambdaKnapsack(packages, 95);
       expect(result).toHaveLength(9);
     });
+  });
+
+  describe('analyze', () => {
+    const originalEnv = process.env.VERCEL_PYTHON_ON_HIVE;
+
+    afterEach(() => {
+      if (originalEnv === undefined) {
+        delete process.env.VERCEL_PYTHON_ON_HIVE;
+      } else {
+        process.env.VERCEL_PYTHON_ON_HIVE = originalEnv;
+      }
+    });
+
+    it('throws user-friendly error for custom install command with oversized bundle', async () => {
+      delete process.env.VERCEL_PYTHON_ON_HIVE;
+
+      const tempDir = path.join(tmpdir(), `dep-ext-analyze-${Date.now()}`);
+      fs.mkdirSync(tempDir, { recursive: true });
+
+      // Create a sparse file that reports > 245 MB without using real disk space
+      const bigFilePath = path.join(tempDir, 'big-file.dat');
+      const fd = fs.openSync(bigFilePath, 'w');
+      fs.ftruncateSync(fd, LAMBDA_SIZE_THRESHOLD_BYTES + 1024 * 1024);
+      fs.closeSync(fd);
+
+      const ext = new PythonDependencyExternalizer({
+        venvPath: tempDir,
+        vendorDir: '_vendor',
+        workPath: tempDir,
+        uvLockPath: path.join(tempDir, 'uv.lock'),
+        uvProjectDir: tempDir,
+        projectName: 'test-project',
+        pythonMajor: 3,
+        pythonMinor: 12,
+        pythonPath: '/usr/bin/python3',
+        hasCustomCommand: true,
+      });
+
+      const files = {
+        'big-file.dat': new FileFsRef({ fsPath: bigFilePath }),
+      };
+
+      try {
+        await expect(ext.analyze(files)).rejects.toThrow(
+          'exceeds the size limit'
+        );
+
+        // Re-create the externalizer since the previous one may have mutated state
+        const ext2 = new PythonDependencyExternalizer({
+          venvPath: tempDir,
+          vendorDir: '_vendor',
+          workPath: tempDir,
+          uvLockPath: path.join(tempDir, 'uv.lock'),
+          uvProjectDir: tempDir,
+          projectName: 'test-project',
+          pythonMajor: 3,
+          pythonMinor: 12,
+          pythonPath: '/usr/bin/python3',
+          hasCustomCommand: true,
+        });
+
+        try {
+          await ext2.analyze(files);
+          expect.fail('Expected analyze() to throw');
+        } catch (error: unknown) {
+          const message = (error as Error).message;
+          expect(message).toContain('custom install command');
+          expect(message).not.toContain('Lambda size limit');
+          expect(message).not.toContain('runtime dependency installation');
+        }
+      } finally {
+        fs.removeSync(tempDir);
+      }
+    });
+
+    it('does not throw for custom install command when bundle is under threshold', async () => {
+      delete process.env.VERCEL_PYTHON_ON_HIVE;
+
+      const tempDir = path.join(tmpdir(), `dep-ext-analyze-ok-${Date.now()}`);
+      fs.mkdirSync(tempDir, { recursive: true });
+
+      const smallFilePath = path.join(tempDir, 'small-file.dat');
+      fs.writeFileSync(smallFilePath, 'a'.repeat(100));
+
+      const ext = new PythonDependencyExternalizer({
+        venvPath: tempDir,
+        vendorDir: '_vendor',
+        workPath: tempDir,
+        uvLockPath: path.join(tempDir, 'uv.lock'),
+        uvProjectDir: tempDir,
+        projectName: 'test-project',
+        pythonMajor: 3,
+        pythonMinor: 12,
+        pythonPath: '/usr/bin/python3',
+        hasCustomCommand: true,
+      });
+
+      const files = {
+        'small-file.dat': new FileFsRef({ fsPath: smallFilePath }),
+      };
+
+      try {
+        const result = await ext.analyze(files);
+        expect(result.runtimeInstallEnabled).toBe(false);
+      } finally {
+        fs.removeSync(tempDir);
+      }
+    });
+  });
+});
+
+describe('detectTargetPlatform', () => {
+  const originalEnv = process.env.VERCEL_BUILD_ARCH;
+
+  afterEach(() => {
+    if (originalEnv === undefined) {
+      delete process.env.VERCEL_BUILD_ARCH;
+    } else {
+      process.env.VERCEL_BUILD_ARCH = originalEnv;
+    }
+  });
+
+  it('returns linux sysPlatform regardless of host', () => {
+    delete process.env.VERCEL_BUILD_ARCH;
+    const platform = detectTargetPlatform();
+    expect(platform.sysPlatform).toBe('linux');
+    expect(platform.os).toBe('linux');
+  });
+
+  it('returns manylinux osName', () => {
+    delete process.env.VERCEL_BUILD_ARCH;
+    const platform = detectTargetPlatform();
+    expect(platform.osName).toBe('manylinux');
+  });
+
+  it('returns gnu libc', () => {
+    delete process.env.VERCEL_BUILD_ARCH;
+    const platform = detectTargetPlatform();
+    expect(platform.libc).toBe('gnu');
+  });
+
+  it('defaults to x86_64 archName', () => {
+    delete process.env.VERCEL_BUILD_ARCH;
+    const platform = detectTargetPlatform();
+    expect(platform.archName).toBe('x86_64');
+  });
+
+  it('returns valid glibc version numbers', () => {
+    delete process.env.VERCEL_BUILD_ARCH;
+    const platform = detectTargetPlatform();
+    expect(platform.osMajor).toBeGreaterThanOrEqual(2);
+    expect(platform.osMinor).toBeGreaterThanOrEqual(0);
+  });
+
+  it('returns aarch64 when VERCEL_BUILD_ARCH is aarch64', () => {
+    process.env.VERCEL_BUILD_ARCH = 'aarch64';
+    const platform = detectTargetPlatform();
+    expect(platform.archName).toBe('aarch64');
+    expect(platform.sysPlatform).toBe('linux');
+  });
+
+  it('returns x86_64 when VERCEL_BUILD_ARCH is x86_64', () => {
+    process.env.VERCEL_BUILD_ARCH = 'x86_64';
+    const platform = detectTargetPlatform();
+    expect(platform.archName).toBe('x86_64');
+  });
+
+  it('is case-insensitive', () => {
+    process.env.VERCEL_BUILD_ARCH = 'AARCH64';
+    const platform = detectTargetPlatform();
+    expect(platform.archName).toBe('aarch64');
+  });
+
+  it('throws on unrecognized VERCEL_BUILD_ARCH', () => {
+    process.env.VERCEL_BUILD_ARCH = 'mips';
+    expect(() => detectTargetPlatform()).toThrow(
+      'Unrecognized VERCEL_BUILD_ARCH'
+    );
+  });
+});
+
+describe('UV_BINARY_CHECKSUM', () => {
+  it('is a 64-character hex string', () => {
+    expect(UV_BINARY_CHECKSUM).toMatch(/^[0-9a-f]{64}$/);
+  });
+});
+
+describe('downloadUvBinaryForTarget', () => {
+  it('returns cached binary without downloading', async () => {
+    const cacheDir = path.join(tmpdir(), `uv-dl-cache-${Date.now()}`);
+    const target = 'x86_64-unknown-linux-gnu';
+    const destDir = path.join(cacheDir, `uv-${UV_VERSION}-${target}`);
+    const destBinary = path.join(destDir, 'uv');
+
+    fs.mkdirSync(destDir, { recursive: true });
+    fs.writeFileSync(destBinary, '#!/bin/sh\necho mock');
+    fs.chmodSync(destBinary, 0o755);
+
+    try {
+      const result = await downloadUvBinaryForTarget(cacheDir);
+      expect(result).toBe(destBinary);
+    } finally {
+      fs.removeSync(cacheDir);
+    }
   });
 });

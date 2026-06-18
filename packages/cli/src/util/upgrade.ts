@@ -1,33 +1,66 @@
-import { spawn } from 'child_process';
-import getUpdateCommand from './get-update-command';
+import { spawn, execFile } from 'child_process';
+import { promisify } from 'util';
+import { tmpdir } from 'os';
+import { getUpdateCommandInfo } from './get-update-command';
+import pkg from './pkg';
 import output from '../output-manager';
+
+const execFileAsync = promisify(execFile);
+
+async function getInstalledVersion(): Promise<string | undefined> {
+  for (const bin of ['vercel', 'vc']) {
+    try {
+      const { stdout } = await execFileAsync(bin, ['--version'], {
+        encoding: 'utf8',
+        windowsHide: true,
+      });
+      const version = stdout.trim();
+      if (version) {
+        return version;
+      }
+    } catch {}
+  }
+  return undefined;
+}
 
 /**
  * Executes the upgrade command to update the Vercel CLI.
  * Returns the exit code from the upgrade process.
+ *
+ * @param targetVersion The version being upgraded to, when the caller already
+ * knows it (the update notifier). When omitted (e.g. `vercel upgrade`), the
+ * resulting version is detected after the install so we can report when no
+ * upgrade was actually available.
  */
-export async function executeUpgrade(): Promise<number> {
-  const updateCommand = await getUpdateCommand();
+export async function executeUpgrade(targetVersion?: string): Promise<number> {
+  const { command: updateCommand, global } = await getUpdateCommandInfo();
   const [command, ...args] = updateCommand.split(' ');
 
+  const cwd = global ? tmpdir() : process.cwd();
+
+  // The version currently running, captured before the install overwrites it.
+  // This is what `vc --version` reports, for both Node.js and native binary.
+  const versionBefore = pkg.version;
+
   output.log(`Upgrading Vercel CLI...`);
-  output.debug(`Executing: ${updateCommand}`);
+  output.debug(`Executing: ${updateCommand} (cwd: ${cwd})`);
 
   return new Promise<number>(resolve => {
-    const stdout: Buffer[] = [];
-    const stderr: Buffer[] = [];
+    const stdout: Uint8Array[] = [];
+    const stderr: Uint8Array[] = [];
 
     const upgradeProcess = spawn(command, args, {
+      cwd,
       stdio: ['inherit', 'pipe', 'pipe'],
       shell: false,
     });
 
     upgradeProcess.stdout?.on('data', (data: Buffer) => {
-      stdout.push(data);
+      stdout.push(Uint8Array.from(data));
     });
 
     upgradeProcess.stderr?.on('data', (data: Buffer) => {
-      stderr.push(data);
+      stderr.push(Uint8Array.from(data));
     });
 
     upgradeProcess.on('error', (err: Error) => {
@@ -37,9 +70,7 @@ export async function executeUpgrade(): Promise<number> {
     });
 
     upgradeProcess.on('close', (code: number | null) => {
-      if (code === 0) {
-        output.success('Vercel CLI has been upgraded successfully!');
-      } else {
+      if (code !== 0) {
         // Show output only on error
         const stdoutStr = Buffer.concat(stdout).toString();
         const stderrStr = Buffer.concat(stderr).toString();
@@ -53,8 +84,32 @@ export async function executeUpgrade(): Promise<number> {
         output.log(
           `You can try running the command manually: ${updateCommand}`
         );
+        resolve(code ?? 1);
+        return;
       }
-      resolve(code ?? 1);
+
+      if (targetVersion) {
+        output.success(
+          `Vercel CLI has been upgraded to v${targetVersion} successfully!`
+        );
+        resolve(0);
+        return;
+      }
+
+      getInstalledVersion().then(versionAfter => {
+        if (versionAfter && versionAfter === versionBefore) {
+          output.log(
+            `No upgrade available. Vercel CLI is already on the latest version (v${versionBefore}).`
+          );
+        } else if (versionAfter) {
+          output.success(
+            `Vercel CLI has been upgraded to v${versionAfter} successfully!`
+          );
+        } else {
+          output.success('Vercel CLI has been upgraded successfully!');
+        }
+        resolve(0);
+      });
     });
   });
 }
