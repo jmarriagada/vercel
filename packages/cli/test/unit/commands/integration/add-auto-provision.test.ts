@@ -26,6 +26,20 @@ vi.mock('../../../../src/commands/env/pull', () => {
   };
 });
 
+// Skill resolution hits skills.sh; stub it so unit tests stay offline. The
+// resolver/normalizer are covered in
+// test/unit/util/integration/skill-suggestion.test.ts.
+vi.mock('../../../../src/util/integration/skill-suggestion', async orig => {
+  const actual =
+    await orig<
+      typeof import('../../../../src/util/integration/skill-suggestion')
+    >();
+  return {
+    ...actual,
+    resolveProductSkill: vi.fn().mockResolvedValue(null),
+  };
+});
+
 vi.mock(
   '../../../../src/util/integration-resource/connect-resource-to-project',
   () => {
