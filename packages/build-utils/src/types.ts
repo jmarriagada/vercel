@@ -49,6 +49,7 @@ export interface Config {
   buildCommand?: string;
   devCommand?: string;
   framework?: string | null;
+  runtime?: string | null;
   nodeVersion?: string;
   middleware?: boolean;
   [key: string]: unknown;
@@ -457,6 +458,7 @@ export interface BuilderFunctions {
 
 export interface ProjectSettings {
   framework?: string | null;
+  runtime?: string | null;
   devCommand?: string | null;
   installCommand?: string | null;
   buildCommand?: string | null;
