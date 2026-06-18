@@ -1186,8 +1186,8 @@ exports[`help command > deploy help output snapshots > deploy help column width 
   command for the Vercel CLI, and can   
   be omitted (\`vc deploy my-app\` equals 
   \`vc my-app\`). Use \`--dry\` to inspect  
-  the detected framework and source     
-  files without deploying.              
+  the detected framework preset and     
+  source files without deploying.       
 
   Options:
 
@@ -1214,6 +1214,7 @@ exports[`help command > deploy help output snapshots > deploy help column width 
                                 the     
                                 detected
                                 framewo…
+                                preset  
                                 and     
                                 source  
                                 files   
@@ -1433,8 +1434,8 @@ exports[`help command > deploy help output snapshots > deploy help column width 
 
   Deploy your project to Vercel. The \`deploy\` command is the default command    
   for the Vercel CLI, and can be omitted (\`vc deploy my-app\` equals \`vc         
-  my-app\`). Use \`--dry\` to inspect the detected framework and source files      
-  without deploying.                                                            
+  my-app\`). Use \`--dry\` to inspect the detected framework preset and source     
+  files without deploying.                                                      
 
   Options:
 
@@ -1442,9 +1443,10 @@ exports[`help command > deploy help output snapshots > deploy help column width 
                                 before uploading it                             
   -b,  --build-env <KEY=VALUE>  Specify environment variables during build-time 
                                 (e.g. \`-b KEY1=value1 -b KEY2=value2\`)          
-       --dry                    Inspect the detected framework and source files 
-                                without uploading or creating a deployment.     
-                                Non-TTY output includes every file as JSON      
+       --dry                    Inspect the detected framework preset and source
+                                files without uploading or creating a           
+                                deployment. Non-TTY output includes every file  
+                                as JSON                                         
   -e,  --env <KEY=VALUE>        Specify environment variables during run-time   
                                 (e.g. \`-e KEY1=value1 -e KEY2=value2\`)          
   -f,  --force                  Force a new deployment even if nothing has      
@@ -1527,14 +1529,14 @@ exports[`help command > deploy help output snapshots > deploy help column width 
   ▲ vercel deploy [project-path] [options]
 
   Deploy your project to Vercel. The \`deploy\` command is the default command for the Vercel CLI, and can be omitted     
-  (\`vc deploy my-app\` equals \`vc my-app\`). Use \`--dry\` to inspect the detected framework and source files without       
-  deploying.                                                                                                            
+  (\`vc deploy my-app\` equals \`vc my-app\`). Use \`--dry\` to inspect the detected framework preset and source files        
+  without deploying.                                                                                                    
 
   Options:
 
        --archive <FORMAT>       Compress the deployment code into an archive before uploading it                        
   -b,  --build-env <KEY=VALUE>  Specify environment variables during build-time (e.g. \`-b KEY1=value1 -b KEY2=value2\`)  
-       --dry                    Inspect the detected framework and source files without uploading or creating a         
+       --dry                    Inspect the detected framework preset and source files without uploading or creating a  
                                 deployment. Non-TTY output includes every file as JSON                                  
   -e,  --env <KEY=VALUE>        Specify environment variables during run-time (e.g. \`-e KEY1=value1 -e KEY2=value2\`)    
   -f,  --force                  Force a new deployment even if nothing has changed                                      
