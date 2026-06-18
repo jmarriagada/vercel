@@ -987,13 +987,19 @@ from vercel_runtime.vc_init import vc_handler
     .trace(async bundleSpan => {
       // analyze() always computes source-only sizes so threshold
       // decisions are not inflated by bytecode overhead.
-      const depAnalysis = await depExternalizer.analyze(files);
-
-      bundleSpan.setAttributes({
-        'python.bundle.totalSizeBytes': String(depAnalysis.totalBundleSize),
-        'python.bundle.runtimeInstallEnabled': String(
-          depAnalysis.runtimeInstallEnabled
-        ),
+      //
+      // Record the size via the onSized callback (invoked before any
+      // size-limit enforcement that may throw) so the span is tagged even
+      // for oversized bundles that subsequently fail the build.
+      const depAnalysis = await depExternalizer.analyze(files, {
+        onSized: ({ totalSizeBytes, runtimeInstallEnabled }) => {
+          bundleSpan.setAttributes({
+            'python.bundle.totalSizeBytes': String(totalSizeBytes),
+            'python.bundle.runtimeInstallEnabled': String(
+              runtimeInstallEnabled
+            ),
+          });
+        },
       });
 
       if (depAnalysis.runtimeInstallEnabled) {
