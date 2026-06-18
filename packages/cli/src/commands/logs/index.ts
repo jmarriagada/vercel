@@ -4,6 +4,7 @@ import chalk from 'chalk';
 import format from 'date-fns/format';
 import type Client from '../../util/client';
 import { createGitMeta } from '../../util/create-git-meta';
+import { getLatestDeploymentByBranch } from '../../util/deploy/get-latest-deployment-by-branch';
 import { printError } from '../../util/error';
 import { parseArguments } from '../../util/get-args';
 import { getFlagsSpecification } from '../../util/get-flags-specification';
@@ -29,11 +30,6 @@ import { help } from '../help';
 import { logsCommand } from './command';
 import output from '../../output-manager';
 
-interface BranchDeployment {
-  id: string;
-  url: string;
-}
-
 interface LogsTarget {
   projectId: string;
   projectSlug: string;
@@ -49,45 +45,6 @@ interface ResolveLogsTargetOptions {
 }
 
 type ResolveLogsTargetResult = LogsTarget | { exitCode: number };
-
-async function getLatestDeploymentByBranch(
-  client: Client,
-  projectId: string,
-  branch: string
-): Promise<BranchDeployment | null> {
-  interface DeploymentResponse {
-    deployments: Array<{ uid: string; url: string }>;
-  }
-
-  // Different git providers use different metadata keys for the branch
-  const branchMetaKeys = [
-    'githubCommitRef',
-    'gitlabCommitRef',
-    'bitbucketCommitRef',
-  ];
-
-  for (const metaKey of branchMetaKeys) {
-    const query = new URLSearchParams();
-    query.set('projectId', projectId);
-    query.set('limit', '1');
-    query.set('state', 'READY');
-    query.set(`meta-${metaKey}`, branch);
-
-    const { deployments } = await client.fetch<DeploymentResponse>(
-      `/v6/deployments?${query}`
-    );
-
-    if (deployments.length > 0) {
-      return {
-        id: deployments[0].uid,
-        url: deployments[0].url,
-      };
-    }
-  }
-
-  return null;
-}
-
 const TIME_ONLY_FORMAT = 'HH:mm:ss.SS';
 const DATE_TIME_FORMAT = 'MMM DD HH:mm:ss.SS';
 
