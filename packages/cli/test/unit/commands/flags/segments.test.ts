@@ -7,6 +7,13 @@ import { useTeams } from '../../../mocks/team';
 import { useUser } from '../../../mocks/user';
 import { defaultSegments, useFlags } from '../../../mocks/flags';
 import type { Segment } from '../../../../src/util/flags/types';
+import { formatFlagConditionComparatorList } from '../../../../src/util/flags/comparators';
+
+function expectHelpOutputToListRuleOperators(output: string) {
+  expect(output.replace(/\s+/g, ' ')).toContain(
+    `Valid operators: ${formatFlagConditionComparatorList()}`
+  );
+}
 
 describe('flags segments', () => {
   let segmentsList: Segment[];
@@ -52,12 +59,7 @@ describe('flags segments', () => {
       const exitCode = await flags(client);
 
       expect(exitCode).toEqual(2);
-      expect(client.stderr.getFullOutput()).toContain(
-        'Valid operators: eq, !eq, oneOf, !oneOf'
-      );
-      expect(client.stderr.getFullOutput()).toContain(
-        'containsAllOf, containsAnyOf, containsNoneOf'
-      );
+      expectHelpOutputToListRuleOperators(client.stderr.getFullOutput());
     });
 
     it('shows rule operators in update help', async () => {
@@ -66,12 +68,7 @@ describe('flags segments', () => {
       const exitCode = await flags(client);
 
       expect(exitCode).toEqual(2);
-      expect(client.stderr.getFullOutput()).toContain(
-        'Valid operators: eq, !eq, oneOf, !oneOf'
-      );
-      expect(client.stderr.getFullOutput()).toContain(
-        'startsWith, endsWith, contains, !contains'
-      );
+      expectHelpOutputToListRuleOperators(client.stderr.getFullOutput());
     });
   });
 
