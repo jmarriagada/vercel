@@ -1,5 +1,8 @@
 import { yesOption } from '../../util/arg-common';
+import { formatFlagConditionComparatorList } from '../../util/flags/comparators';
 import { packageName } from '../../util/pkg-name';
+
+const segmentRuleOperatorDescription = `Valid operators: ${formatFlagConditionComparatorList()}`;
 
 export const listSubcommand = {
   name: 'list',
@@ -685,8 +688,7 @@ export const segmentsCreateSubcommand = {
       shorthand: 'r',
       type: [String],
       deprecated: false,
-      description:
-        'Rule as ENTITY.ATTRIBUTE:OPERATOR:VALUE or full rule JSON; repeat to OR rules',
+      description: `Rule as ENTITY.ATTRIBUTE:OPERATOR:VALUE or full rule JSON; repeat to OR rules. ${segmentRuleOperatorDescription}`,
       argument: 'RULE',
     },
     {
@@ -780,8 +782,7 @@ export const segmentsUpdateSubcommand = {
       shorthand: 'r',
       type: [String],
       deprecated: false,
-      description:
-        'Add a rule as ENTITY.ATTRIBUTE:OPERATOR:VALUE or full rule JSON; repeatable',
+      description: `Add a rule as ENTITY.ATTRIBUTE:OPERATOR:VALUE or full rule JSON; repeatable. ${segmentRuleOperatorDescription}`,
       argument: 'RULE',
     },
     {

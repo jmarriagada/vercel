@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import deepEqual from 'fast-deep-equal';
 import {
+  formatFlagConditionComparatorList,
   FLAG_CONDITION_LIST_COMPARATORS,
   FLAG_CONDITION_RHS_OPTIONAL_COMPARATORS,
 } from './comparators';
@@ -377,7 +378,9 @@ function parseComparator(input: string): SegmentComparator {
   const comparator =
     OPERATOR_ALIASES[normalized] ?? OPERATOR_ALIASES[lowercase];
   if (!comparator) {
-    throw new Error(`Invalid segment rule operator "${input}"`);
+    throw new Error(
+      `Invalid segment rule operator "${input}". Valid operators: ${formatFlagConditionComparatorList()}.`
+    );
   }
   return comparator;
 }

@@ -45,6 +45,34 @@ describe('flags segments', () => {
         },
       ]);
     });
+
+    it('shows rule operators in create help', async () => {
+      client.setArgv('flags', 'segments', 'create', '--help');
+
+      const exitCode = await flags(client);
+
+      expect(exitCode).toEqual(2);
+      expect(client.stderr.getFullOutput()).toContain(
+        'Valid operators: eq, !eq, oneOf, !oneOf'
+      );
+      expect(client.stderr.getFullOutput()).toContain(
+        'containsAllOf, containsAnyOf, containsNoneOf'
+      );
+    });
+
+    it('shows rule operators in update help', async () => {
+      client.setArgv('flags', 'segments', 'update', '--help');
+
+      const exitCode = await flags(client);
+
+      expect(exitCode).toEqual(2);
+      expect(client.stderr.getFullOutput()).toContain(
+        'Valid operators: eq, !eq, oneOf, !oneOf'
+      );
+      expect(client.stderr.getFullOutput()).toContain(
+        'startsWith, endsWith, contains, !contains'
+      );
+    });
   });
 
   it('errors when invoked without subcommand', async () => {
@@ -181,6 +209,33 @@ describe('flags segments', () => {
         cmp: '!contains',
         rhs: 'gmail.com',
       });
+    });
+
+    it('lists valid operators when a rule operator is invalid', async () => {
+      client.setArgv(
+        'flags',
+        'segments',
+        'create',
+        'invalid-rule',
+        '--label',
+        'Invalid rule',
+        '--rule',
+        'user.plan:near:pro'
+      );
+
+      const exitCode = await flags(client);
+
+      expect(exitCode).toEqual(1);
+      expect(client.stderr.getFullOutput()).toContain(
+        'Invalid segment rule operator "near"'
+      );
+      expect(client.stderr.getFullOutput()).toContain(
+        'Valid operators: eq, !eq, oneOf, !oneOf'
+      );
+      expect(segmentsList.map(segment => segment.slug)).toEqual([
+        'beta-users',
+        'staff',
+      ]);
     });
   });
 

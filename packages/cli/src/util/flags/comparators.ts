@@ -34,6 +34,10 @@ export const FLAG_CONDITION_RHS_OPTIONAL_COMPARATORS = [
   '!ex',
 ] as const satisfies readonly FlagConditionComparator[];
 
+export function formatFlagConditionComparatorList(): string {
+  return FLAG_CONDITION_COMPARATORS.join(', ');
+}
+
 const FLAG_CONDITION_COMPARATOR_LABELS = {
   eq: 'is',
   '!eq': 'is not',
