@@ -101,6 +101,19 @@ interface DependencyAnalysis {
   totalBundleSize: number;
 }
 
+interface AnalyzeOptions {
+  /**
+   * Invoked once the source-only bundle size is known, BEFORE any
+   * size-limit enforcement that may throw.  This guarantees the size is
+   * always observable (e.g. for telemetry) even for oversized bundles that
+   * subsequently fail the build.
+   */
+  onSized?: (info: {
+    totalSizeBytes: number;
+    runtimeInstallEnabled: boolean;
+  }) => void;
+}
+
 export class PythonDependencyExternalizer {
   private venvPath: string;
   private vendorDir: string;
@@ -158,7 +171,10 @@ export class PythonDependencyExternalizer {
    * and determine whether runtime installation is needed.
    * Must be called before generateBundle().
    */
-  async analyze(files: Files): Promise<DependencyAnalysis> {
+  async analyze(
+    files: Files,
+    options: AnalyzeOptions = {}
+  ): Promise<DependencyAnalysis> {
     // Resolve site-packages dirs and scan distributions once.  Subsequent
     // calls to mirrorPackagesIntoVendor() and calculatePerPackageSizes()
     // read from these fields directly.
@@ -192,6 +208,14 @@ export class PythonDependencyExternalizer {
     const pythonOnHiveEnabled =
       process.env.VERCEL_PYTHON_ON_HIVE === '1' ||
       process.env.VERCEL_PYTHON_ON_HIVE === 'true';
+
+    // Surface the size BEFORE the size-limit checks below, which may throw.
+    // Otherwise oversized bundles (e.g. Hive > 1 GB) would never report their
+    // size, biasing any size telemetry toward builds that fit the limit.
+    options.onSized?.({
+      totalSizeBytes: this.totalBundleSize,
+      runtimeInstallEnabled,
+    });
 
     if (
       this.totalBundleSize > LAMBDA_SIZE_THRESHOLD_BYTES &&

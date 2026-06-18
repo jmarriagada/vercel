@@ -1012,6 +1012,93 @@ version = "8.1.7"
         fs.removeSync(tempDir);
       }
     });
+
+    it('invokes onSized with the size even when the bundle exceeds the Hive limit and throws', async () => {
+      process.env.VERCEL_PYTHON_ON_HIVE = '1';
+
+      const tempDir = path.join(tmpdir(), `dep-ext-onsized-hive-${Date.now()}`);
+      fs.mkdirSync(tempDir, { recursive: true });
+
+      // Sparse file just over the 1 GB Hive limit (no real disk usage).
+      const bigFilePath = path.join(tempDir, 'big-file.dat');
+      const fd = fs.openSync(bigFilePath, 'w');
+      const oversized = HIVE_LAMBDA_SIZE_BYTES + 1024 * 1024;
+      fs.ftruncateSync(fd, oversized);
+      fs.closeSync(fd);
+
+      const ext = new PythonDependencyExternalizer({
+        venvPath: tempDir,
+        vendorDir: '_vendor',
+        workPath: tempDir,
+        uvLockPath: path.join(tempDir, 'uv.lock'),
+        uvProjectDir: tempDir,
+        projectName: 'test-project',
+        pythonMajor: 3,
+        pythonMinor: 12,
+        pythonPath: '/usr/bin/python3',
+        hasCustomCommand: false,
+      });
+
+      const files = {
+        'big-file.dat': new FileFsRef({ fsPath: bigFilePath }),
+      };
+
+      const onSized = vi.fn();
+
+      try {
+        await expect(ext.analyze(files, { onSized })).rejects.toThrow(
+          'exceeds the extended function size limit'
+        );
+        // The callback must have fired before the throw, carrying the size.
+        expect(onSized).toHaveBeenCalledTimes(1);
+        expect(onSized).toHaveBeenCalledWith({
+          totalSizeBytes: oversized,
+          runtimeInstallEnabled: false,
+        });
+      } finally {
+        fs.removeSync(tempDir);
+      }
+    });
+
+    it('invokes onSized on the under-threshold success path', async () => {
+      delete process.env.VERCEL_PYTHON_ON_HIVE;
+
+      const tempDir = path.join(tmpdir(), `dep-ext-onsized-ok-${Date.now()}`);
+      fs.mkdirSync(tempDir, { recursive: true });
+
+      const smallFilePath = path.join(tempDir, 'small-file.dat');
+      fs.writeFileSync(smallFilePath, 'a'.repeat(100));
+
+      const ext = new PythonDependencyExternalizer({
+        venvPath: tempDir,
+        vendorDir: '_vendor',
+        workPath: tempDir,
+        uvLockPath: path.join(tempDir, 'uv.lock'),
+        uvProjectDir: tempDir,
+        projectName: 'test-project',
+        pythonMajor: 3,
+        pythonMinor: 12,
+        pythonPath: '/usr/bin/python3',
+        hasCustomCommand: false,
+      });
+
+      const files = {
+        'small-file.dat': new FileFsRef({ fsPath: smallFilePath }),
+      };
+
+      const onSized = vi.fn();
+
+      try {
+        await ext.analyze(files, { onSized });
+        expect(onSized).toHaveBeenCalledTimes(1);
+        expect(onSized).toHaveBeenCalledWith({
+          totalSizeBytes: 100,
+          runtimeInstallEnabled: false,
+        });
+      } finally {
+        fs.removeSync(tempDir);
+      }
+    });
   });
 });
 
