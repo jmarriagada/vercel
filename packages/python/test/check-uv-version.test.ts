@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'fs-extra';
 import path from 'path';
 import { tmpdir } from 'os';
-import { checkUvBinaryVersion, MIN_UV_VERSION } from '../src/uv';
+import { checkUvBinaryVersion, MIN_UV_VERSION, UV_VERSION } from '../src/uv';
 
 const isWin = process.platform === 'win32';
 
@@ -58,9 +58,10 @@ describe('checkUvBinaryVersion', () => {
     expect(() => checkUvBinaryVersion(uvBin)).not.toThrow();
   });
 
-  it('passes when uv is newer than the minimum', () => {
-    const uvBin = makeFakeUv(dir, 'uv 0.11.19 (abcdef0 2026-04-27)');
-    expect(() => checkUvBinaryVersion(uvBin)).not.toThrow();
+  it('returns the version output for a supported uv (UV_VERSION)', () => {
+    const out = `uv ${UV_VERSION} (abcdef0 2026-04-27)`;
+    const uvBin = makeFakeUv(dir, out);
+    expect(checkUvBinaryVersion(uvBin)).toBe(out);
   });
 
   it('compares numerically, not lexically (0.10.0 >= 0.9.25)', () => {
@@ -68,14 +69,16 @@ describe('checkUvBinaryVersion', () => {
     expect(() => checkUvBinaryVersion(uvBin)).not.toThrow();
   });
 
-  it('does not throw when the version cannot be parsed (fails open)', () => {
+  it('throws when the uv version cannot be determined', () => {
     const uvBin = makeFakeUv(dir, 'uv built from source');
-    expect(() => checkUvBinaryVersion(uvBin)).not.toThrow();
+    expect(() => checkUvBinaryVersion(uvBin)).toThrow(
+      'Could not determine the uv version'
+    );
   });
 
-  it('does not throw when the binary cannot be run (fails open)', () => {
+  it('throws when uv --version cannot be run', () => {
     expect(() =>
       checkUvBinaryVersion(path.join(dir, 'does-not-exist-uv'))
-    ).not.toThrow();
+    ).toThrow('could not run "uv --version"');
   });
 });
