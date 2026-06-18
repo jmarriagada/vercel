@@ -106,6 +106,22 @@ export const buildahEngine: ContainerEngine = {
   },
 
   async build(params: BuildPushParams): Promise<void> {
+    // Report whether the layer store started warm (restored by prepareCache) or
+    // cold, so cache effectiveness is visible up front.
+    try {
+      const { stdout } = await runBuildah(['images', '--quiet'], {
+        quiet: true,
+      });
+      const imageCount = stdout.trim() ? stdout.trim().split('\n').length : 0;
+      info(
+        imageCount > 0
+          ? `layer store: warm (${imageCount} image(s) present before build)`
+          : 'layer store: cold (no cached images; first build or cache miss)'
+      );
+    } catch (err) {
+      debug(`could not read store warmth: ${(err as Error).message}`);
+    }
+
     const { stdout, stderr } = await runBuildah([
       'build',
       '--platform',
