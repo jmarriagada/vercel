@@ -5,7 +5,13 @@ import type { Lambda, LambdaArchitecture } from './lambda';
 import type { Prerender } from './prerender';
 import type { EdgeFunction } from './edge-function';
 import type { Span } from './trace';
-import type { HasField } from '@vercel/routing-utils';
+import type {
+  HasField,
+  Route,
+  Rewrite,
+  Redirect,
+  Header,
+} from '@vercel/routing-utils';
 
 export interface Env {
   [name: string]: string | undefined;
@@ -484,6 +490,7 @@ export interface BuilderV2 {
   diagnostics?: Diagnostics;
   prepareCache?: PrepareCache;
   shouldServe?: ShouldServe;
+  startDevServer?: StartDevServer;
 }
 
 export interface BuilderV3 {
@@ -603,7 +610,8 @@ export type EnvVar = ServiceRefEnvVar;
 
 export type EnvVars = Record<string, EnvVar>;
 
-export interface Service {
+export interface ExperimentalService {
+  schema: 'experimentalServices';
   name: string;
   type: ServiceType;
   trigger?: JobTrigger;
@@ -628,6 +636,49 @@ export interface Service {
   topics?: ServiceTopics;
   /* environment variables declared by the user to be injected into this service. */
   env?: EnvVars;
+}
+
+export interface ExperimentalServiceV2 {
+  schema: 'experimentalServicesV2';
+  name: string;
+  /** Path to the service root, relative to the project root. */
+  root: string;
+  framework?: string;
+  runtime?: string;
+  /** Resolved entrypoint, relative to the service root. */
+  entrypoint?: string;
+  /** Builder selected by the resolver. */
+  builder: Builder;
+  installCommand?: string;
+  buildCommand?: string;
+  devCommand?: string;
+  ignoreCommand?: string;
+  outputDirectory?: string;
+  /** Caller-side bindings to other services. */
+  bindings?: ExperimentalServiceV2Binding[];
+  /** Function configuration scoped to this service. */
+  functions?: BuilderFunctions;
+  /* Per-service route table. Applied only after top-level routing. */
+  headers?: Header[];
+  redirects?: Redirect[];
+  rewrites?: Rewrite[];
+  routes?: Route[];
+  cleanUrls?: boolean;
+  trailingSlash?: boolean;
+}
+
+export type Service = ExperimentalService | ExperimentalServiceV2;
+
+export function isExperimentalService(
+  service: Service
+): service is ExperimentalService {
+  return service.schema === 'experimentalServices';
+}
+
+export function isExperimentalServiceV2(
+  service: Service
+): service is ExperimentalServiceV2 {
+  return service.schema === 'experimentalServicesV2';
 }
 
 export function getServiceQueueTopicConfigs(config: {
@@ -667,6 +718,23 @@ export function isScheduleTriggeredService(service: {
   return (
     service.type === 'cron' ||
     (service.type === 'job' && service.trigger === 'schedule')
+  );
+}
+
+export function isWorkflowTriggeredService(service: {
+  type?: ServiceType;
+  trigger?: JobTrigger;
+}): boolean {
+  return service.type === 'job' && service.trigger === 'workflow';
+}
+
+/** Returns true for any service that consumes queue messages (worker, queue-triggered job, workflow-triggered job). */
+export function isQueueBackedService(service: {
+  type?: ServiceType;
+  trigger?: JobTrigger;
+}): boolean {
+  return (
+    isQueueTriggeredService(service) || isWorkflowTriggeredService(service)
   );
 }
 
@@ -715,6 +783,7 @@ export interface BuildResultV2Typical {
     value: string;
   }>;
   framework?: {
+    slug: string;
     version: string;
   };
   flags?: { definitions: FlagDefinitions };
@@ -948,56 +1017,6 @@ export interface ExperimentalServiceConfig {
 export type ExperimentalServices = Record<string, ExperimentalServiceConfig>;
 
 /**
- * Public configuration for a service in vercel.json.
- */
-export interface ServiceConfig {
-  type?: ServiceType;
-  trigger?: JobTrigger;
-  /**
-   * Path to the service's root directory relative to the project root.
-   * Should contain a manifest file (package.json, pyproject.toml, etc.).
-   * Defaults to ".".
-   */
-  root?: string;
-  /**
-   * Service entrypoint, relative to the service root directory.
-   * Can be either a file path (runtime entrypoint) or a directory path
-   * (service workspace for framework-based services).
-   */
-  entrypoint?: string;
-
-  /** Framework to use */
-  framework?: string;
-  /** Specific lambda runtime to use, e.g. nodejs24.x, python3.14 */
-  runtime?: string;
-
-  buildCommand?: string;
-  preDeployCommand?: string;
-
-  /** Lambda config */
-  memory?: number;
-  maxDuration?: MaxDuration;
-  includeFiles?: string | string[];
-  excludeFiles?: string | string[];
-
-  /* Web service config */
-  /** Preferred routing config for route paths. */
-  mount?: string | ServiceMount;
-
-  /* Scheduled job config */
-  /** Cron schedule expression(s) (e.g., "0 0 * * *") */
-  schedule?: string | string[];
-
-  /* Queue-triggered job config */
-  topics?: ServiceTopics;
-}
-
-/**
- * Map of service name to public service configuration.
- */
-export type Services = Record<string, ServiceConfig>;
-
-/**
  * Map of service group name to array of service names belonging to that group.
  * @experimental This feature is experimental and may change.
  * @example
@@ -1007,6 +1026,67 @@ export type Services = Record<string, ServiceConfig>;
  * }
  */
 export type ExperimentalServiceGroups = Record<string, string[]>;
+
+export interface ExperimentalServiceV2Binding {
+  /** Must be `"service"` for Service-to-Service HTTP bindings. */
+  type: 'service';
+  /** Target service name from `experimentalServicesV2`. */
+  service: string;
+  /** Generated value shape, must be `"url"`. */
+  format: 'url';
+  /** Environment variable name that will store the generated value */
+  env: string;
+}
+
+/**
+ * Configuration for a service in `experimentalServicesV2` in `vercel.json`.
+ *
+ * @experimental This feature is experimental and may change.
+ */
+export interface ExperimentalServiceV2Config {
+  /** Path to the service root, relative to `vercel.json`. */
+  root: string;
+  /** Framework for this service. */
+  framework?: string;
+  /** Runtime for this service. */
+  runtime?: string;
+  /**
+   * Service entrypoint, relative to the service root directory.
+   * Can be a file path or a module specification (for Python).
+   */
+  entrypoint?: string;
+
+  /* Service-level build setting overrides. */
+  installCommand?: string;
+  buildCommand?: string;
+  devCommand?: string;
+  ignoreCommand?: string;
+  outputDirectory?: string;
+
+  /** Caller-side bindings that grant this service access to another service. */
+  bindings?: ExperimentalServiceV2Binding[];
+
+  /** Function configuration scoped to this service root. */
+  functions?: BuilderFunctions;
+
+  /* Service's route table. Applied only after top-level routing. */
+  headers?: Header[];
+  redirects?: Redirect[];
+  rewrites?: Rewrite[];
+  routes?: Route[];
+  cleanUrls?: boolean;
+  trailingSlash?: boolean;
+}
+
+/**
+ * Map of service name to service configuration for `experimentalServicesV2`.
+ *
+ * @experimental This feature is experimental and may change.
+ */
+export type ExperimentalServicesV2 = Record<
+  string,
+  ExperimentalServiceV2Config
+>;
 
 /**
  * Result of a runtime builder's normalized entrypoint detection.

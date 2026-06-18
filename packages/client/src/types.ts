@@ -2,13 +2,12 @@ import type { Agent } from 'http';
 import type {
   Builder,
   BuilderFunctions,
-  EnvVars,
   Images,
   ProjectSettings,
   Cron,
-  Services,
   ExperimentalServices,
   ExperimentalServiceGroups,
+  ExperimentalServicesV2,
 } from '@vercel/build-utils';
 import type { Header, Route, Redirect, Rewrite } from '@vercel/routing-utils';
 
@@ -158,8 +157,7 @@ export interface VercelConfig {
   name?: string;
   meta?: string[];
   version?: number;
-  public?: boolean;
-  env?: Dictionary<string> | EnvVars;
+  env?: Dictionary<string>;
   build?: {
     env?: Dictionary<string>;
   };
@@ -191,7 +189,6 @@ export interface VercelConfig {
    * This file will be included in prebuilt deployments.
    */
   bulkRedirectsPath?: string | null;
-  services?: Services;
   /**
    * @experimental This feature is experimental and may change.
    */
@@ -200,6 +197,10 @@ export interface VercelConfig {
    * @experimental This feature is experimental and may change.
    */
   experimentalServiceGroups?: ExperimentalServiceGroups;
+  /**
+   * @experimental This feature is experimental and may change.
+   */
+  experimentalServicesV2?: ExperimentalServicesV2;
 }
 
 export interface GitMetadata {
@@ -232,7 +233,6 @@ export interface DeploymentOptions {
   source?: string;
   target?: string;
   name?: string;
-  public?: boolean;
   meta?: Dictionary<string>;
   projectSettings?: ProjectSettings;
   gitMetadata?: GitMetadata;

@@ -1,4 +1,4 @@
-import { formatOption } from '../../util/arg-common';
+import { formatOption, projectOption } from '../../util/arg-common';
 import { packageName } from '../../util/pkg-name';
 
 export const schemaSubcommand = {
@@ -72,9 +72,9 @@ export const metricsCommand = {
     {
       name: 'filter',
       shorthand: 'f',
-      type: String,
+      type: [String],
       deprecated: false,
-      description: 'OData filter expression',
+      description: 'OData filter expression (repeatable, ANDed together)',
       argument: 'EXPR',
     },
     {
@@ -103,12 +103,17 @@ export const metricsCommand = {
       argument: 'SIZE',
     },
     {
-      name: 'project',
-      shorthand: 'p',
+      name: 'bucket-timezone',
+      shorthand: null,
       type: String,
       deprecated: false,
-      description: 'Project name or ID (default: linked project)',
-      argument: 'NAME_OR_ID',
+      description:
+        'IANA timezone for calendar bucket alignment only; does not shift --since/--until or output timestamps (e.g., Europe/Paris)',
+      argument: 'ZONE',
+    },
+    {
+      ...projectOption,
+      shorthand: 'p',
     },
     {
       name: 'all',
@@ -141,12 +146,24 @@ export const metricsCommand = {
       value: `${packageName} metrics vercel.speed_insights_metric.lcp -a p75 --group-by route --since 7d`,
     },
     {
+      name: 'Daily pageviews with a Paris-aligned bucket',
+      value: `${packageName} metrics vercel.analytics_pageview.count --since 2026-05-28 --until 2026-05-29 --granularity 1d --bucket-timezone Europe/Paris`,
+    },
+    {
+      name: 'Visitors time series from the top 5 countries',
+      value: `${packageName} metrics vercel.analytics_pageview.count -a unique/visitor_id --group-by country --since 1d --granularity 1h --limit 5`,
+    },
+    {
       name: 'List available metrics',
       value: `${packageName} metrics schema`,
     },
     {
       name: 'Function executions matching a path pattern',
       value: `${packageName} metrics vercel.function_invocation.count -f "contains(request_path, '/api')" --group-by route --since 1h`,
+    },
+    {
+      name: 'Function executions matching multiple filters',
+      value: `${packageName} metrics vercel.function_invocation.count -f "http_status ge 500" -f "contains(request_path, '/api')" --since 1h`,
     },
     {
       name: 'Show schema for a metric prefix',

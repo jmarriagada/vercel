@@ -3,6 +3,7 @@ import {
   forceOption,
   formatOption,
   jsonOption,
+  projectOption,
   yesOption,
 } from '../../util/arg-common';
 
@@ -25,13 +26,6 @@ export const initSubcommand = {
       type: Boolean,
       deprecated: false,
       description: 'Retain build cache when using "--force"',
-    },
-    {
-      name: 'public',
-      shorthand: 'p',
-      type: Boolean,
-      deprecated: false,
-      description: 'Deployment is public (`/_src`) is exposed)',
     },
     {
       name: 'env',
@@ -108,20 +102,7 @@ export const initSubcommand = {
     formatOption,
     jsonOption,
     confirmOption,
-    {
-      name: 'functions-beta',
-      shorthand: null,
-      type: Boolean,
-      deprecated: false,
-      // No description — keeps it hidden from --help output
-    },
-    {
-      name: 'no-functions-beta',
-      shorthand: null,
-      type: Boolean,
-      deprecated: false,
-      // No description — keeps it hidden from --help output
-    },
+    projectOption,
   ],
   examples: [
     {
@@ -199,13 +180,6 @@ export const deployCommand = {
       type: Boolean,
       deprecated: false,
       description: 'Retain build cache when using "--force"',
-    },
-    {
-      name: 'public',
-      shorthand: 'p',
-      type: Boolean,
-      deprecated: false,
-      description: 'Deployment is public (`/_src`) is exposed)',
     },
     {
       name: 'env',
@@ -330,20 +304,7 @@ export const deployCommand = {
     formatOption,
     jsonOption,
     confirmOption,
-    {
-      name: 'functions-beta',
-      shorthand: null,
-      type: Boolean,
-      deprecated: false,
-      // No description — keeps it hidden from --help output
-    },
-    {
-      name: 'no-functions-beta',
-      shorthand: null,
-      type: Boolean,
-      deprecated: false,
-      // No description — keeps it hidden from --help output
-    },
+    projectOption,
   ],
   examples: [
     {

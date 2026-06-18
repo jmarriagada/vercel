@@ -1,5 +1,46 @@
 # @vercel/frameworks
 
+## 3.29.0
+
+### Minor Changes
+
+- 3d8df16: Add bun preset.
+
+### Patch Changes
+
+- 2fd14e0: Replace placeholder Eve framework logos with the official triangle mark used in Eve docs.
+- 68c2fd7: Graduate Eve from experimental frameworks so detection and deploys no longer require `VERCEL_USE_EXPERIMENTAL_FRAMEWORKS`.
+
+## 3.28.1
+
+### Patch Changes
+
+- 4421ad9: Allow the Node framework preset to work without a `package.json`. The `node`
+  framework is now detected from a `server.*` entrypoint alone, and the
+  `@vercel/backends` builder defaults the module format to ESM (`"module"`) when
+  no `package.json` is present instead of erroring with "Unable to resolve format".
+
+## 3.28.0
+
+### Minor Changes
+
+- 4bd58f2: Add Eve as an experimental framework declaration alongside Ash.
+
+### Patch Changes
+
+- b98053e: Change label for Sanity v2
+
+## 3.27.0
+
+### Minor Changes
+
+- c0f1229: Update Sanity branding (new tagline, dark mode logo, demo URL) and broaden framework detection to cover Sanity v3, v4, and v5 via the `sanity` package. Move the legacy v2 entry to its own `sanity-v2` slug (with the example moved to `examples/sanity-v2`).
+
+### Patch Changes
+
+- Updated dependencies [fddeb55]
+  - @vercel/error-utils@2.2.0
+
 ## 3.26.1
 
 ### Patch Changes

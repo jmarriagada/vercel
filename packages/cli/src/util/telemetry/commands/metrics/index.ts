@@ -60,8 +60,8 @@ export class MetricsTelemetryClient
     }
   }
 
-  trackCliOptionFilter(v: string | undefined) {
-    if (v) {
+  trackCliOptionFilter(v: string[] | undefined) {
+    if (v && v.length > 0) {
       this.trackCliOption({
         option: 'filter',
         value: this.redactedValue,
@@ -91,6 +91,15 @@ export class MetricsTelemetryClient
     if (v) {
       this.trackCliOption({
         option: 'granularity',
+        value: v,
+      });
+    }
+  }
+
+  trackCliOptionBucketTimezone(v: string | undefined) {
+    if (v) {
+      this.trackCliOption({
+        option: 'bucket-timezone',
         value: v,
       });
     }
