@@ -527,6 +527,16 @@ export const routesSchema = {
               'When set to true (default), external rewrites will respect the Cache-Control header from the origin. When false, caching is disabled for this rewrite.',
             type: 'boolean',
           },
+          allowedFunctionRegions: {
+            description:
+              'An array of region identifiers to restrict which regions a serverless function can execute in.',
+            type: 'array',
+            maxItems: 64,
+            items: {
+              type: 'string',
+              maxLength: 32,
+            },
+          },
         },
       },
       {
@@ -590,6 +600,16 @@ export const rewritesSchema = {
         description:
           'When set to true (default), external rewrites will respect the Cache-Control header from the origin. When false, caching is disabled for this rewrite.',
         type: 'boolean',
+      },
+      allowedFunctionRegions: {
+        description:
+          'An array of region identifiers to restrict which regions a serverless function can execute in.',
+        type: 'array',
+        maxItems: 64,
+        items: {
+          type: 'string',
+          maxLength: 32,
+        },
       },
     },
   },
