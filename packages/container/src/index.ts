@@ -28,6 +28,7 @@ import {
 export const version = 2;
 
 export { startDevServer } from './dev';
+export { prepareCache } from './prepare-cache';
 
 function normalizeCommand(command: unknown): string[] | undefined {
   if (typeof command === 'string') {
@@ -181,6 +182,11 @@ async function buildAndPushImage(params: {
         debug(`dockerfile: ${dockerfilePath}`);
         debug(`context:    ${contextDir}`);
         debug(`platform:   ${TARGET_PLATFORM}`);
+        debug(
+          `build args:  ${
+            buildArgs ? Object.keys(buildArgs).length : 0
+          } (from project build env)`
+        );
 
         const buildStart = Date.now();
         step(`${engine.name} build (${TARGET_PLATFORM})`);
@@ -223,6 +229,10 @@ async function buildAndPushImage(params: {
         });
 
         info(`Image reference ${resolvedRef}`);
+        debug(
+          `container build_and_push total: ${elapsed(buildStart)} ` +
+            `(build + push + storage report)`
+        );
         return resolvedRef;
       });
     }

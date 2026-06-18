@@ -18,6 +18,17 @@ import { selectStorageDriver } from '../storage-driver';
 import type { BuildPushParams, ContainerEngine } from './types';
 import { TARGET_PLATFORM, buildArgFlags } from './types';
 
+/** Run `docker` with the given args, logging the exact invocation for debugging. */
+function runDocker(
+  args: string[],
+  opts: { input?: string; quiet?: boolean } = {}
+) {
+  // `--password-stdin` reads the secret from stdin, so nothing sensitive is on
+  // the command line.
+  debug(`exec: docker ${args.join(' ')}`);
+  return run('docker', args, opts);
+}
+
 async function hasBinary(name: string): Promise<boolean> {
   try {
     await run('which', [name], { quiet: true });
@@ -277,7 +288,7 @@ export const dockerEngine: ContainerEngine = {
   withRuntime: withManagedDaemon,
 
   async build(params: BuildPushParams): Promise<void> {
-    await run('docker', [
+    await runDocker([
       'build',
       '--platform',
       TARGET_PLATFORM,
@@ -292,8 +303,7 @@ export const dockerEngine: ContainerEngine = {
 
   async login(params: BuildPushParams): Promise<void> {
     try {
-      await run(
-        'docker',
+      await runDocker(
         [
           'login',
           params.registry,
@@ -320,7 +330,10 @@ export const dockerEngine: ContainerEngine = {
 
   async push(params: BuildPushParams): Promise<string | undefined> {
     try {
-      const { stdout } = await run('docker', ['push', params.imageRef]);
+      info(`pushing ${params.imageRef}`);
+      const pushStart = Date.now();
+      const { stdout } = await runDocker(['push', params.imageRef]);
+      debug(`push completed in ${Date.now() - pushStart}ms`);
       let resolvedDigest = stdout.match(/sha256:[a-f0-9]{64}/)?.[0];
       if (!resolvedDigest) {
         debug('digest not found in push output — inspecting RepoDigests');

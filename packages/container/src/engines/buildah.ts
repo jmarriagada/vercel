@@ -26,7 +26,28 @@ async function runBuildah(
   opts: { input?: string; quiet?: boolean } = {}
 ) {
   const storageArgs = await buildahStorageArgs();
-  return run('buildah', [...storageArgs, ...args], opts);
+  const fullArgs = [...storageArgs, ...args];
+  // Log the exact buildah invocation (flags included) so failures/behavior are
+  // diagnosable from build logs. `--password-stdin` reads the secret from
+  // stdin, so nothing sensitive is on the command line.
+  debug(`exec: buildah ${fullArgs.join(' ')}`);
+  return run('buildah', fullArgs, opts);
+}
+
+/**
+ * Parse buildah `build --layers` output and log how many Dockerfile steps were
+ * served from cache vs. freshly built. With `--layers`, buildah prints a
+ * `STEP i/n: ...` line per instruction and `--> Using cache <id>` when a layer
+ * is reused. This makes layer-cache effectiveness visible in build logs.
+ */
+function logLayerCacheSummary(output: string): void {
+  const steps = (output.match(/^STEP\s+\d+\/\d+:/gm) || []).length;
+  const cached = (output.match(/-->\s+Using cache\b/gi) || []).length;
+  if (steps === 0) {
+    return;
+  }
+  const built = Math.max(steps - cached, 0);
+  info(`layer cache: ${cached}/${steps} steps reused, ${built} rebuilt`);
 }
 
 export const buildahEngine: ContainerEngine = {
@@ -85,7 +106,7 @@ export const buildahEngine: ContainerEngine = {
   },
 
   async build(params: BuildPushParams): Promise<void> {
-    await runBuildah([
+    const { stdout, stderr } = await runBuildah([
       'build',
       '--platform',
       TARGET_PLATFORM,
@@ -109,6 +130,7 @@ export const buildahEngine: ContainerEngine = {
       params.dockerfilePath,
       params.contextDir,
     ]);
+    logLayerCacheSummary(`${stdout}\n${stderr}`);
   },
 
   async login(params: BuildPushParams): Promise<void> {
@@ -177,12 +199,31 @@ export const buildahEngine: ContainerEngine = {
   async push(params: BuildPushParams): Promise<string | undefined> {
     const digestDir = mkdtempSync(join(tmpdir(), 'vercel-container-digest-'));
     const digestFile = join(digestDir, 'digest');
-    // Push with zstd compression (OCI media types). VCR supports zstd and it
+    // Push with zstd compression and OCI media types. VCR supports zstd and it
     // makes the server-side VHS conversion faster, especially for larger
-    // images. Opt out with VERCEL_VCR_DISABLE_ZSTD=1.
-    const zstdArgs = readString(process.env.VERCEL_VCR_DISABLE_ZSTD)
-      ? []
-      : ['--compression-format', 'zstd', '--compression-level', '3'];
+    // images. `--force-compression` re-compresses already-compressed (e.g.
+    // gzip) base-image layers to zstd too, so every layer is zstd (equivalent
+    // to BuildKit's `force-compression=true`). Opt out with
+    // VERCEL_VCR_DISABLE_ZSTD=1.
+    const zstdEnabled = !readString(process.env.VERCEL_VCR_DISABLE_ZSTD);
+    const zstdArgs = zstdEnabled
+      ? [
+          '--compression-format',
+          'zstd',
+          '--compression-level',
+          '3',
+          '--force-compression',
+          '--format',
+          'oci',
+        ]
+      : [];
+    info(
+      `pushing ${params.imageRef} ` +
+        (zstdEnabled
+          ? 'with zstd compression (level=3, force, oci)'
+          : 'with default compression (zstd disabled)')
+    );
+    const pushStart = Date.now();
     try {
       await runBuildah([
         'push',
@@ -192,7 +233,13 @@ export const buildahEngine: ContainerEngine = {
         params.imageRef,
       ]);
       const digest = readFileSync(digestFile, 'utf8').trim();
-      return digest.match(/sha256:[a-f0-9]{64}/)?.[0] ?? (digest || undefined);
+      const resolved =
+        digest.match(/sha256:[a-f0-9]{64}/)?.[0] ?? (digest || undefined);
+      debug(
+        `push completed in ${Date.now() - pushStart}ms` +
+          (resolved ? ` (digest ${resolved})` : '')
+      );
+      return resolved;
     } catch (err) {
       const message = (err as Error).message;
       if (

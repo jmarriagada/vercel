@@ -2,7 +2,7 @@ import type { BuildResultV2Typical } from '@vercel/build-utils';
 import { EventEmitter } from 'node:events';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { build, startDevServer } from '../src';
+import { build, prepareCache, startDevServer } from '../src';
 import { __resetStorageDriverCache } from '../src/storage-driver';
 
 const { spawnMock, existsSyncMock } = vi.hoisted(() => ({
@@ -135,6 +135,7 @@ const VCR_ENV_KEYS = [
   'VERCEL_CONTAINER_ENGINE',
   'VERCEL_VCR_DOCKER_STORAGE_DRIVER',
   'VERCEL_VCR_STRICT_STORAGE',
+  'VERCEL_VCR_DISABLE_LAYER_CACHE',
 ];
 
 beforeEach(() => {
@@ -707,6 +708,40 @@ describe('@vercel/container', () => {
       expect(
         commandsRun().some(c => /^docker stop vercel-dev-api-/.test(c))
       ).toBe(true);
+    });
+  });
+
+  describe('prepareCache', () => {
+    const baseOpts = {
+      files: {},
+      entrypoint: 'apps/whoami/Dockerfile',
+      workPath: '/vercel',
+      repoRootPath: '/vercel',
+      config: {},
+    } as any;
+
+    it('is a no-op outside the build container', async () => {
+      // VERCEL_BUILD_IMAGE unset => not the build container.
+      const result = await prepareCache(baseOpts);
+      expect(result).toEqual({});
+    });
+
+    it('is a no-op when the layer cache is disabled', async () => {
+      process.env.VERCEL_BUILD_IMAGE = 'al2023';
+      process.env.VERCEL_VCR_DISABLE_LAYER_CACHE = '1';
+      try {
+        const result = await prepareCache(baseOpts);
+        expect(result).toEqual({});
+      } finally {
+        delete process.env.VERCEL_VCR_DISABLE_LAYER_CACHE;
+      }
+    });
+
+    it('is a no-op when the buildah store directory does not exist', async () => {
+      process.env.VERCEL_BUILD_IMAGE = 'al2023';
+      existsSyncMock.mockReturnValue(false); // graphroot missing
+      const result = await prepareCache(baseOpts);
+      expect(result).toEqual({});
     });
   });
 });
