@@ -13,6 +13,7 @@ import {
   type VercelConfig,
 } from '@vercel/client';
 import { errorToString, isError } from '@vercel/error-utils';
+import { frameworkList, type Framework } from '@vercel/frameworks';
 import bytes from 'bytes';
 import chalk from 'chalk';
 import fs from 'fs-extra';
@@ -953,7 +954,7 @@ async function handleDefaultDeploy(
   telemetryClient.trackCliFlagPrebuilt(parsedArguments.flags['--prebuilt']);
   telemetryClient.trackCliOptionRegions(parsedArguments.flags['--regions']);
   telemetryClient.trackCliFlagNoWait(parsedArguments.flags['--no-wait']);
-  telemetryClient.trackCliFlagDryRun(parsedArguments.flags['--dry-run']);
+  telemetryClient.trackCliFlagDry(parsedArguments.flags['--dry']);
   telemetryClient.trackCliFlagYes(parsedArguments.flags['--yes']);
   telemetryClient.trackCliOptionTarget(parsedArguments.flags['--target']);
   telemetryClient.trackCliFlagProd(parsedArguments.flags['--prod']);
@@ -1246,7 +1247,7 @@ async function handleDefaultDeploy(
 
   localConfig = localConfig || {};
 
-  if (parsedArguments.flags['--dry-run']) {
+  if (parsedArguments.flags['--dry']) {
     try {
       const summary = await inspectDeploymentFiles({
         path: cwd,
@@ -1258,8 +1259,17 @@ async function handleDefaultDeploy(
         rootDirectory,
         bulkRedirectsPath: localConfig.bulkRedirectsPath,
       });
+      const framework = resolveDeploymentFrameworkPreset({
+        localFramework: localConfig.framework,
+        projectFramework: project.framework,
+      });
 
-      printDeploymentDryRun(client, summary, asJson || !client.stdout.isTTY);
+      printDeploymentDryRun(
+        client,
+        summary,
+        framework,
+        asJson || !client.stdout.isTTY
+      );
       return 0;
     } catch (err: unknown) {
       printError(err);
@@ -1965,9 +1975,40 @@ type DeploymentDryRunSummary = Awaited<
   ReturnType<typeof inspectDeploymentFiles>
 >;
 
+type DeploymentFramework = Pick<Framework, 'name' | 'slug'>;
+
+function toDeploymentFramework(framework: Framework): DeploymentFramework {
+  return {
+    name: framework.name,
+    slug: framework.slug,
+  };
+}
+
+function resolveDeploymentFrameworkPreset({
+  localFramework,
+  projectFramework,
+}: {
+  localFramework?: string | null;
+  projectFramework?: string | null;
+}): DeploymentFramework {
+  const frameworkSlug =
+    typeof localFramework === 'undefined' ? projectFramework : localFramework;
+  const frameworkPreset = frameworkList.find(
+    framework => framework.slug === frameworkSlug
+  );
+  const otherPreset = frameworkList.find(framework => framework.slug === null);
+
+  return frameworkPreset
+    ? toDeploymentFramework(frameworkPreset)
+    : otherPreset
+      ? toDeploymentFramework(otherPreset)
+      : { name: 'Other', slug: null };
+}
+
 function printDeploymentDryRun(
   client: Client,
   summary: DeploymentDryRunSummary,
+  framework: DeploymentFramework,
   asJson: boolean
 ) {
   const directories = getDirectoryDistribution(summary.files);
@@ -1979,6 +2020,7 @@ function printDeploymentDryRun(
     client.stdout.write(
       `${JSON.stringify(
         {
+          framework,
           basePath: summary.basePath,
           fileCount: summary.fileCount,
           totalSize: summary.totalSize,
@@ -1997,6 +2039,9 @@ function printDeploymentDryRun(
 
   const lines = [
     `${chalk.bold('Deployment Dry Run')}\n`,
+    `${chalk.bold('Detected Framework Preset')}: ${framework.name}${
+      framework.slug ? ` (${framework.slug})` : ''
+    }`,
     `Included: ${summary.fileCount} ${pluralize(
       'file',
       summary.fileCount
