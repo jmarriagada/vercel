@@ -2,6 +2,9 @@ import { getPlatformEnv } from '@vercel/build-utils';
 import type { Span } from '@vercel/build-utils';
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
+import { existsSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 
 /** Verbose tracing for the container builder, gated on `BUILDER_DEBUG` like every other builder. */
 export const DEBUG = Boolean(getPlatformEnv('BUILDER_DEBUG'));
@@ -215,4 +218,25 @@ export function decodeOidcClaims(token: string | undefined): OidcClaims {
  */
 export function isBuildContainer(): boolean {
   return Boolean(readString(process.env.VERCEL_BUILD_IMAGE));
+}
+
+/**
+ * Locate a pre-existing container registry auth file, if any. The Vercel build
+ * container (see vercel/api#76560) writes `~/.config/containers/auth.json` with
+ * `auths["vcr.vercel.com"] = base64("oidc:<token>")` before the builder runs,
+ * so buildah/podman pick up credentials automatically. `REGISTRY_AUTH_FILE`,
+ * when set, overrides the default location for those tools.
+ *
+ * Returns the path to the auth file that exists, or `undefined` when none is
+ * present (e.g. local `vercel build`, where we still need an explicit login).
+ */
+export function existingRegistryAuthFile(): string | undefined {
+  const explicit = readString(process.env.REGISTRY_AUTH_FILE);
+  if (explicit) {
+    return existsSync(explicit) ? explicit : undefined;
+  }
+  const fromXdg = readString(process.env.XDG_CONFIG_HOME);
+  const configHome = fromXdg || join(homedir(), '.config');
+  const defaultPath = join(configHome, 'containers', 'auth.json');
+  return existsSync(defaultPath) ? defaultPath : undefined;
 }

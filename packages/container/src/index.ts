@@ -16,6 +16,7 @@ import {
   decodeOidcClaims,
   done,
   elapsed,
+  existingRegistryAuthFile,
   info,
   readString,
   shortDigest,
@@ -159,17 +160,41 @@ async function buildAndPushImage(params: {
           span: buildSpan,
         };
 
-        step(`Authenticating to ${VCR_REGISTRY} as ${username}`);
-        await withSpan(
-          buildSpan,
-          'container.registry_login',
-          {
+        // The Vercel build container writes a registry auth file
+        // (`~/.config/containers/auth.json`, see vercel/api#76560) before the
+        // builder runs, so buildah/podman authenticate automatically. Running
+        // `buildah login` on top of that is redundant and risks overwriting
+        // the credentials the platform provisioned. Skip the explicit login
+        // when such a file already exists; only log in ourselves otherwise
+        // (e.g. local `vercel build` with the docker engine).
+        // Escape hatch: force an explicit `engine.login` even when a
+        // provisioned auth file is present, for debugging credential issues.
+        const forceLogin =
+          readString(process.env.VERCEL_VCR_FORCE_LOGIN) === '1';
+        const authFile = forceLogin ? undefined : existingRegistryAuthFile();
+        if (authFile) {
+          debug(`registry auth file present: ${authFile}`);
+          step(`Using registry credentials from ${authFile}`);
+          buildSpan?.setAttributes({
             'container.registry': VCR_REGISTRY,
             'registry.username': username,
-          },
-          () => engine.login(buildParams)
-        );
-        done('authenticated');
+            'registry.auth_file': authFile,
+            'registry.login_skipped': toTag(true),
+          });
+          done('authenticated via provisioned credentials');
+        } else {
+          step(`Authenticating to ${VCR_REGISTRY} as ${username}`);
+          await withSpan(
+            buildSpan,
+            'container.registry_login',
+            {
+              'container.registry': VCR_REGISTRY,
+              'registry.username': username,
+            },
+            () => engine.login(buildParams)
+          );
+          done('authenticated');
+        }
 
         await withSpan(
           buildSpan,

@@ -136,6 +136,9 @@ const VCR_ENV_KEYS = [
   'VERCEL_VCR_DOCKER_STORAGE_DRIVER',
   'VERCEL_VCR_STRICT_STORAGE',
   'VERCEL_VCR_DISABLE_LAYER_CACHE',
+  'VERCEL_VCR_FORCE_LOGIN',
+  'REGISTRY_AUTH_FILE',
+  'XDG_CONFIG_HOME',
 ];
 
 beforeEach(() => {
@@ -232,6 +235,11 @@ describe('@vercel/container', () => {
     /** Override the simulated `buildah info` store object. */
     storeInfo?: Record<string, unknown>;
     meta?: Record<string, unknown>;
+    /**
+     * When true, simulate the build container having provisioned a registry
+     * auth file (vercel/api#76560), so the builder skips the explicit login.
+     */
+    authFilePresent?: boolean;
   }) {
     if (options?.buildImageEnv) {
       process.env.VERCEL_BUILD_IMAGE = options.buildImageEnv;
@@ -243,7 +251,14 @@ describe('@vercel/container', () => {
     const fetchMock = vi.fn();
     stubRegistryFetch(fetchMock);
     vi.stubGlobal('fetch', fetchMock);
-    existsSyncMock.mockReturnValue(true);
+    // Everything exists (Dockerfile, store dir, …) except the registry auth
+    // file, which is only present when the build container provisioned it.
+    existsSyncMock.mockImplementation((p: unknown) => {
+      if (typeof p === 'string' && p.includes('containers/auth.json')) {
+        return Boolean(options?.authFilePresent);
+      }
+      return true;
+    });
     // Simulate `buildah info` reporting the intended store: native overlay with
     // the graphroot under the XFS /vercel volume. Tests can override via
     // `storeInfo`.
@@ -344,6 +359,28 @@ describe('@vercel/container', () => {
       commands.some(c => c.includes('--root /vercel/.containers/storage'))
     ).toBe(true);
     expect(commands.some(c => c.startsWith('docker build'))).toBe(false);
+  });
+
+  it('skips the explicit login when the build container provisioned an auth file', async () => {
+    // vercel/api#76560 writes ~/.config/containers/auth.json before the
+    // builder runs; buildah picks it up automatically, so we must not run a
+    // redundant `buildah login` that could clobber those credentials.
+    const commands = await runDockerfileBuild({
+      buildImageEnv: 'al2023',
+      authFilePresent: true,
+    });
+    expect(commands.some(c => /\bbuildah\b.*\blogin\b/.test(c))).toBe(false);
+    // The build still proceeds and pushes.
+    expect(commands.some(c => /\bbuildah\b.*\bpush\b/.test(c))).toBe(true);
+  });
+
+  it('forces an explicit login under VERCEL_VCR_FORCE_LOGIN even with an auth file', async () => {
+    process.env.VERCEL_VCR_FORCE_LOGIN = '1';
+    const commands = await runDockerfileBuild({
+      buildImageEnv: 'al2023',
+      authFilePresent: true,
+    });
+    expect(commands.some(c => /\bbuildah\b.*\blogin\b/.test(c))).toBe(true);
   });
 
   it('forwards the project build env to the image build as --build-arg', async () => {
@@ -562,7 +599,14 @@ describe('@vercel/container', () => {
   });
 
   it('fails before building when registry login is rejected', async () => {
-    existsSyncMock.mockReturnValue(true);
+    // No provisioned auth file here, so the builder performs an explicit
+    // login (the docker/local path) which we simulate rejecting.
+    existsSyncMock.mockImplementation((p: unknown) => {
+      if (typeof p === 'string' && p.includes('containers/auth.json')) {
+        return false;
+      }
+      return true;
+    });
     process.env.VERCEL_OIDC_TOKEN = fakeOidcToken({
       owner_id: 'team_TtmJZYmD3tcLBLqWOhoVawd1',
     });
