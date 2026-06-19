@@ -262,13 +262,21 @@ async function waitForPort(
   timeout: number
 ): Promise<void> {
   let exited: { code: number | null; signal: string | null } | null = null;
+  let spawnError: Error | null = null;
   const onExit = (code: number | null, signal: string | null) => {
     exited = { code, signal };
   };
+  const onError = (err: Error) => {
+    spawnError = err;
+  };
   child.once('exit', onExit);
+  child.once('error', onError);
   try {
     const start = Date.now();
     while (Date.now() - start < timeout) {
+      if (spawnError) {
+        throw spawnError;
+      }
       if (exited) {
         const { code, signal } = exited;
         throw new Error(
@@ -285,6 +293,7 @@ async function waitForPort(
     );
   } finally {
     child.removeListener('exit', onExit);
+    child.removeListener('error', onError);
   }
 }
 
@@ -330,6 +339,15 @@ export async function startStandaloneDevServer(
       PORT: String(port),
     });
 
+    const entrypointDir = dirname(join(workPath, resolvedEntrypoint));
+    const { goModPath } = await findGoModPath(entrypointDir, workPath);
+    const modulePath = goModPath ? dirname(goModPath) : workPath;
+    const go = await createGo({
+      modulePath,
+      opts: { cwd: workPath, env },
+      workPath,
+    });
+
     // Determine run target based on entrypoint location
     // - main.go at root: go run .
     // - cmd/api/main.go: go run ./cmd/api
@@ -348,7 +366,7 @@ export async function startStandaloneDevServer(
     const child = spawn('go', ['run', '-tags', 'vcdev', devWrapper, devUtils], {
       cwd: workPath,
       env: {
-        ...env,
+        ...go.getEnv(),
         __VC_GO_DEV_RUN_TARGET: runTarget,
       },
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -371,12 +389,17 @@ export async function startStandaloneDevServer(
       }
     });
 
-    const pid = child.pid!;
+    const pid = child.pid;
     try {
       await waitForPort(port, child, DEV_SERVER_STARTUP_TIMEOUT);
     } catch (err) {
-      killStandaloneDevServer(pid);
+      if (pid) {
+        killStandaloneDevServer(pid);
+      }
       throw err;
+    }
+    if (!pid) {
+      throw new Error('Standalone Go dev server started without a PID');
     }
 
     PERSISTENT_SERVERS.set(serverKey, { port, pid, child });
