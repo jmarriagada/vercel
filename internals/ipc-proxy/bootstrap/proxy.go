@@ -89,7 +89,7 @@ func sendIPCMessage(msg interface{}) error {
 	return err
 }
 
-// fatal reports a fatal init error via IPC and exits.
+// fatal reports an unrecoverable error via IPC and exits.
 func fatal(exitCode int, msg string) {
 	fmt.Fprintln(os.Stderr, msg)
 	sendIPCMessage(UnrecoverableErrorMessage{
@@ -99,22 +99,46 @@ func fatal(exitCode int, msg string) {
 			Message:  msg,
 		},
 	})
-	os.Exit(exitCode)
+	os.Exit(proxyExitCode(exitCode))
 }
 
-// childExitCode derives the exit code to report from a cmd.Wait() error.
-// A clean exit (nil) or a signal-terminated child (ExitCode() == -1) is
-// still fatal for the instance, so anything non-positive is reported as 1.
+// childExitCode derives the user server exit code to report from a cmd.Wait()
+// error. A clean exit is reported as 0 even though it is fatal for the proxy.
 func childExitCode(waitErr error) int {
-	exitCode := 1
+	if waitErr == nil {
+		return 0
+	}
+
 	var exitErr *exec.ExitError
 	if errors.As(waitErr, &exitErr) {
-		exitCode = exitErr.ExitCode()
+		exitCode := exitErr.ExitCode()
+		if exitCode >= 0 {
+			return exitCode
+		}
 	}
+
+	return 1
+}
+
+// proxyExitCode derives the proxy process exit code from the reported user
+// server exit code. A clean child exit is still fatal because the process must
+// keep serving requests.
+func proxyExitCode(exitCode int) int {
 	if exitCode <= 0 {
-		exitCode = 1
+		return 1
 	}
 	return exitCode
+}
+
+func childExitMessage(waitErr error, reason string) string {
+	msg := fmt.Sprintf(
+		"Expected a long-running server process, but the user server %s",
+		reason,
+	)
+	if waitErr == nil {
+		return fmt.Sprintf("%s with exit code 0", msg)
+	}
+	return fmt.Sprintf("%s: %v", msg, waitErr)
 }
 
 func connectIPC() error {
@@ -176,7 +200,10 @@ func main() {
 	select {
 	case waitErr := <-childDone:
 		// Child exited before the server became ready.
-		fatal(childExitCode(waitErr), "User server exited during startup")
+		fatal(
+			childExitCode(waitErr),
+			childExitMessage(waitErr, "exited during startup"),
+		)
 	case err := <-serverReady:
 		if err != nil {
 			cmd.Process.Kill()
@@ -190,11 +217,10 @@ func main() {
 	// while the health check still reports OK.
 	go func() {
 		waitErr := <-childDone
-		msg := "User server exited unexpectedly"
-		if waitErr != nil {
-			msg = fmt.Sprintf("%s: %v", msg, waitErr)
-		}
-		fatal(childExitCode(waitErr), msg)
+		fatal(
+			childExitCode(waitErr),
+			childExitMessage(waitErr, "exited unexpectedly"),
+		)
 	}()
 
 	// Create reverse proxy to user's server
