@@ -371,9 +371,14 @@ export async function startStandaloneDevServer(
       }
     });
 
-    await waitForPort(port, child, DEV_SERVER_STARTUP_TIMEOUT);
-
     const pid = child.pid!;
+    try {
+      await waitForPort(port, child, DEV_SERVER_STARTUP_TIMEOUT);
+    } catch (err) {
+      killStandaloneDevServer(pid);
+      throw err;
+    }
+
     PERSISTENT_SERVERS.set(serverKey, { port, pid, child });
     child.once('exit', () => {
       PERSISTENT_SERVERS.delete(serverKey);
