@@ -280,8 +280,13 @@ export function applySegmentOperations(
     const map = next[operation.field];
     const entityValues = map?.[operation.entity];
     const values = entityValues?.[operation.attribute];
-    if (!values) {
-      continue;
+    const valueExists = values?.some(
+      value => value.value === operation.value.value
+    );
+    if (!values || !valueExists) {
+      throw new Error(
+        `Segment ${operation.field} value "${operation.entity}.${operation.attribute}=${operation.value.value}" does not exist.`
+      );
     }
     entityValues![operation.attribute] = values.filter(
       value => value.value !== operation.value.value

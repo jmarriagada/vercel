@@ -314,6 +314,12 @@ async function buildUpdateRequest(
     output.stopSpinner();
     request.data = applySegmentOperations(segment.data, input.operations);
   } else if (input.operations.length > 0) {
+    if (hasRemoveOperations(input.operations)) {
+      output.spinner('Fetching segment...');
+      const segment = await getSegment(client, projectId, segmentArg, true);
+      output.stopSpinner();
+      applySegmentOperations(segment.data, input.operations);
+    }
     request.operations = input.operations.filter(isMembershipOperation);
   }
 
@@ -332,6 +338,10 @@ function buildOperations(input: {
 
 function hasRuleOperations(operations: SegmentOperation[]): boolean {
   return operations.some(operation => operation.field === 'rule');
+}
+
+function hasRemoveOperations(operations: SegmentOperation[]): boolean {
+  return operations.some(operation => operation.action === 'remove');
 }
 
 function isMembershipOperation(

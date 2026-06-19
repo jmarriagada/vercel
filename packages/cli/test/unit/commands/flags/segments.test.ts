@@ -361,6 +361,31 @@ describe('flags segments', () => {
         'rule_plan',
       ]);
     });
+
+    it.each([
+      'include',
+      'exclude',
+    ])('errors when removing a %s value that does not exist', async field => {
+      client.setArgv(
+        'flags',
+        'segments',
+        'update',
+        'beta-users',
+        '--remove',
+        `${field}:user.id=neverexisted`
+      );
+
+      const exitCode = await flags(client);
+
+      expect(exitCode).toEqual(1);
+      expect(client.stderr.getFullOutput()).toContain(
+        `Segment ${field} value "user.id=neverexisted" does not exist.`
+      );
+      expect(segmentsList[0].data.include?.user.id).toMatchObject([
+        { value: 'user_123', note: 'founder' },
+      ]);
+      expect(segmentsList[0].data.exclude).toEqual({});
+    });
   });
 
   describe('rm', () => {
