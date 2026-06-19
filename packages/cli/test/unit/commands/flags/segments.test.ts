@@ -110,6 +110,16 @@ describe('flags segments', () => {
   });
 
   describe('inspect', () => {
+    it('prints segment rule IDs', async () => {
+      client.setArgv('flags', 'segments', 'inspect', 'beta-users');
+
+      const exitCode = await flags(client);
+
+      expect(exitCode).toEqual(0);
+      expect(client.stderr.getFullOutput()).toContain('Rule ID:');
+      expect(client.stderr.getFullOutput()).toContain('rule_plan');
+    });
+
     it('prints segment JSON', async () => {
       client.setArgv('flags', 'segments', 'inspect', 'beta-users', '--json');
 

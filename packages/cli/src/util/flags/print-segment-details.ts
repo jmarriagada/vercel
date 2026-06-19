@@ -61,6 +61,7 @@ function printSegmentData(segment: Segment) {
     output.print(`    ${chalk.dim('-')}\n`);
   } else {
     for (const rule of rules) {
+      output.print(`    ${chalk.dim('Rule ID:')} ${rule.id}\n`);
       output.print(`    ${chalk.dim('→')} ${formatOutcome(rule.outcome)}\n`);
       for (const condition of rule.conditions) {
         output.print(
