@@ -980,6 +980,8 @@ from vercel_runtime.vc_init import vc_handler
         ? ['vercel-workers', 'vercel_workers']
         : []),
     ],
+    targetArch: target.architecture,
+    isDev: meta.isDev,
   });
 
   await builderSpan
