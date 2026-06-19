@@ -932,7 +932,7 @@ export async function startDevServer(
   // For some reason, if `entrypoint` is a path segment (filename contains `[]`
   // brackets) then the `.go` suffix on the entrypoint is missing. Fix that here…
   let entrypointWithExt = entrypoint;
-  if (entrypoint !== '<detect>' && !entrypoint.endsWith('.go')) {
+  if (!entrypoint.endsWith('.go')) {
     entrypointWithExt += '.go';
   }
 

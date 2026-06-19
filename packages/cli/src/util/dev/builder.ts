@@ -584,19 +584,15 @@ export async function getBuildMatches(
         mapToEntrypoint.set(src, originalSrc);
       }
     }
-    // The Go builder handles entrypoint discovery itself via <detect>.
-    // Match a real candidate file so the dev server creates a BuildMatch,
-    // but only when the preset explicitly asks the runtime to detect it.
-    if (buildConfig.config?.framework === 'go' && src === '<detect>') {
+    // The Go framework preset uses `index.go` as its deployment mount point.
+    // During dev, match the real server entrypoint when that sentinel is absent,
+    // while still passing `index.go` through so @vercel/go owns detection.
+    if (buildConfig.config?.framework === 'go' && !fileList.includes(src)) {
       const originalSrc = src;
-      const goEntrypoints = [
-        'main.go',
-        'cmd/api/main.go',
-        'cmd/server/main.go',
-      ];
-      const existing = goEntrypoints.filter(p => fileList.includes(p));
-      if (existing.length > 0) {
-        src = existing[0];
+      const { detectGoEntrypoint } = await import('@vercel/go');
+      const detectedEntrypoint = await detectGoEntrypoint(cwd, originalSrc);
+      if (detectedEntrypoint && fileList.includes(detectedEntrypoint)) {
+        src = detectedEntrypoint;
         mapToEntrypoint.set(src, originalSrc);
       }
     }
