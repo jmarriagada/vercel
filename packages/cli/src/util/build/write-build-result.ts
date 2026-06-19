@@ -16,6 +16,7 @@ import {
   type BuildResultV3,
   type File,
   type Files,
+  FileBlob,
   FileFsRef,
   type BuilderVX,
   type BuilderV2,
@@ -36,6 +37,8 @@ import {
   type Service,
   isExperimentalService,
   isExternalSymlink,
+  isSymbolicLink,
+  getSymlinkTarget,
 } from '@vercel/build-utils';
 import { getInternalServiceFunctionPath } from '@vercel/fs-detectors';
 import pipe from 'promisepipe';
@@ -962,9 +965,60 @@ function stripParentSegments(path: string): string {
 }
 
 /**
+ * Re-anchors a symlink so that it resolves inside the function root.
+ *
+ * pnpm (and other package managers) link a dependency into an app's
+ * `node_modules` with a relative symlink that points at the hoisted copy in
+ * the store, e.g. `apps/api/node_modules/hono` ->
+ * `../../../node_modules/.pnpm/hono@.../node_modules/hono`. These links are
+ * essential: Node resolves bare imports (`require('hono')`) by walking up
+ * `node_modules` directories from the handler, so without them the dependency
+ * is unreachable at runtime even though its bytes were packaged.
+ *
+ * When the dependency files are anchored at the function root, a symlink whose
+ * resolved target escapes that root must be rewritten to point at the anchored
+ * location. We compute where the target lives relative to the function root
+ * (stripping leading `..`) and rewrite the link relative to its own directory.
+ *
+ * @param key the symlink's key within the function (e.g.
+ *   `apps/api/node_modules/hono`)
+ * @param target the raw symlink target read from disk (e.g.
+ *   `../../../node_modules/.pnpm/hono@.../node_modules/hono`)
+ * @returns the re-anchored target, or the original target when it already
+ *   resolves inside the function root
+ */
+function reanchorSymlinkTarget(key: string, target: string): string {
+  // Where does the link point, relative to the function root?
+  const resolvedFromRoot = normalizePath(join(dirname(key), target));
+  // If it doesn't escape the function root, it's already valid — leave it.
+  if (!resolvedFromRoot.startsWith('../')) {
+    return target;
+  }
+  // Anchor the resolved target inside the function root, then rewrite the link
+  // relative to its own directory so it resolves to that anchored location.
+  const anchoredTarget = stripParentSegments(resolvedFromRoot);
+  return normalizePath(relative(dirname(key), anchoredTarget));
+}
+
+/**
  * Removes the `FileFsRef` instances from the `Files` object
  * and returns them in a JSON serializable map of repo root
  * relative paths to Lambda destination paths.
+ *
+ * Standalone builds have two modes:
+ *
+ *  - **monorepo-root mode** (`VERCEL_STANDALONE_MONOREPO_ROOT=1`): the build
+ *    already traced files relative to the true monorepo root, so traced keys
+ *    are anchored inside the function. Files are written directly into the
+ *    function and package-manager symlinks are preserved (with their targets
+ *    re-anchored), making the function self-contained with no `filePathMap`
+ *    indirection. This is the consistent path we are migrating toward.
+ *
+ *  - **legacy mode** (default): the build traced relative to `cwd` (the app
+ *    dir), so hoisted dependencies produce keys that escape the function
+ *    root. Those keys are re-anchored and their bytes recorded in
+ *    `filePathMap`/`shared` for the deploy pipeline to hydrate. External
+ *    symlinks are skipped (their targets would be rejected on deploy).
  */
 export function filesWithoutFsRefs(
   files: Files,
@@ -972,25 +1026,41 @@ export function filesWithoutFsRefs(
   sharedDest?: string,
   standalone?: boolean
 ): { files: Files; filePathMap?: Record<string, string>; shared?: Files } {
+  const monorepoRootMode = process.env.VERCEL_STANDALONE_MONOREPO_ROOT === '1';
   let filePathMap: Record<string, string> | undefined;
   const out: Files = {};
   const shared: Files = {};
   for (const [path, file] of Object.entries(files)) {
     if (file.type === 'FileFsRef') {
       if (!filePathMap) filePathMap = {};
-      if (standalone && sharedDest) {
-        // pnpm and other package managers create symlinks in node_modules that
-        // point outside the app directory (e.g. ../../node_modules/.pnpm/...).
-        // These targets are rejected during prebuilt deploys, so skip them.
-        // The traced dependency files are included at their logical paths.
+      if (standalone && sharedDest && monorepoRootMode) {
+        // The build traced relative to the true monorepo root, so dependency
+        // file keys are already anchored inside the function. Write them
+        // directly into the function (no `filePathMap` indirection). Preserve
+        // package-manager symlinks so bare imports resolve at runtime,
+        // re-anchoring any target that would otherwise escape the function.
+        if (isSymbolicLink(file.mode)) {
+          const target = getSymlinkTarget(file);
+          if (target !== null) {
+            out[normalizePath(path)] = new FileBlob({
+              mode: file.mode,
+              data: reanchorSymlinkTarget(normalizePath(path), target),
+            });
+            continue;
+          }
+        }
+        out[normalizePath(path)] = file;
+      } else if (standalone && sharedDest) {
+        // Legacy mode: the build traced relative to `cwd`, so hoisted
+        // dependencies escape the function root. pnpm symlinks pointing
+        // outside the app are rejected on deploy, so skip them; the traced
+        // dependency bytes are included at their (re-anchored) logical paths.
         if (isExternalSymlink(file)) {
           continue;
         }
-        // A standalone function must be self-contained, so any remaining file
-        // whose key escapes the function root (e.g. `../../node_modules/...`,
-        // produced when building from a monorepo subdirectory) is re-anchored
-        // inside the function. The shared bytes are placed under the same
-        // anchored key so the recorded `filePathMap` value points at them.
+        // Re-anchor any file whose key escapes the function root and record the
+        // shared bytes under the same anchored key so `filePathMap` points at
+        // them.
         const funcPath = stripParentSegments(path);
         shared[funcPath] = file;
         filePathMap[funcPath] = normalizePath(

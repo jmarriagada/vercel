@@ -129,6 +129,7 @@ import { pullEnvRecords } from '../../util/env/get-env-records';
 import { buildCommand } from './command';
 import { validatePackageManifest } from '../../util/validate-package-manifest';
 import { shouldEmbedFlagsDefinitions } from '../../util/flags/build-embedding';
+import { resolveRepoRoot } from '../../util/build/repo-root';
 
 /** Build a plain suggested command with global flags (e.g. --cwd, --non-interactive) appended. */
 function buildCommandWithGlobalFlags(
@@ -642,10 +643,26 @@ async function doBuild(
 
   const workPath = join(cwd, project.settings.rootDirectory || '.');
 
+  // When building a standalone (prebuilt) artifact from a monorepo
+  // subdirectory, dependencies are frequently hoisted to the monorepo root
+  // above `cwd`. Tracing relative to `cwd` then produces function file keys
+  // that escape the function root (`../../node_modules/...`), which breaks
+  // both zipping and runtime module resolution. Resolving the true monorepo
+  // root and using it as `repoRootPath` keeps every traced path anchored
+  // inside the function. Gated behind an opt-in env var while it bakes.
+  const useMonorepoRepoRoot =
+    standalone && process.env.VERCEL_STANDALONE_MONOREPO_ROOT === '1';
+  const repoRootPath = useMonorepoRepoRoot ? resolveRepoRoot({ cwd }) : cwd;
+  if (repoRootPath !== cwd) {
+    output.debug(
+      `Standalone build: using monorepo root as repoRootPath: ${repoRootPath} (cwd=${cwd})`
+    );
+  }
+
   const sourceConfigFile = await findSourceVercelConfigFile(workPath);
   let corepackShimDir: string | null | undefined;
   if (sourceConfigFile) {
-    corepackShimDir = await initCorepack({ repoRootPath: cwd });
+    corepackShimDir = await initCorepack({ repoRootPath });
 
     const installDepsSpan = span.child('vc.installDeps');
     try {
@@ -963,7 +980,6 @@ async function doBuild(
   const executedBuilds: Builder[] = [];
   const buildResults: Map<Builder, BuildResult | BuildOutputConfig> = new Map();
   const overrides: PathOverride[] = [];
-  const repoRootPath = cwd;
   // Only initialize corepack if not already done during early install
   if (!corepackShimDir) {
     corepackShimDir = await initCorepack({ repoRootPath });
