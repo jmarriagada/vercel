@@ -49,6 +49,9 @@ import {
   type TriggerEvent,
   sanitizeConsumerName,
   downloadFile,
+  type DeployManifest,
+  type DeployManifestService,
+  type PackageManifest,
 } from '@vercel/build-utils';
 import type { VercelConfig } from '@vercel/client';
 import { fileNameSymbol } from '@vercel/client';
@@ -1829,9 +1832,13 @@ async function doBuild(
   }
 
   // Aggregate individual package-manifest.json files from builders into
-  // a single project-manifest.json keyed by service workspace.
+  // a single project-manifest.json and deploy-manifest.json keyed by service workspace.
   if (packageManifests.length > 0) {
     const projectManifest: Record<string, unknown> = {};
+    const deployManifest: DeployManifest = {
+      manifestVersion: '2.0',
+      services: {},
+    };
     for (const {
       workspace,
       buildConfig,
@@ -1839,7 +1846,8 @@ async function doBuild(
       service,
       builderUse,
     } of packageManifests) {
-      projectManifest[`${builderUse}:${workspace}`] = {
+      const key = `${builderUse}:${workspace}`;
+      projectManifest[key] = {
         ...manifest,
         workspace,
         builder: builderUse,
@@ -1852,6 +1860,12 @@ async function doBuild(
             ? service.routePrefix
             : undefined,
       };
+      const deployService: DeployManifestService = {
+        ...(manifest as unknown as PackageManifest),
+        root: workspace,
+        builder: builderUse,
+      };
+      deployManifest.services[key] = deployService;
     }
     if (Object.keys(projectManifest).length > 0) {
       const projectManifestBlob = new FileBlob({
@@ -1862,6 +1876,19 @@ async function doBuild(
         downloadFile(
           projectManifestBlob,
           join(outputDir, 'diagnostics', 'project-manifest.json')
+        ).then(
+          () => undefined,
+          err => err
+        )
+      );
+      const deployManifestBlob = new FileBlob({
+        data: JSON.stringify(deployManifest),
+      });
+      diagnostics['deploy-manifest.json'] = deployManifestBlob;
+      ops.push(
+        downloadFile(
+          deployManifestBlob,
+          join(outputDir, 'diagnostics', 'deploy-manifest.json')
         ).then(
           () => undefined,
           err => err
