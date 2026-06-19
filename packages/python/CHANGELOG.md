@@ -1,5 +1,38 @@
 # @vercel/python
 
+## 6.46.1
+
+### Patch Changes
+
+- 480ee7c: Record the `python.bundle.totalSizeBytes` build span tag before the bundle size-limit checks, so oversized functions that exceed the limit (and fail the build) still report their size instead of being omitted from telemetry.
+
+## 6.46.0
+
+### Minor Changes
+
+- e84cf48: Produce an error message when the uv version is too old
+
+### Patch Changes
+
+- 0d9bc23: Scope `compileall` bytecode precompilation to Hive deployments. It now runs only when `VERCEL_PYTHON_ON_HIVE` is set and is gated behind `VERCEL_PYTHON_COMPILEALL` as an explicit opt-in flag (default off). The dev and custom-command guards are unchanged.
+
+## 6.45.1
+
+### Patch Changes
+
+- e9aa6f5: Remove hidden `--functions-beta` / `--no-functions-beta` deploy flags and the size-limit hint messaging
+
+## 6.45.0
+
+### Minor Changes
+
+- d712d41: Override uv's exclude-newer when install vercel-runtime/vercel-workers
+- dbb31fc: Override uv's exclude-newer when installing vercel-runtime/vercel-workers for dev server
+
+### Patch Changes
+
+- f7f0003: Refactor dev server dep injection to not be so duplicated
+
 ## 6.44.1
 
 ### Patch Changes

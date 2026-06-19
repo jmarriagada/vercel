@@ -66,6 +66,7 @@ import { build, prepareCache } from '../src/index';
 import type { BuildResultV3, BuildResultV2 } from '@vercel/build-utils';
 import { createVenvEnv, getVenvBinDir } from '../src/utils';
 import {
+  UV_VERSION,
   UV_PYTHON_DOWNLOADS_MODE,
   getProtectedUvEnv,
   getUvCacheDir,
@@ -159,8 +160,12 @@ function createMockUvRunner(options?: {
   onLock?: (options: any) => void;
 }) {
   return class MockUvRunner {
+    uvPath: string;
+    constructor(uvPath = '/mock/uv') {
+      this.uvPath = uvPath;
+    }
     getPath() {
-      return '/mock/uv';
+      return this.uvPath;
     }
     async sync(syncOptions: any) {
       options?.onSync?.(syncOptions);
@@ -950,6 +955,10 @@ function makeMockPython(version: string) {
     const uvWinScript = [
       '@echo off',
       'rem mock uv binary',
+      'if "%1"=="--version" (',
+      `  echo uv ${UV_VERSION} ^(mock 2026-01-01^)`,
+      '  exit /b 0',
+      ')',
       'if "%1"=="python" if "%2"=="list" (',
       `  type "${uvPythonListFile}"`,
       '  exit /b 0',
@@ -963,6 +972,10 @@ function makeMockPython(version: string) {
     const uvPosixScript = [
       '#!/bin/sh',
       '# mock uv binary',
+      'if [ "$1" = "--version" ]; then',
+      `  echo "uv ${UV_VERSION} (mock 2026-01-01)"`,
+      '  exit 0',
+      'fi',
       'if [ "$1" = "python" ] && [ "$2" = "list" ]; then',
       `  /bin/cat "${uvPythonListFile}"`,
       '  exit 0',
@@ -1215,6 +1228,10 @@ describe('uv workspace lockfile resolution (workspace root above workPath)', () 
       const uvWinScript = [
         '@echo off',
         'rem mock uv binary (workspace)',
+        'if "%1"=="--version" (',
+        `  echo uv ${UV_VERSION} ^(mock 2026-01-01^)`,
+        '  exit /b 0',
+        ')',
         'if "%1"=="python" if "%2"=="list" (',
         `  type "${uvPythonListFile}"`,
         '  exit /b 0',
@@ -1227,6 +1244,10 @@ describe('uv workspace lockfile resolution (workspace root above workPath)', () 
       const uvPosixScript = [
         '#!/bin/sh',
         '# mock uv binary (workspace)',
+        'if [ "$1" = "--version" ]; then',
+        `  echo "uv ${UV_VERSION} (mock 2026-01-01)"`,
+        '  exit 0',
+        'fi',
         'if [ "$1" = "python" ] && [ "$2" = "list" ]; then',
         `  /bin/cat "${uvPythonListFile}"`,
         '  exit 0',
@@ -3705,6 +3726,7 @@ describe('worker services dependency installation', () => {
           pipCalls.push(options.args);
         }
       },
+      checkUvBinaryVersion: () => `uv ${UV_VERSION} (mock)`,
     }));
 
     // Worker dependency installation happens before dependency externalization.

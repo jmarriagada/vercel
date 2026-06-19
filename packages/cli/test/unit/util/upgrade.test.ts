@@ -1,14 +1,16 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { EventEmitter } from 'events';
 import { tmpdir } from 'os';
-import { spawn } from 'child_process';
+import { spawn, execFile } from 'child_process';
 import output from '../../../src/output-manager';
 import { executeUpgrade } from '../../../src/util/upgrade';
 import { getUpdateCommandInfo } from '../../../src/util/get-update-command';
+import pkg from '../../../src/util/pkg';
 
 // Mock child_process
 vi.mock('child_process', () => ({
   spawn: vi.fn(),
+  execFile: vi.fn(),
 }));
 
 // Mock output-manager
@@ -30,12 +32,39 @@ vi.mock('../../../src/util/get-update-command', () => ({
 }));
 
 const spawnMock = vi.mocked(spawn);
+const execFileMock = vi.mocked(execFile);
 const outputMock = vi.mocked(output);
 const getUpdateCommandInfoMock = vi.mocked(getUpdateCommandInfo);
+
+// Makes the post-upgrade `vercel --version` lookup resolve to `version`.
+function mockInstalledVersion(version: string) {
+  execFileMock.mockImplementation(((
+    _cmd: string,
+    _args: string[],
+    _opts: unknown,
+    cb: (err: Error | null, res?: { stdout: string; stderr: string }) => void
+  ) => {
+    const callback = typeof _opts === 'function' ? (_opts as typeof cb) : cb;
+    callback(null, { stdout: `${version}\n`, stderr: '' });
+    return {} as any;
+  }) as any);
+}
 
 describe('executeUpgrade', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Default: the post-upgrade version lookup fails, so getInstalledVersion()
+    // returns undefined and the generic success message is used.
+    execFileMock.mockImplementation(((
+      _cmd: string,
+      _args: string[],
+      _opts: unknown,
+      cb: (err: Error | null) => void
+    ) => {
+      const callback = typeof _opts === 'function' ? (_opts as typeof cb) : cb;
+      callback(new Error('command not found'));
+      return {} as any;
+    }) as any);
   });
 
   afterEach(() => {
@@ -79,6 +108,62 @@ describe('executeUpgrade', () => {
     );
     // Output should NOT be printed on success
     expect(outputMock.print).not.toHaveBeenCalled();
+  });
+
+  it('should include the target version in the success message when provided', async () => {
+    const mockProcess = createMockProcess();
+    spawnMock.mockReturnValue(mockProcess as any);
+
+    const exitCodePromise = executeUpgrade('99.9.9');
+    await tick();
+
+    mockProcess.emit('close', 0);
+
+    const exitCode = await exitCodePromise;
+
+    expect(exitCode).toBe(0);
+    expect(outputMock.success).toHaveBeenCalledWith(
+      'Vercel CLI has been upgraded to v99.9.9 successfully!'
+    );
+  });
+
+  it('reports no upgrade available when the version did not change', async () => {
+    const mockProcess = createMockProcess();
+    spawnMock.mockReturnValue(mockProcess as any);
+    // After the install, the installed version matches the running version.
+    mockInstalledVersion(pkg.version);
+
+    const exitCodePromise = executeUpgrade();
+    await tick();
+
+    mockProcess.emit('close', 0);
+
+    const exitCode = await exitCodePromise;
+
+    expect(exitCode).toBe(0);
+    expect(outputMock.success).not.toHaveBeenCalled();
+    expect(outputMock.log).toHaveBeenCalledWith(
+      `No upgrade available. Vercel CLI is already on the latest version (v${pkg.version}).`
+    );
+  });
+
+  it('reports the new version when the install upgraded the CLI', async () => {
+    const mockProcess = createMockProcess();
+    spawnMock.mockReturnValue(mockProcess as any);
+    // After the install, a newer version is present than what is running.
+    mockInstalledVersion('999.0.0');
+
+    const exitCodePromise = executeUpgrade();
+    await tick();
+
+    mockProcess.emit('close', 0);
+
+    const exitCode = await exitCodePromise;
+
+    expect(exitCode).toBe(0);
+    expect(outputMock.success).toHaveBeenCalledWith(
+      'Vercel CLI has been upgraded to v999.0.0 successfully!'
+    );
   });
 
   it('should show captured output and error message on failed upgrade', async () => {
