@@ -64,9 +64,6 @@ export default async function segmentsUpdate(
   const description = flags['--description'] as string | undefined;
   const hint = flags['--hint'] as string | undefined;
   const dataInput = flags['--data'] as string | undefined;
-  const ruleInputs = (flags['--rule'] as string[] | undefined) ?? [];
-  const includeInputs = (flags['--include'] as string[] | undefined) ?? [];
-  const excludeInputs = (flags['--exclude'] as string[] | undefined) ?? [];
   const addInputs = (flags['--add'] as string[] | undefined) ?? [];
   const removeInputs = (flags['--remove'] as string[] | undefined) ?? [];
   const json = flags['--json'] as boolean | undefined;
@@ -76,9 +73,6 @@ export default async function segmentsUpdate(
   telemetryClient.trackCliOptionDescription(description);
   telemetryClient.trackCliOptionHint(hint);
   telemetryClient.trackCliOptionData(dataInput);
-  telemetryClient.trackCliOptionRule(ruleInputs);
-  telemetryClient.trackCliOptionInclude(includeInputs);
-  telemetryClient.trackCliOptionExclude(excludeInputs);
   telemetryClient.trackCliOptionAdd(addInputs);
   telemetryClient.trackCliOptionRemove(removeInputs);
   telemetryClient.trackCliFlagJson(json);
@@ -126,9 +120,6 @@ export default async function segmentsUpdate(
     }
 
     const operations = buildOperations({
-      ruleInputs,
-      includeInputs,
-      excludeInputs,
       addInputs,
       removeInputs,
     });
@@ -163,7 +154,7 @@ export default async function segmentsUpdate(
             status: AGENT_STATUS.ERROR,
             reason: AGENT_REASON.MISSING_ARGUMENTS,
             message:
-              'Please provide at least one segment update option, such as --label, --data, --rule, --include, --add, or --remove.',
+              'Please provide at least one segment update option, such as --label, --data, --add, or --remove.',
             next: [
               {
                 command: buildCommandWithGlobalFlags(
@@ -274,7 +265,7 @@ async function resolveSegmentArg(
   if (segments.length === 0) {
     output.error('No feature flag segments found');
     output.log(
-      `Create one with: ${getCommandName('flags segments create beta-users --label "Beta users" --include user.id=user_123')}`
+      `Create one with: ${getCommandName('flags segments create beta-users --label "Beta users" --add include:user.id=user_123')}`
     );
     return undefined;
   }
@@ -330,16 +321,10 @@ async function buildUpdateRequest(
 }
 
 function buildOperations(input: {
-  ruleInputs: string[];
-  includeInputs: string[];
-  excludeInputs: string[];
   addInputs: string[];
   removeInputs: string[];
 }): SegmentOperation[] {
   return [
-    ...buildSegmentRuleOperations('add', input.ruleInputs),
-    ...buildSegmentOperations('include', 'add', input.includeInputs),
-    ...buildSegmentOperations('exclude', 'add', input.excludeInputs),
     ...buildSegmentTargetOperations('add', input.addInputs),
     ...buildSegmentTargetOperations('remove', input.removeInputs),
   ];

@@ -12,6 +12,8 @@ import {
 import { AGENT_REASON, AGENT_STATUS } from '../../util/agent-output-constants';
 import {
   addSegmentValue,
+  applySegmentOperations,
+  buildSegmentTargetOperations,
   normalizeSegmentData,
   parseSegmentDataInput,
   parseSegmentRuleInput,
@@ -51,9 +53,7 @@ export default async function segmentsCreate(
   const description = flags['--description'] as string | undefined;
   let hint = flags['--hint'] as string | undefined;
   const dataInput = flags['--data'] as string | undefined;
-  const ruleInputs = (flags['--rule'] as string[] | undefined) ?? [];
-  const includeInputs = (flags['--include'] as string[] | undefined) ?? [];
-  const excludeInputs = (flags['--exclude'] as string[] | undefined) ?? [];
+  const addInputs = (flags['--add'] as string[] | undefined) ?? [];
   const json = flags['--json'] as boolean | undefined;
 
   telemetryClient.trackCliArgumentSlug(slug);
@@ -61,9 +61,7 @@ export default async function segmentsCreate(
   telemetryClient.trackCliOptionDescription(description);
   telemetryClient.trackCliOptionHint(hint);
   telemetryClient.trackCliOptionData(dataInput);
-  telemetryClient.trackCliOptionRule(ruleInputs);
-  telemetryClient.trackCliOptionInclude(includeInputs);
-  telemetryClient.trackCliOptionExclude(excludeInputs);
+  telemetryClient.trackCliOptionAdd(addInputs);
   telemetryClient.trackCliFlagJson(json);
 
   if (!slug) {
@@ -78,7 +76,7 @@ export default async function segmentsCreate(
             {
               command: buildCommandWithGlobalFlags(
                 client.argv,
-                'flags segments create <slug> --label <label> --include user.id=<value>'
+                'flags segments create <slug> --label <label> --add include:user.id=<value>'
               ),
               when: 'create a segment with explicit values',
             },
@@ -90,7 +88,7 @@ export default async function segmentsCreate(
     }
     output.error('Please provide a slug for the segment');
     output.log(
-      `Example: ${getCommandName('flags segments create beta-users --label "Beta users" --include user.id=user_123')}`
+      `Example: ${getCommandName('flags segments create beta-users --label "Beta users" --add include:user.id=user_123')}`
     );
     return 1;
   }
@@ -136,9 +134,7 @@ export default async function segmentsCreate(
   try {
     data = await collectSegmentData(client, {
       dataInput,
-      ruleInputs,
-      includeInputs,
-      excludeInputs,
+      addInputs,
     });
   } catch (err) {
     output.error((err as Error).message);
@@ -223,9 +219,7 @@ async function collectSegmentData(
   client: Client,
   input: {
     dataInput?: string;
-    ruleInputs: string[];
-    includeInputs: string[];
-    excludeInputs: string[];
+    addInputs: string[];
   }
 ): Promise<SegmentData> {
   const hasExplicitData = Boolean(input.dataInput);
@@ -233,31 +227,20 @@ async function collectSegmentData(
     ? parseSegmentDataInput(input.dataInput!)
     : normalizeSegmentData({});
 
-  if (input.ruleInputs.length > 0) {
-    data.rules = (data.rules ?? []).concat(
-      input.ruleInputs.map(rule => parseSegmentRuleInput(rule))
-    );
-  }
-
-  for (const includeInput of input.includeInputs) {
-    addSegmentValue(data, 'include', includeInput);
-  }
-  for (const excludeInput of input.excludeInputs) {
-    addSegmentValue(data, 'exclude', excludeInput);
-  }
+  const operations = buildSegmentTargetOperations('add', input.addInputs);
+  const nextData =
+    operations.length > 0 ? applySegmentOperations(data, operations) : data;
 
   if (
     !hasExplicitData &&
-    input.ruleInputs.length === 0 &&
-    input.includeInputs.length === 0 &&
-    input.excludeInputs.length === 0 &&
+    input.addInputs.length === 0 &&
     client.stdin.isTTY &&
     !client.nonInteractive
   ) {
-    await collectSegmentDataInteractively(client, data);
+    await collectSegmentDataInteractively(client, nextData);
   }
 
-  return normalizeSegmentData(data);
+  return normalizeSegmentData(nextData);
 }
 
 async function collectSegmentDataInteractively(

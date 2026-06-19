@@ -684,30 +684,12 @@ export const segmentsCreateSubcommand = {
       argument: 'JSON',
     },
     {
-      name: 'rule',
-      shorthand: 'r',
+      name: 'add',
+      shorthand: 'a',
       type: [String],
       deprecated: false,
-      description: `Rule as ENTITY.ATTRIBUTE:OPERATOR:VALUE or full rule JSON; repeat to OR rules. ${segmentRuleOperatorDescription}`,
-      argument: 'RULE',
-    },
-    {
-      name: 'include',
-      shorthand: 'i',
-      type: [String],
-      deprecated: false,
-      description:
-        'Include a value as ENTITY.ATTRIBUTE=VALUE or ENTITY.ATTRIBUTE=VALUE|NOTE; repeatable',
-      argument: 'VALUE',
-    },
-    {
-      name: 'exclude',
-      shorthand: 'x',
-      type: [String],
-      deprecated: false,
-      description:
-        'Exclude a value as ENTITY.ATTRIBUTE=VALUE or ENTITY.ATTRIBUTE=VALUE|NOTE; repeatable',
-      argument: 'VALUE',
+      description: `Add include:ENTITY.ATTRIBUTE=VALUE, exclude:ENTITY.ATTRIBUTE=VALUE, or rule:ENTITY.ATTRIBUTE:OPERATOR:VALUE; repeatable. ${segmentRuleOperatorDescription}`,
+      argument: 'TARGET',
     },
     {
       name: 'json',
@@ -720,11 +702,11 @@ export const segmentsCreateSubcommand = {
   examples: [
     {
       name: 'Create a segment with included users',
-      value: `${packageName} flags segments create beta-users --label "Beta users" --include user.id=user_123 --include user.id=user_456`,
+      value: `${packageName} flags segments create beta-users --label "Beta users" --add include:user.id=user_123 --add include:user.id=user_456`,
     },
     {
       name: 'Create a segment from rules',
-      value: `${packageName} flags segments create enterprise-users --label "Enterprise users" --rule user.plan:eq:enterprise`,
+      value: `${packageName} flags segments create enterprise-users --label "Enterprise users" --add rule:user.plan:eq:enterprise`,
     },
     {
       name: 'Create a segment from full JSON data',
@@ -778,36 +760,11 @@ export const segmentsUpdateSubcommand = {
       argument: 'JSON',
     },
     {
-      name: 'rule',
-      shorthand: 'r',
-      type: [String],
-      deprecated: false,
-      description: `Add a rule as ENTITY.ATTRIBUTE:OPERATOR:VALUE or full rule JSON; repeatable. ${segmentRuleOperatorDescription}`,
-      argument: 'RULE',
-    },
-    {
-      name: 'include',
-      shorthand: 'i',
-      type: [String],
-      deprecated: false,
-      description: 'Add an included value as ENTITY.ATTRIBUTE=VALUE',
-      argument: 'VALUE',
-    },
-    {
-      name: 'exclude',
-      shorthand: 'x',
-      type: [String],
-      deprecated: false,
-      description: 'Add an excluded value as ENTITY.ATTRIBUTE=VALUE',
-      argument: 'VALUE',
-    },
-    {
       name: 'add',
       shorthand: 'a',
       type: [String],
       deprecated: false,
-      description:
-        'Add include:ENTITY.ATTRIBUTE=VALUE, exclude:ENTITY.ATTRIBUTE=VALUE, or rule:ENTITY.ATTRIBUTE:OPERATOR:VALUE; repeatable',
+      description: `Add include:ENTITY.ATTRIBUTE=VALUE, exclude:ENTITY.ATTRIBUTE=VALUE, or rule:ENTITY.ATTRIBUTE:OPERATOR:VALUE; repeatable. ${segmentRuleOperatorDescription}`,
       argument: 'TARGET',
     },
     {
@@ -815,8 +772,7 @@ export const segmentsUpdateSubcommand = {
       shorthand: null,
       type: [String],
       deprecated: false,
-      description:
-        'Remove include:ENTITY.ATTRIBUTE=VALUE, exclude:ENTITY.ATTRIBUTE=VALUE, rule:ENTITY.ATTRIBUTE:OPERATOR:VALUE, or rule:RULE_ID; repeatable',
+      description: `Remove include:ENTITY.ATTRIBUTE=VALUE, exclude:ENTITY.ATTRIBUTE=VALUE, rule:ENTITY.ATTRIBUTE:OPERATOR:VALUE, or rule:RULE_ID; repeatable. ${segmentRuleOperatorDescription}`,
       argument: 'TARGET',
     },
     {

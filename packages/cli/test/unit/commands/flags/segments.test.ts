@@ -134,10 +134,10 @@ describe('flags segments', () => {
         'enterprise-users',
         '--label',
         'Enterprise users',
-        '--include',
-        'user.id=user_789|manual add',
-        '--rule',
-        'user.plan:eq:enterprise'
+        '--add',
+        'include:user.id=user_789|manual add',
+        '--add',
+        'rule:user.plan:eq:enterprise'
       );
 
       const exitCode = await flags(client);
@@ -194,8 +194,8 @@ describe('flags segments', () => {
         'non-gmail-users',
         '--label',
         'Non Gmail users',
-        '--rule',
-        'user.email:not-contains:gmail.com'
+        '--add',
+        'rule:user.email:not-contains:gmail.com'
       );
 
       const exitCode = await flags(client);
@@ -216,8 +216,8 @@ describe('flags segments', () => {
         'invalid-rule',
         '--label',
         'Invalid rule',
-        '--rule',
-        'user.plan:near:pro'
+        '--add',
+        'rule:user.plan:near:pro'
       );
 
       const exitCode = await flags(client);
@@ -265,8 +265,8 @@ describe('flags segments', () => {
         'beta-users',
         '--add',
         'rule:user.email:ends-with:@company.com',
-        '--rule',
-        'user.country:eq:US',
+        '--add',
+        'rule:user.country:eq:US',
         '--remove',
         'rule:user.plan:eq:pro'
       );
@@ -278,16 +278,22 @@ describe('flags segments', () => {
         value: 'user_123',
       });
       expect(segmentsList[0].data.rules).toHaveLength(2);
-      expect(segmentsList[0].data.rules?.[0].conditions[0]).toMatchObject({
-        lhs: { type: 'entity', kind: 'user', attribute: 'country' },
-        cmp: 'eq',
-        rhs: 'US',
-      });
-      expect(segmentsList[0].data.rules?.[1].conditions[0]).toMatchObject({
-        lhs: { type: 'entity', kind: 'user', attribute: 'email' },
-        cmp: 'endsWith',
-        rhs: '@company.com',
-      });
+      expect(
+        segmentsList[0].data.rules?.map(rule => rule.conditions[0])
+      ).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            lhs: { type: 'entity', kind: 'user', attribute: 'country' },
+            cmp: 'eq',
+            rhs: 'US',
+          }),
+          expect.objectContaining({
+            lhs: { type: 'entity', kind: 'user', attribute: 'email' },
+            cmp: 'endsWith',
+            rhs: '@company.com',
+          }),
+        ])
+      );
     });
 
     it('removes list-style rules stored by the API', async () => {

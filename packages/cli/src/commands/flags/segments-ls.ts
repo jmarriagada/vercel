@@ -72,7 +72,7 @@ export default async function segmentsLs(
         `No feature flag segments found for ${projectSlugLink} ${chalk.gray(lsStamp())}`
       );
       output.log(
-        `\nCreate one with: ${getCommandName('flags segments create beta-users --label "Beta users" --include user.id=user_123')}`
+        `\nCreate one with: ${getCommandName('flags segments create beta-users --label "Beta users" --add include:user.id=user_123')}`
       );
     } else {
       output.log(

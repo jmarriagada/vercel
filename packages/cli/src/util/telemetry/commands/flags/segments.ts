@@ -108,28 +108,10 @@ export class FlagsSegmentsCreateTelemetryClient extends TelemetryClient {
     }
   }
 
-  trackCliOptionRule(rule: string[] | undefined) {
-    if (rule?.length) {
+  trackCliOptionAdd(add: string[] | undefined) {
+    if (add?.length) {
       this.trackCliOption({
-        option: 'rule',
-        value: this.redactedValue,
-      });
-    }
-  }
-
-  trackCliOptionInclude(include: string[] | undefined) {
-    if (include?.length) {
-      this.trackCliOption({
-        option: 'include',
-        value: this.redactedValue,
-      });
-    }
-  }
-
-  trackCliOptionExclude(exclude: string[] | undefined) {
-    if (exclude?.length) {
-      this.trackCliOption({
-        option: 'exclude',
+        option: 'add',
         value: this.redactedValue,
       });
     }
@@ -183,33 +165,6 @@ export class FlagsSegmentsUpdateTelemetryClient extends TelemetryClient {
     if (data) {
       this.trackCliOption({
         option: 'data',
-        value: this.redactedValue,
-      });
-    }
-  }
-
-  trackCliOptionRule(rule: string[] | undefined) {
-    if (rule?.length) {
-      this.trackCliOption({
-        option: 'rule',
-        value: this.redactedValue,
-      });
-    }
-  }
-
-  trackCliOptionInclude(include: string[] | undefined) {
-    if (include?.length) {
-      this.trackCliOption({
-        option: 'include',
-        value: this.redactedValue,
-      });
-    }
-  }
-
-  trackCliOptionExclude(exclude: string[] | undefined) {
-    if (exclude?.length) {
-      this.trackCliOption({
-        option: 'exclude',
         value: this.redactedValue,
       });
     }
