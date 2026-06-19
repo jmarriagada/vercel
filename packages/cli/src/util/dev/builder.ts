@@ -589,10 +589,14 @@ export async function getBuildMatches(
     // while still passing `index.go` through so @vercel/go owns detection.
     if (buildConfig.config?.framework === 'go' && !fileList.includes(src)) {
       const originalSrc = src;
-      const { detectGoEntrypoint } = await import('@vercel/go');
-      const detectedEntrypoint = await detectGoEntrypoint(cwd, originalSrc);
-      if (detectedEntrypoint && fileList.includes(detectedEntrypoint)) {
-        src = detectedEntrypoint;
+      const goEntrypoints = [
+        'main.go',
+        'cmd/api/main.go',
+        'cmd/server/main.go',
+      ];
+      const existing = goEntrypoints.filter(p => fileList.includes(p));
+      if (existing.length > 0) {
+        src = existing[0];
         mapToEntrypoint.set(src, originalSrc);
       }
     }
