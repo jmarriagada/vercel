@@ -1277,12 +1277,6 @@ exports[`help command > deploy help output snapshots > deploy help column width 
                                 to the  
                                 linked  
                                 project)
-  -p,  --public                 Deploym…
-                                is      
-                                public  
-                                (\`/_src…
-                                is      
-                                exposed)
        --regions <REGION>       Set     
                                 default 
                                 regions 
@@ -1435,7 +1429,6 @@ exports[`help command > deploy help output snapshots > deploy help column width 
                                 \`--target=production\`)                          
        --project <NAME_OR_ID>   Project name or ID (defaults to the linked      
                                 project)                                        
-  -p,  --public                 Deployment is public (\`/_src\`) is exposed)      
        --regions <REGION>       Set default regions to enable the deployment on 
        --skip-domain            Disable the automatic promotion (aliasing) of   
                                 the relevant domains to a new production        
@@ -1509,7 +1502,6 @@ exports[`help command > deploy help output snapshots > deploy help column width 
        --prebuilt               Use in combination with \`vc build\`. Deploy an existing build                            
        --prod                   Create a production deployment (shorthand for \`--target=production\`)                    
        --project <NAME_OR_ID>   Project name or ID (defaults to the linked project)                                     
-  -p,  --public                 Deployment is public (\`/_src\`) is exposed)                                              
        --regions <REGION>       Set default regions to enable the deployment on                                         
        --skip-domain            Disable the automatic promotion (aliasing) of the relevant domains to a new production  
                                 deployment. You can use \`vc promote\` to complete the domain-assignment process later    
@@ -2536,16 +2528,15 @@ exports[`help command > env help output snapshots > env add help output snapshot
 "
   ▲ vercel env add name [environment] [git-branch] [options]
 
-  Add an Environment Variable (see examples below)                                                                      
+  Add an Environment Variable                                                                                           
 
   Options:
 
-       --force          Force overwrites when a command would normally fail                                                  
-       --guidance       Receive command suggestions once command is complete                                                 
-       --no-sensitive   Opt out of the sensitive default on Production and Preview; value remains readable later             
-       --sensitive      Force the Environment Variable to be sensitive, even when adding to Development (will fail           
-                        server-side)                                                                                         
-       --value <VALUE>  Value for the variable (non-interactive). Otherwise use stdin or you will be prompted.               
+       --force          Overwrite an existing variable for the same target                                                   
+       --guidance       Show command suggestions after completion                                                            
+       --no-sensitive   Store the value as non-sensitive when policy allows                                                  
+       --sensitive      Store the value as sensitive for Production or Preview                                               
+       --value <VALUE>  Set the variable value for non-interactive use; otherwise use stdin or the prompt                    
   -y,  --yes            Skip the confirmation prompt when adding an Environment Variable                                     
 
 
@@ -2594,9 +2585,9 @@ exports[`help command > env help output snapshots > env add help output snapshot
     $ cat ~/.npmrc | vercel env add NPM_RC preview
     $ vercel env add API_URL production < url.txt
 
-  - Add with value as argument (non-interactive)
+  - Add with --value for non-interactive use
 
-    $ vercel env add API_TOKEN production --value "secret" --yes
+    $ vercel env add API_TOKEN production --value "<value>" --yes
 
 "
 `;
@@ -2611,9 +2602,6 @@ exports[`help command > env help output snapshots > env help column width 40 1`]
   Commands:
 
   add     name [environment] [git-branch]  …
-                                           …
-                                           …
-                                           …
                                            …
                                            …
                                            …
@@ -2734,8 +2722,7 @@ exports[`help command > env help output snapshots > env help column width 80 1`]
 
   Commands:
 
-  add     name [environment] [git-branch]  Add an Environment Variable (see
-                                           examples below)                 
+  add     name [environment] [git-branch]  Add an Environment Variable     
   list    [environment] [git-branch]       List all Environment Variables  
                                            for a Project                   
   pull    [filename]                       Pull all Development Environment
@@ -2784,7 +2771,7 @@ exports[`help command > env help output snapshots > env help column width 120 1`
 
   Commands:
 
-  add     name [environment] [git-branch]  Add an Environment Variable (see examples below)                        
+  add     name [environment] [git-branch]  Add an Environment Variable                                             
   list    [environment] [git-branch]       List all Environment Variables for a Project                            
   pull    [filename]                       Pull all Development Environment Variables from the cloud and write to a
                                            file [.env.local]                                                       
@@ -4746,50 +4733,50 @@ exports[`help command > link help output snapshots > link help column width 40 1
   ▲ vercel link command [options]
 
   Link a local directory to a Vercel    
-  Project.                              
+  project                               
 
   Commands:
 
-  add    Add additional Vercel  
-         Projects to an existing
-         repository link.       
-         Requires an existing   
-         repo.json (created by  
-         \`link --repo\`).        
+  add    Add projects to an     
+         existing repository    
+         link created by link   
+         --repo                 
 
 
   Options:
 
-  -p,  --project <NAME_OR_ID>    Project  
+  -p,  --project <NAME_OR_ID>    Set the  
+                                 project  
                                  name or  
                                  ID to    
-                                 link to  
-                                 (required
+                                 link;    
+                                 required 
                                  for      
                                  non-inte…
+                                 existing…
+                                 links    
   -r,  --repo                    Link     
                                  multiple 
                                  projects 
-                                 based on 
+                                 from the 
                                  Git      
                                  reposito…
                                  (alpha)  
-       --team <TEAM_ID_OR_SLUG>  Scope:   
+       --team <TEAM_ID_OR_SLUG>  Set the  
                                  team ID  
-                                 or slug  
-                                 (use with
+                                 or slug; 
+                                 use with 
                                  --project
                                  for      
                                  non-inte…
+                                 links    
   -y,  --yes                     Skip     
                                  questions
                                  when     
                                  setting  
-                                 up new   
-                                 project  
-                                 using    
+                                 up with  
                                  default  
-                                 scope and
+                                 team and 
                                  settings 
 
 
@@ -4843,7 +4830,7 @@ exports[`help command > link help output snapshots > link help column width 40 1
 
   Examples:
 
-  - Link current directory to a Vercel Project
+  - Link current directory to a Vercel project
 
     $ vercel link
 
@@ -4851,15 +4838,15 @@ exports[`help command > link help output snapshots > link help column width 40 1
 
     $ vercel link --yes
 
-  - Non-interactive: link to an existing project (CI/agents)
+  - Link to an existing project in CI or agent mode
 
     $ vercel link --yes --team <team-id> --project <project-name-or-id>
 
-  - Link a specific directory to a Vercel Project
+  - Link a specific directory to a Vercel project
 
     $ vercel link --cwd /path/to/project
 
-  - Link to the current Git repository, allowing for multiple Vercel Projects to be linked simultaneously (useful for monorepos)
+  - Link multiple projects from the current Git repository
 
     $ vercel link --repo
 
@@ -4874,24 +4861,24 @@ exports[`help command > link help output snapshots > link help column width 80 1
 "
   ▲ vercel link command [options]
 
-  Link a local directory to a Vercel Project.                                   
+  Link a local directory to a Vercel project                                    
 
   Commands:
 
-  add    Add additional Vercel Projects to an existing repository link. 
-         Requires an existing repo.json (created by \`link --repo\`).     
+  add    Add projects to an existing repository link created by link    
+         --repo                                                         
 
 
   Options:
 
-  -p,  --project <NAME_OR_ID>    Project name or ID to link to (required for      
-                                 non-interactive)                                 
-  -r,  --repo                    Link multiple projects based on Git repository   
+  -p,  --project <NAME_OR_ID>    Set the project name or ID to link; required for 
+                                 non-interactive existing-project links           
+  -r,  --repo                    Link multiple projects from the Git repository   
                                  (alpha)                                          
-       --team <TEAM_ID_OR_SLUG>  Scope: team ID or slug (use with --project for   
-                                 non-interactive)                                 
-  -y,  --yes                     Skip questions when setting up new project using 
-                                 default scope and settings                       
+       --team <TEAM_ID_OR_SLUG>  Set the team ID or slug; use with --project for  
+                                 non-interactive links                            
+  -y,  --yes                     Skip questions when setting up with default team 
+                                 and settings                                     
 
 
   Global Options:
@@ -4912,7 +4899,7 @@ exports[`help command > link help output snapshots > link help column width 80 1
 
   Examples:
 
-  - Link current directory to a Vercel Project
+  - Link current directory to a Vercel project
 
     $ vercel link
 
@@ -4920,15 +4907,15 @@ exports[`help command > link help output snapshots > link help column width 80 1
 
     $ vercel link --yes
 
-  - Non-interactive: link to an existing project (CI/agents)
+  - Link to an existing project in CI or agent mode
 
     $ vercel link --yes --team <team-id> --project <project-name-or-id>
 
-  - Link a specific directory to a Vercel Project
+  - Link a specific directory to a Vercel project
 
     $ vercel link --cwd /path/to/project
 
-  - Link to the current Git repository, allowing for multiple Vercel Projects to be linked simultaneously (useful for monorepos)
+  - Link multiple projects from the current Git repository
 
     $ vercel link --repo
 
@@ -4943,20 +4930,19 @@ exports[`help command > link help output snapshots > link help column width 120 
 "
   ▲ vercel link command [options]
 
-  Link a local directory to a Vercel Project.                                                                           
+  Link a local directory to a Vercel project                                                                            
 
   Commands:
 
-  add    Add additional Vercel Projects to an existing repository link. Requires an existing repo.json (created 
-         by \`link --repo\`).                                                                                     
+  add    Add projects to an existing repository link created by link --repo                                     
 
 
   Options:
 
-  -p,  --project <NAME_OR_ID>    Project name or ID to link to (required for non-interactive)                             
-  -r,  --repo                    Link multiple projects based on Git repository (alpha)                                   
-       --team <TEAM_ID_OR_SLUG>  Scope: team ID or slug (use with --project for non-interactive)                          
-  -y,  --yes                     Skip questions when setting up new project using default scope and settings              
+  -p,  --project <NAME_OR_ID>    Set the project name or ID to link; required for non-interactive existing-project links  
+  -r,  --repo                    Link multiple projects from the Git repository (alpha)                                   
+       --team <TEAM_ID_OR_SLUG>  Set the team ID or slug; use with --project for non-interactive links                    
+  -y,  --yes                     Skip questions when setting up with default team and settings                            
 
 
   Global Options:
@@ -4975,7 +4961,7 @@ exports[`help command > link help output snapshots > link help column width 120 
 
   Examples:
 
-  - Link current directory to a Vercel Project
+  - Link current directory to a Vercel project
 
     $ vercel link
 
@@ -4983,15 +4969,15 @@ exports[`help command > link help output snapshots > link help column width 120 
 
     $ vercel link --yes
 
-  - Non-interactive: link to an existing project (CI/agents)
+  - Link to an existing project in CI or agent mode
 
     $ vercel link --yes --team <team-id> --project <project-name-or-id>
 
-  - Link a specific directory to a Vercel Project
+  - Link a specific directory to a Vercel project
 
     $ vercel link --cwd /path/to/project
 
-  - Link to the current Git repository, allowing for multiple Vercel Projects to be linked simultaneously (useful for monorepos)
+  - Link multiple projects from the current Git repository
 
     $ vercel link --repo
 

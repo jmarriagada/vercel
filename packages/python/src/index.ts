@@ -1,5 +1,4 @@
 import assert from 'assert';
-import { execSync } from 'child_process';
 import fs from 'fs';
 import { join, dirname, basename, parse } from 'path';
 import {
@@ -42,7 +41,6 @@ import {
 } from './install';
 import {
   PythonDependencyExternalizer,
-  LAMBDA_SIZE_THRESHOLD_BYTES,
   HIVE_LAMBDA_SIZE_BYTES,
   lambdaKnapsack,
   calculateBundleSize,
@@ -53,6 +51,7 @@ import {
   getUvBinaryOrInstall,
   getUvCacheDir,
   findUvInPath,
+  checkUvBinaryVersion,
 } from './uv';
 import { resolvePythonVersion, pythonVersionString } from './version';
 import { generateProjectManifest } from './diagnostics';
@@ -514,10 +513,6 @@ export const build: BuildVX = async ({
   try {
     const uvPath = await getUvBinaryOrInstall(pythonVersion.pythonPath);
     uv = new UvRunner(uvPath, uvCacheDir);
-    const uvVersionOutput = execSync(`${uvPath} --version`, {
-      encoding: 'utf8',
-    }).trim();
-    console.log(`Using ${uvVersionOutput}`);
   } catch (err) {
     console.log('Failed to install or locate uv');
     throw new Error(
@@ -526,6 +521,9 @@ export const build: BuildVX = async ({
       }`
     );
   }
+
+  const uvVersion = checkUvBinaryVersion(uv.getPath());
+  console.log(`Using ${uvVersion}`);
 
   const venvPath = service?.name
     ? join(workPath, '.vercel', 'python', 'services', service.name, '.venv')
@@ -989,13 +987,19 @@ from vercel_runtime.vc_init import vc_handler
     .trace(async bundleSpan => {
       // analyze() always computes source-only sizes so threshold
       // decisions are not inflated by bytecode overhead.
-      const depAnalysis = await depExternalizer.analyze(files);
-
-      bundleSpan.setAttributes({
-        'python.bundle.totalSizeBytes': String(depAnalysis.totalBundleSize),
-        'python.bundle.runtimeInstallEnabled': String(
-          depAnalysis.runtimeInstallEnabled
-        ),
+      //
+      // Record the size via the onSized callback (invoked before any
+      // size-limit enforcement that may throw) so the span is tagged even
+      // for oversized bundles that subsequently fail the build.
+      const depAnalysis = await depExternalizer.analyze(files, {
+        onSized: ({ totalSizeBytes, runtimeInstallEnabled }) => {
+          bundleSpan.setAttributes({
+            'python.bundle.totalSizeBytes': String(totalSizeBytes),
+            'python.bundle.runtimeInstallEnabled': String(
+              runtimeInstallEnabled
+            ),
+          });
+        },
       });
 
       if (depAnalysis.runtimeInstallEnabled) {
@@ -1044,15 +1048,11 @@ from vercel_runtime.vc_init import vc_handler
               });
             });
 
-          // Collect bytecode and fill remaining capacity.
-          const pythonOnHiveEnabled =
-            process.env.VERCEL_PYTHON_ON_HIVE === '1' ||
-            process.env.VERCEL_PYTHON_ON_HIVE === 'true';
-          const activeThreshold = pythonOnHiveEnabled
-            ? HIVE_LAMBDA_SIZE_BYTES
-            : LAMBDA_SIZE_THRESHOLD_BYTES;
+          // Collect bytecode and fill remaining capacity.  Compileall only
+          // runs on Hive (see shouldUseCompileAll), so the Hive Lambda size
+          // threshold always applies here.
           const currentSize = await calculateBundleSize(files);
-          let remainingCapacity = activeThreshold - currentSize;
+          let remainingCapacity = HIVE_LAMBDA_SIZE_BYTES - currentSize;
 
           if (pythonVersion.major != null && pythonVersion.minor != null) {
             const appBytecodeInfo = await collectAppBytecodeFiles({
