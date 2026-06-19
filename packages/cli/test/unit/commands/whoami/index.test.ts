@@ -56,6 +56,7 @@ describe('whoami', () => {
   });
 
   it('should not use token introspection when the feature flag is disabled', async () => {
+    let introspectionCalled = false;
     client.scenario.get('/v2/user', (_req, res) => {
       res.status(403).json({
         error: {
@@ -65,6 +66,7 @@ describe('whoami', () => {
       });
     });
     client.scenario.post('/login/oauth/token/introspect', (_req, res) => {
+      introspectionCalled = true;
       res.status(500).json({
         error: {
           code: 'unexpected_introspection',
@@ -73,9 +75,10 @@ describe('whoami', () => {
       });
     });
 
-    const exitCode = await whoami(client);
-
-    expect(exitCode).toEqual(1);
+    await expect(whoami(client)).rejects.toThrow(
+      'The specified token is not valid.'
+    );
+    expect(introspectionCalled).toBe(false);
   });
 
   it('should print the Vercel App principal when the token is not user-backed', async () => {
