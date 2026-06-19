@@ -584,10 +584,11 @@ export async function getBuildMatches(
         mapToEntrypoint.set(src, originalSrc);
       }
     }
-    // The Go framework preset's src ("index.go") is a placeholder — the Go
-    // builder resolves the real entrypoint itself via `detectGoEntrypoint`.
-    // Match the entrypoint candidates here so a build match is created.
-    if (buildConfig.config?.framework === 'go' && !fileList.includes(src)) {
+    // The Go builder handles entrypoint discovery itself via <detect>.
+    // Match a real candidate file so the dev server creates a BuildMatch,
+    // but only when the preset explicitly asks the runtime to detect it.
+    if (buildConfig.config?.framework === 'go' && src === '<detect>') {
+      const originalSrc = src;
       const goEntrypoints = [
         'main.go',
         'cmd/api/main.go',
@@ -596,6 +597,7 @@ export async function getBuildMatches(
       const existing = goEntrypoints.filter(p => fileList.includes(p));
       if (existing.length > 0) {
         src = existing[0];
+        mapToEntrypoint.set(src, originalSrc);
       }
     }
     const extensionless = devServer.getExtensionlessFile(src);

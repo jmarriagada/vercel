@@ -1,7 +1,7 @@
 import fs from 'fs-extra';
 import { tmpdir } from 'os';
 import path from 'path';
-import { detectEntrypoint } from '../src/entrypoint';
+import { detectEntrypoint, detectGoEntrypoint } from '../src/entrypoint';
 
 async function makeTmp(name: string): Promise<string> {
   const dir = path.join(tmpdir(), `vc-go-detect-${name}-${Date.now()}`);
@@ -35,6 +35,18 @@ describe('detectEntrypoint (normalized)', () => {
         kind: 'file',
         entrypoint: 'cmd/api/main.go',
       });
+    } finally {
+      await fs.remove(dir);
+    }
+  });
+
+  it('treats <detect> as a request to discover the entrypoint', async () => {
+    const dir = await makeTmp('detect-sentinel');
+    try {
+      await fs.writeFile(path.join(dir, 'main.go'), 'package main\n');
+      await expect(detectGoEntrypoint(dir, '<detect>')).resolves.toBe(
+        'main.go'
+      );
     } finally {
       await fs.remove(dir);
     }

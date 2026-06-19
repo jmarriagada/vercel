@@ -16,13 +16,13 @@ export async function detectGoEntrypoint(
   workPath: string,
   configuredEntrypoint?: string
 ): Promise<string | null> {
+  const entrypoint =
+    configuredEntrypoint === '<detect>' ? undefined : configuredEntrypoint;
+
   // If the configured entrypoint exists, use it
-  if (
-    configuredEntrypoint &&
-    (await pathExists(join(workPath, configuredEntrypoint)))
-  ) {
-    debug(`Using configured Go entrypoint: ${configuredEntrypoint}`);
-    return configuredEntrypoint;
+  if (entrypoint && (await pathExists(join(workPath, entrypoint)))) {
+    debug(`Using configured Go entrypoint: ${entrypoint}`);
+    return entrypoint;
   }
 
   // Search candidate locations
