@@ -52,6 +52,7 @@ from vercel_runtime.routing import (
     apply_service_route_prefix_to_target,
     split_request_target,
 )
+from vercel_runtime.utils import read_wsgi_request_body
 from vercel_runtime.workers import (
     is_worker_service,
     maybe_bootstrap_worker_service_app,
@@ -546,12 +547,13 @@ class ASGIMiddleware:
         receive: _ASGIReceive,
         send: _ASGISend,
     ) -> None:
-        if scope.get("type") != "http":
-            # Non-HTTP traffic is forwarded verbatim
+        scope_type = scope.get("type")
+        if scope_type not in ("http", "websocket"):
+            # Non-HTTP/WebSocket traffic is forwarded verbatim
             await self.app(scope, receive, send)
             return
 
-        if scope.get("path") == "/_vercel/ping":
+        if scope_type == "http" and scope.get("path") == "/_vercel/ping":
             await send(
                 {
                     "type": "http.response.start",
@@ -644,9 +646,14 @@ class ASGIMiddleware:
         set_vercel_headers_from_asgi_pairs(new_headers)
         set_runtime_cache_from_asgi_pairs(sc_pairs)
 
-        try:
-            await self.app(new_scope, receive, send)
-        finally:
+        request_finished = False
+
+        def finish_request() -> None:
+            nonlocal request_finished
+            if request_finished:
+                return
+
+            request_finished = True
             clear_runtime_cache_context()
             clear_vercel_headers_context()
             storage.reset(token)
@@ -661,6 +668,34 @@ class ASGIMiddleware:
                     },
                 }
             )
+
+        async def send_wrapper(message: dict[str, Any]) -> None:
+            await send(message)
+
+            if scope_type != "websocket":
+                return
+
+            message_type = message.get("type")
+            if message_type == "websocket.accept":
+                # End the request lifecycle once the 101 is sent so the
+                # platform can begin bidirectional WebSocket streaming.
+                finish_request()
+                return
+
+            if message_type == "websocket.close":
+                finish_request()
+                return
+
+            if (
+                message_type == "websocket.http.response.body"
+                and not message.get("more_body")
+            ):
+                finish_request()
+
+        try:
+            await self.app(new_scope, receive, send_wrapper)
+        finally:
+            finish_request()
 
 
 if "VERCEL_IPC_PATH" in os.environ:
@@ -893,9 +928,14 @@ if "VERCEL_IPC_PATH" in os.environ:
                         "_vc_service_root_path",
                         "",
                     )
-                    content_length = int(self.headers.get("Content-Length", 0))
+                    try:
+                        body = read_wsgi_request_body(self.rfile, self.headers)
+                    except ValueError as exc:
+                        self.log_error("invalid request body: %s", exc)
+                        self.send_error(400)
+                        return
                     env: dict[str, Any] = {
-                        "CONTENT_LENGTH": str(content_length),
+                        "CONTENT_LENGTH": str(len(body)),
                         "CONTENT_TYPE": self.headers.get("content-type", ""),
                         "SCRIPT_NAME": service_root_path,
                         "PATH_INFO": path,
@@ -910,7 +950,7 @@ if "VERCEL_IPC_PATH" in os.environ:
                         ),
                         "SERVER_PROTOCOL": "HTTP/1.1",
                         "wsgi.errors": sys.stderr,
-                        "wsgi.input": BytesIO(self.rfile.read(content_length)),
+                        "wsgi.input": BytesIO(body),
                         "wsgi.multiprocess": False,
                         "wsgi.multithread": False,
                         "wsgi.run_once": False,
@@ -923,6 +963,9 @@ if "VERCEL_IPC_PATH" in os.environ:
                         if isinstance(value, string_types):
                             env[key] = wsgi_encoding_dance(value)
                     for k, v in self.headers.items():
+                        # Hop-by-hop; body is already de-chunked (PEP 3333).
+                        if k.lower() == "transfer-encoding":
+                            continue
                         env["HTTP_" + k.replace("-", "_").upper()] = v
 
                     def start_response(
