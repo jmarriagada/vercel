@@ -340,6 +340,27 @@ describe('flags segments', () => {
       expect(segmentsList[0].data.rules).toHaveLength(1);
       expect(segmentsList[0].data.rules?.[0].id).toEqual('rule_plan');
     });
+
+    it('errors when removing a rule ID that does not exist', async () => {
+      client.setArgv(
+        'flags',
+        'segments',
+        'update',
+        'beta-users',
+        '--remove',
+        'rule:missing_rule'
+      );
+
+      const exitCode = await flags(client);
+
+      expect(exitCode).toEqual(1);
+      expect(client.stderr.getFullOutput()).toContain(
+        'Segment rule "missing_rule" does not exist.'
+      );
+      expect(segmentsList[0].data.rules?.map(rule => rule.id)).toEqual([
+        'rule_plan',
+      ]);
+    });
   });
 
   describe('rm', () => {

@@ -245,12 +245,22 @@ export function applySegmentOperations(
       if (operation.action === 'add') {
         next.rules = (next.rules ?? []).concat(structuredClone(operation.rule));
       } else if (operation.ruleId) {
-        next.rules = (next.rules ?? []).filter(
-          rule => rule.id !== operation.ruleId
-        );
+        const rules = next.rules ?? [];
+        const ruleExists = rules.some(rule => rule.id === operation.ruleId);
+        if (!ruleExists) {
+          throw new Error(`Segment rule "${operation.ruleId}" does not exist.`);
+        }
+        next.rules = rules.filter(rule => rule.id !== operation.ruleId);
       } else if (operation.rule) {
         const ruleToRemove = operation.rule;
-        next.rules = (next.rules ?? []).filter(
+        const rules = next.rules ?? [];
+        const ruleExists = rules.some(rule =>
+          segmentRulesEqual(rule, ruleToRemove)
+        );
+        if (!ruleExists) {
+          throw new Error('Segment rule does not exist.');
+        }
+        next.rules = rules.filter(
           rule => !segmentRulesEqual(rule, ruleToRemove)
         );
       }
