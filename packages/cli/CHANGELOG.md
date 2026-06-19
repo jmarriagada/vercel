@@ -1,5 +1,18 @@
 # vercel
 
+## 54.14.3
+
+### Patch Changes
+
+- efc1811: Add `vercel blob signed-token` and `vercel blob presign` commands, and allow `blob presign` to accept explicit delegation/client-signing tokens or issue them automatically when omitted.
+- 7d29e22: Fix the `vercel metrics` function duration example to use the supported metric name.
+- 9afe46d: Unhide the `flags` command in CLI help output.
+- fe6d98b: Add WebSocket support for Python ASGI applications via vendored wsproto
+- Updated dependencies [e84cf48]
+- Updated dependencies [0d9bc23]
+  - @vercel/python@6.46.0
+  - @vercel/node@5.8.17
+
 ## 54.14.2
 
 ### Patch Changes
