@@ -16,6 +16,7 @@ import {
   type BuildResultV3,
   type File,
   type Files,
+  FileBlob,
   FileFsRef,
   type BuilderVX,
   type BuilderV2,
@@ -35,7 +36,8 @@ import {
   type ExperimentalService,
   type Service,
   isExperimentalService,
-  isExternalSymlink,
+  isSymbolicLink,
+  getSymlinkTarget,
 } from '@vercel/build-utils';
 import { getInternalServiceFunctionPath } from '@vercel/fs-detectors';
 import pipe from 'promisepipe';
@@ -962,6 +964,45 @@ function stripParentSegments(path: string): string {
 }
 
 /**
+ * Re-anchors a symlink so that it resolves inside the function root.
+ *
+ * pnpm (and other package managers) link a dependency into an app's
+ * `node_modules` with a relative symlink that points at the hoisted copy in
+ * the store, e.g. `apps/api/node_modules/hono` ->
+ * `../../../node_modules/.pnpm/hono@.../node_modules/hono`. These links are
+ * essential: Node resolves bare imports (`require('hono')`) by walking up
+ * `node_modules` directories from the handler, so without them the dependency
+ * is unreachable at runtime even though its bytes were traced into the
+ * function.
+ *
+ * The traced dependency files are re-anchored to the function root (the leading
+ * `..` segments are stripped — see {@link stripParentSegments}), so the link's
+ * resolved target must be re-anchored the same way. We compute where the target
+ * lives inside the function and rewrite the link relative to its own directory.
+ *
+ * @param key the symlink's key within the Lambda files (e.g.
+ *   `apps/api/node_modules/hono`)
+ * @param target the raw symlink target read from disk (e.g.
+ *   `../../../node_modules/.pnpm/hono@.../node_modules/hono`)
+ * @returns the re-anchored target, or the original target when it already
+ *   resolves inside the function root
+ */
+function reanchorSymlinkTarget(key: string, target: string): string {
+  // Where does the link currently point, relative to the function root?
+  const resolvedFromRoot = normalizePath(join(dirname(key), target));
+  // If it doesn't escape the function root, it's already valid — leave it.
+  if (!resolvedFromRoot.startsWith('../')) {
+    return target;
+  }
+  // Anchor the resolved target inside the function root, matching how the
+  // dependency files themselves are re-anchored.
+  const anchoredTarget = stripParentSegments(resolvedFromRoot);
+  // Rewrite the link relative to its own directory so it resolves to the
+  // anchored location inside the function.
+  return normalizePath(relative(dirname(key), anchoredTarget));
+}
+
+/**
  * Removes the `FileFsRef` instances from the `Files` object
  * and returns them in a JSON serializable map of repo root
  * relative paths to Lambda destination paths.
@@ -979,12 +1020,25 @@ export function filesWithoutFsRefs(
     if (file.type === 'FileFsRef') {
       if (!filePathMap) filePathMap = {};
       if (standalone && sharedDest) {
-        // pnpm and other package managers create symlinks in node_modules that
-        // point outside the app directory (e.g. ../../node_modules/.pnpm/...).
-        // These targets are rejected during prebuilt deploys, so skip them.
-        // The traced dependency files are included at their logical paths.
-        if (isExternalSymlink(file)) {
-          continue;
+        // pnpm (and other package managers) link a dependency into an app's
+        // `node_modules` with a relative symlink pointing at the hoisted copy
+        // in the store (e.g. `apps/api/node_modules/hono` ->
+        // `../../../node_modules/.pnpm/hono@.../node_modules/hono`). Node
+        // resolves bare imports by walking up `node_modules` directories from
+        // the handler, so these links must be preserved — without them the
+        // dependency is unreachable at runtime even though its bytes were
+        // traced into the function. The link's target is re-anchored to the
+        // re-anchored location of those bytes inside the function root.
+        if (isSymbolicLink(file.mode)) {
+          const target = getSymlinkTarget(file);
+          if (target !== null) {
+            const funcPath = stripParentSegments(path);
+            out[funcPath] = new FileBlob({
+              mode: file.mode,
+              data: reanchorSymlinkTarget(funcPath, target),
+            });
+            continue;
+          }
         }
         // A standalone function must be self-contained, so any remaining file
         // whose key escapes the function root (e.g. `../../node_modules/...`,
