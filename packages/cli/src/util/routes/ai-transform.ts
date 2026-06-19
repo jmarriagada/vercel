@@ -13,6 +13,7 @@ import { REDIRECT_STATUS_CODES } from './interactive';
 import type {
   AddRouteInput,
   HasField,
+  PathTransform,
   TargetTransform,
   Transform,
   RoutingRule,
@@ -31,6 +32,10 @@ function stringifyTransformArgs(
   args: string | string[] | undefined
 ): string | undefined {
   return Array.isArray(args) ? args.join(', ') : args;
+}
+
+function isPathTransform(transform: Transform): transform is PathTransform {
+  return transform.type === 'request.path';
 }
 
 /**
@@ -83,9 +88,15 @@ export function generatedRouteToAddInput(
         status = action.status;
         break;
       case 'modify': {
-        if (!action.headers) break;
+        if (action.subType === 'transform-request-path') {
+          if (!action.requestPath) break;
 
-        if (action.subType === 'response-headers') {
+          transforms.push({
+            type: 'request.path',
+            op: action.requestPath.op,
+            args: action.requestPath.value,
+          });
+        } else if (action.subType === 'response-headers' && action.headers) {
           for (const h of action.headers) {
             if (h.op === 'set') {
               headers[h.key] = h.value ?? '';
@@ -98,7 +109,10 @@ export function generatedRouteToAddInput(
               });
             }
           }
-        } else if (action.subType === 'transform-request-header') {
+        } else if (
+          action.subType === 'transform-request-header' &&
+          action.headers
+        ) {
           for (const h of action.headers) {
             transforms.push({
               type: 'request.headers',
@@ -107,7 +121,10 @@ export function generatedRouteToAddInput(
               ...(h.op !== 'delete' && h.value && { args: h.value }),
             });
           }
-        } else if (action.subType === 'transform-request-query') {
+        } else if (
+          action.subType === 'transform-request-query' &&
+          action.headers
+        ) {
           for (const h of action.headers) {
             transforms.push({
               type: 'request.query',
@@ -291,6 +308,19 @@ export function routingRuleToCurrentRoute(
     });
   }
 
+  const requestPath = allTransforms.find(isPathTransform);
+
+  if (requestPath) {
+    actions.push({
+      type: 'modify',
+      subType: 'transform-request-path',
+      requestPath: {
+        value: requestPath.args,
+        op: requestPath.op,
+      },
+    });
+  }
+
   return {
     name: rule.name,
     description: rule.description,
@@ -355,7 +385,16 @@ export function printGeneratedRoutePreview(generated: GeneratedRoute): void {
   }
 
   for (const action of generated.actions) {
-    if (action.type === 'modify' && action.headers) {
+    if (
+      action.type === 'modify' &&
+      action.subType === 'transform-request-path' &&
+      action.requestPath
+    ) {
+      output.print(`  ${chalk.cyan('Request Path:')}\n`);
+      output.print(
+        `    ${chalk.yellow(action.requestPath.op)} ${chalk.cyan('path')} = ${action.requestPath.value}\n`
+      );
+    } else if (action.type === 'modify' && action.headers) {
       const label =
         action.subType === 'response-headers'
           ? 'Response Headers'

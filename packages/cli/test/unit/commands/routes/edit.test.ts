@@ -1080,6 +1080,11 @@ describe('routes edit', () => {
               type: 'rewrite',
               dest: 'https://new-backend.internal/$1',
             },
+            {
+              type: 'modify',
+              subType: 'transform-request-path',
+              requestPath: { value: '/$1', op: 'set' },
+            },
           ],
         },
       });
@@ -1101,6 +1106,17 @@ describe('routes edit', () => {
       await expect(client.stderr).toOutput('Updated');
 
       await expect(exitCodePromise).resolves.toEqual(0);
+
+      const body = capturedBodies.edit as any;
+      expect(body.route.route.transforms).toEqual(
+        expect.arrayContaining([
+          {
+            type: 'request.path',
+            op: 'set',
+            args: '/$1',
+          },
+        ])
+      );
     });
 
     it('should show error when --ai is used with conflicting flags', async () => {

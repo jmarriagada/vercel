@@ -257,6 +257,30 @@ describe('ai-transform', () => {
       });
     });
 
+    it('should convert request path transforms', () => {
+      const generated: GeneratedRoute = {
+        name: 'Path Transform',
+        description: '',
+        pathCondition: { value: '/api/(.*)', syntax: 'regex' },
+        actions: [
+          {
+            type: 'modify',
+            subType: 'transform-request-path',
+            requestPath: { value: '/internal/$1', op: 'set' },
+          },
+        ],
+      };
+
+      const result = generatedRouteToAddInput(generated);
+
+      expect(result.route.transforms).toHaveLength(1);
+      expect(result.route.transforms![0]).toEqual({
+        type: 'request.path',
+        op: 'set',
+        args: '/internal/$1',
+      });
+    });
+
     it('should combine multiple action types', () => {
       const generated: GeneratedRoute = {
         name: 'Full Route',
@@ -568,13 +592,44 @@ describe('ai-transform', () => {
       ]);
     });
 
-    it('should default srcSyntax to regex when undefined', () => {
+    it('should convert request path transforms', () => {
       const rule = {
         id: 'r9',
+        name: 'Path',
+        route: {
+          src: '/test/(.*)',
+          transforms: [
+            {
+              type: 'request.path',
+              op: 'set',
+              args: '/internal/$1',
+            },
+          ],
+        },
+        enabled: true,
+        position: 8,
+        routeType: 'transform',
+      } as RoutingRule;
+
+      const result = routingRuleToCurrentRoute(rule);
+
+      const modifyAction = result.actions.find(
+        a => a.type === 'modify' && a.subType === 'transform-request-path'
+      );
+      expect(modifyAction).toBeDefined();
+      expect(modifyAction!.requestPath).toEqual({
+        value: '/internal/$1',
+        op: 'set',
+      });
+    });
+
+    it('should default srcSyntax to regex when undefined', () => {
+      const rule = {
+        id: 'r10',
         name: 'No Syntax',
         route: { src: '^/test$', dest: '/dest' },
         enabled: true,
-        position: 8,
+        position: 9,
         routeType: 'rewrite',
       } as RoutingRule;
 
