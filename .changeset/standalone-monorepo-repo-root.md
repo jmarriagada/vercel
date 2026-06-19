@@ -2,7 +2,7 @@
 'vercel': patch
 ---
 
-Add an opt-in, consistent fix for `vc build --standalone` from a monorepo subdirectory (gated behind `VERCEL_STANDALONE_MONOREPO_ROOT=1`).
+Add an opt-in, consistent fix for `vc build --standalone` from a monorepo subdirectory (gated behind `VERCEL_DETECT_REPO_ROOT=1`).
 
 When a standalone (prebuilt) build runs from an app directory whose dependencies are hoisted to the monorepo root (e.g. pnpm's `<root>/node_modules/.pnpm/...`), tracing relative to the app directory produces function file keys that escape the function root (`../../node_modules/...`). That breaks zipping (`invalid relative path`) and, even when the bytes are packaged, leaves dependencies unreachable at runtime (`Cannot find module 'hono'` / `Cannot find module 'next/dist/...'`).
 

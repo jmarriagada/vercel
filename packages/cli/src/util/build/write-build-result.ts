@@ -1007,7 +1007,7 @@ function reanchorSymlinkTarget(key: string, target: string): string {
  *
  * Standalone builds have two modes:
  *
- *  - **monorepo-root mode** (`VERCEL_STANDALONE_MONOREPO_ROOT=1`): the build
+ *  - **monorepo-root mode** (`VERCEL_DETECT_REPO_ROOT=1`): the build
  *    already traced files relative to the true monorepo root, so traced keys
  *    are anchored inside the function. Files are written directly into the
  *    function and package-manager symlinks are preserved (with their targets
@@ -1026,7 +1026,7 @@ export function filesWithoutFsRefs(
   sharedDest?: string,
   standalone?: boolean
 ): { files: Files; filePathMap?: Record<string, string>; shared?: Files } {
-  const monorepoRootMode = process.env.VERCEL_STANDALONE_MONOREPO_ROOT === '1';
+  const monorepoRootMode = process.env.VERCEL_DETECT_REPO_ROOT === '1';
   let filePathMap: Record<string, string> | undefined;
   const out: Files = {};
   const shared: Files = {};

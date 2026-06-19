@@ -358,7 +358,7 @@ describe('monorepo builds with VERCEL_BUILD_MONOREPO_SUPPORT', () => {
     delete process.env.VERCEL_BUILD_MONOREPO_SUPPORT;
     delete process.env.VERCEL_API_FUNCTION_BUNDLING;
     delete process.env.VERCEL_EXPERIMENTAL_BACKENDS;
-    delete process.env.VERCEL_STANDALONE_MONOREPO_ROOT;
+    delete process.env.VERCEL_DETECT_REPO_ROOT;
     delete process.env.TURBO_FORCE;
   });
 
@@ -727,7 +727,7 @@ describe('monorepo builds with VERCEL_BUILD_MONOREPO_SUPPORT', () => {
 });
 
 // New, consistent standalone monorepo behavior, gated behind
-// `VERCEL_STANDALONE_MONOREPO_ROOT`. In this mode the build resolves the true
+// `VERCEL_DETECT_REPO_ROOT`. In this mode the build resolves the true
 // monorepo root and traces relative to it, so:
 //
 //   * traced dependency keys are anchored inside the function (no escaping
@@ -741,15 +741,15 @@ describe('monorepo builds with VERCEL_BUILD_MONOREPO_SUPPORT', () => {
 // `@vercel/node`, and Next.js via `@vercel/next`) to prove the path is
 // framework-agnostic. Each asserts the dependency resolves from an isolated
 // copy of the function — the failure customers reported (`Cannot find module`).
-describe('standalone monorepo builds (VERCEL_STANDALONE_MONOREPO_ROOT)', () => {
+describe('standalone monorepo builds (VERCEL_DETECT_REPO_ROOT)', () => {
   beforeEach(() => {
     delete process.env.__VERCEL_BUILD_RUNNING;
     delete process.env.VERCEL_TRACING_DISABLE_AUTOMATIC_FETCH_INSTRUMENTATION;
-    process.env.VERCEL_STANDALONE_MONOREPO_ROOT = '1';
+    process.env.VERCEL_DETECT_REPO_ROOT = '1';
   });
 
   afterEach(() => {
-    delete process.env.VERCEL_STANDALONE_MONOREPO_ROOT;
+    delete process.env.VERCEL_DETECT_REPO_ROOT;
     delete process.env.VERCEL_BUILD_MONOREPO_SUPPORT;
     delete process.env.TURBO_FORCE;
   });

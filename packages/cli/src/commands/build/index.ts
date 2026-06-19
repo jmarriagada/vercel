@@ -651,7 +651,7 @@ async function doBuild(
   // root and using it as `repoRootPath` keeps every traced path anchored
   // inside the function. Gated behind an opt-in env var while it bakes.
   const useMonorepoRepoRoot =
-    standalone && process.env.VERCEL_STANDALONE_MONOREPO_ROOT === '1';
+    standalone && process.env.VERCEL_DETECT_REPO_ROOT === '1';
   const repoRootPath = useMonorepoRepoRoot ? resolveRepoRoot({ cwd }) : cwd;
   if (repoRootPath !== cwd) {
     output.debug(
