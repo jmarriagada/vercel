@@ -88,14 +88,10 @@ export async function executeUpgrade(targetVersion?: string): Promise<number> {
         return;
       }
 
-      if (targetVersion) {
-        output.success(
-          `Vercel CLI has been upgraded to v${targetVersion} successfully!`
-        );
-        resolve(0);
-        return;
-      }
-
+      // The install command always uses `@latest`, so the installed version
+      // may differ from the prompted target version if `latest` has moved on
+      // npm since the prompt was shown. Detect the actual version to report
+      // an accurate success message.
       getInstalledVersion().then(versionAfter => {
         if (versionAfter && versionAfter === versionBefore) {
           output.log(
@@ -104,6 +100,11 @@ export async function executeUpgrade(targetVersion?: string): Promise<number> {
         } else if (versionAfter) {
           output.success(
             `Vercel CLI has been upgraded to v${versionAfter} successfully!`
+          );
+        } else if (targetVersion) {
+          // Detection failed — fall back to what the caller provided
+          output.success(
+            `Vercel CLI has been upgraded to v${targetVersion} successfully!`
           );
         } else {
           output.success('Vercel CLI has been upgraded successfully!');
