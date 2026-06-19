@@ -38,6 +38,7 @@ import semver from 'semver';
 import epipebomb from 'epipebomb';
 import getLatestVersion, {
   fetchLatestVersion,
+  updateLatestVersionCache,
 } from './util/get-latest-version';
 import { URL } from 'url';
 import { getSentry } from './util/get-sentry';
@@ -1369,6 +1370,8 @@ main()
       let userUpToDate = false;
 
       if (fresh) {
+        updateLatestVersionCache({ name: pkg.name, version: fresh });
+
         if (semver.lt(pkg.version, fresh)) {
           latest = fresh;
         } else {

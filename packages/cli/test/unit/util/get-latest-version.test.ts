@@ -5,6 +5,7 @@ import sleep from '../../../src/util/sleep';
 import tmp from 'tmp-promise';
 import getLatestVersion, {
   fetchLatestVersion,
+  updateLatestVersionCache,
 } from '../../../src/util/get-latest-version';
 import { join } from 'path';
 import { fetchDistTags } from '../../../src/util/get-latest-version/fetch-dist-tags.cjs';
@@ -206,6 +207,54 @@ describe('get latest version', () => {
     const cacheAfterConsume = await fs.readJSON(cacheFile);
     expect(cacheAfterConsume.notifyAt).not.toEqual(originalNotifyAt);
     expect(cacheAfterConsume.notifyAt).toBeGreaterThan(Date.now());
+  });
+});
+
+describe('updateLatestVersionCache', () => {
+  it('writes the version to the cache file with a future expiry', async () => {
+    await fs.mkdirs(join(cacheDir, 'package-updates'));
+
+    updateLatestVersionCache({
+      cacheDir,
+      name: 'vercel',
+      version: '54.14.0',
+    });
+
+    const cache = await fs.readJSON(cacheFile);
+    expect(cache.version).toEqual('54.14.0');
+    expect(cache.expireAt).toBeGreaterThan(Date.now());
+  });
+
+  it('preserves notifyAt from the existing cache', async () => {
+    await fs.mkdirs(join(cacheDir, 'package-updates'));
+    const existingNotifyAt = Date.now() + 100000;
+    await fs.writeJSON(cacheFile, {
+      expireAt: Date.now() - 1000,
+      notifyAt: existingNotifyAt,
+      version: '54.2.0',
+    });
+
+    updateLatestVersionCache({
+      cacheDir,
+      name: 'vercel',
+      version: '54.14.0',
+    });
+
+    const cache = await fs.readJSON(cacheFile);
+    expect(cache.version).toEqual('54.14.0');
+    expect(cache.notifyAt).toEqual(existingNotifyAt);
+  });
+
+  it('works when no cache file exists yet', async () => {
+    updateLatestVersionCache({
+      cacheDir,
+      name: 'vercel',
+      version: '54.14.0',
+    });
+
+    const cache = await fs.readJSON(cacheFile);
+    expect(cache.version).toEqual('54.14.0');
+    expect(cache.expireAt).toBeGreaterThan(Date.now());
   });
 });
 

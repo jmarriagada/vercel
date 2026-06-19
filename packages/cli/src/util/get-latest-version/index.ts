@@ -187,3 +187,44 @@ export async function fetchLatestVersion({
   const tags = await fetchDistTags(name, { timeout });
   return tags?.[distTag];
 }
+
+interface UpdateLatestVersionCacheOptions {
+  cacheDir?: string;
+  distTag?: string;
+  name: string;
+  version: string;
+  updateCheckInterval?: number;
+}
+
+/**
+ * Writes a freshly fetched version to the cache file so that subsequent calls
+ * to {@link getLatestVersion} see an up-to-date value without needing to spawn
+ * the background worker.
+ *
+ * Preserves the existing `notifyAt` from the cache (if any).
+ */
+export function updateLatestVersionCache({
+  cacheDir = XDGAppPaths('com.vercel.cli').cache(),
+  distTag = 'latest',
+  name,
+  version,
+  updateCheckInterval = 1000 * 60 * 60 * 24, // 1 day
+}: UpdateLatestVersionCacheOptions): void {
+  const cacheFile = resolvePath(
+    cacheDir,
+    'package-updates',
+    `${name}-${distTag}.json`
+  );
+
+  let notifyAt: number | undefined;
+  try {
+    const existing = readJSONSync(cacheFile) as PackageInfoCache;
+    notifyAt = existing?.notifyAt;
+  } catch {}
+
+  outputJSONSync(cacheFile, {
+    expireAt: Date.now() + updateCheckInterval,
+    notifyAt,
+    version,
+  });
+}
