@@ -2,14 +2,14 @@
 'vercel': patch
 ---
 
-Add an opt-in, consistent fix for `vc build --standalone` from a monorepo subdirectory (gated behind `VERCEL_DETECT_REPO_ROOT=1`).
+Add opt-in repository-root detection for `vc build` run from a monorepo subdirectory (gated behind `VERCEL_DETECT_REPO_ROOT=1`).
 
-When a standalone (prebuilt) build runs from an app directory whose dependencies are hoisted to the monorepo root (e.g. pnpm's `<root>/node_modules/.pnpm/...`), tracing relative to the app directory produces function file keys that escape the function root (`../../node_modules/...`). That breaks zipping (`invalid relative path`) and, even when the bytes are packaged, leaves dependencies unreachable at runtime (`Cannot find module 'hono'` / `Cannot find module 'next/dist/...'`).
+When `vc build` is invoked from a subdirectory (e.g. `--cwd apps/docs`), `repoRootPath` defaults to that directory instead of the repository root. Any build whose dependencies live above the subdirectory then breaks, in several ways that share this one root cause:
 
-With the flag enabled, the build resolves the true monorepo root (via workspace markers, falling back to git, then cwd) and traces relative to it, so:
+- **Next.js (Turbopack)** errors with `Next.js inferred your workspace root, but it may not be correct ... couldn't find the Next.js package (next/package.json)`, because `outputFileTracingRoot` / `turbopack.root` are set to the app directory.
+- **Next.js (Webpack) and other builders** omit hoisted dependencies (e.g. `sharp`, even `next` itself) from `.nft.json` traces, causing `Cannot find module` errors at runtime.
+- **`--standalone`** produces function file keys that escape the function root (`../../node_modules/...`), breaking zipping (`invalid relative path`) and leaving dependencies unreachable at runtime (`Cannot find module 'hono'` / `next/dist/...`).
 
-- traced dependency keys are anchored inside the function (no escaping paths),
-- dependency files are written directly into the function with no `filePathMap`/`shared` indirection, and
-- package-manager symlinks are preserved (with their targets re-anchored) so bare imports resolve at runtime.
+With the flag enabled, the build resolves the true repository root (via workspace markers — `pnpm-workspace.yaml`, `package.json` `workspaces`, `lerna.json`, `rush.json` — falling back to the git root, then `cwd`) and uses it as `repoRootPath` so builders trace from the correct location. For `--standalone`, dependency files are additionally written directly into the function and package-manager symlinks are preserved (targets re-anchored) so bare imports resolve at runtime, with no `filePathMap`/`shared` indirection.
 
-This behaves identically across frameworks (verified for Hono via `@vercel/node` and Next.js via `@vercel/next`). The previous behavior is unchanged when the flag is not set.
+This is framework-agnostic (verified for Hono via `@vercel/node` and Next.js via `@vercel/next`, standalone and non-standalone). Behavior is unchanged when the flag is not set.

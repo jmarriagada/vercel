@@ -726,22 +726,27 @@ describe('monorepo builds with VERCEL_BUILD_MONOREPO_SUPPORT', () => {
   );
 });
 
-// New, consistent standalone monorepo behavior, gated behind
-// `VERCEL_DETECT_REPO_ROOT`. In this mode the build resolves the true
-// monorepo root and traces relative to it, so:
+// Repository-root detection, gated behind `VERCEL_DETECT_REPO_ROOT`. When
+// `vc build` runs from a subdirectory (e.g. `--cwd apps/api`), the build
+// resolves the true repository root and traces relative to it instead of
+// `cwd`. This fixes a family of monorepo bugs that share one root cause
+// (`repoRootPath` defaulting to the app dir):
 //
-//   * traced dependency keys are anchored inside the function (no escaping
-//     `../../node_modules/...`),
-//   * dependency files are written directly into the function with no
-//     `filePathMap`/`shared` indirection, and
-//   * package-manager symlinks are preserved (targets re-anchored) so bare
-//     imports resolve at runtime.
+//   * `--standalone`: traced dependency keys no longer escape the function
+//     root (`../../node_modules/...`); files are written directly into the
+//     function and package-manager symlinks are preserved so bare imports
+//     resolve at runtime.
+//   * non-standalone: builders receive the correct root, so Next.js sets a
+//     valid `outputFileTracingRoot`/`turbopack.root` and `.nft.json` traces
+//     include hoisted dependencies (otherwise `Cannot find module` at
+//     runtime, and Turbopack errors outright).
 //
-// These tests verify the SAME outcome across two frameworks (Hono via
-// `@vercel/node`, and Next.js via `@vercel/next`) to prove the path is
-// framework-agnostic. Each asserts the dependency resolves from an isolated
+// These tests verify the SAME outcome across frameworks (Hono via
+// `@vercel/node`, Next.js via `@vercel/next`) and across the standalone /
+// non-standalone split, to prove the fix is general rather than
+// standalone-specific. Each asserts the dependency resolves from an isolated
 // copy of the function — the failure customers reported (`Cannot find module`).
-describe('standalone monorepo builds (VERCEL_DETECT_REPO_ROOT)', () => {
+describe('repository-root detection builds (VERCEL_DETECT_REPO_ROOT)', () => {
   beforeEach(() => {
     delete process.env.__VERCEL_BUILD_RUNNING;
     delete process.env.VERCEL_TRACING_DISABLE_AUTOMATIC_FETCH_INSTRUMENTATION;
@@ -864,6 +869,59 @@ describe('standalone monorepo builds (VERCEL_DETECT_REPO_ROOT)', () => {
       const lambda = await createLambdaFromFuncDir(indexFuncDir, appDir);
       const zip = await lambda.createZip();
       expect(zip.length).toBeGreaterThan(0);
+    }
+  );
+
+  // Non-standalone: the same root cause (`repoRootPath` defaulting to the app
+  // dir) breaks regular `vc build --cwd <subdir>` too — builders trace from
+  // the wrong root, so hoisted dependencies are omitted from the function and
+  // fail at runtime (NEXT-4944). With repo-root detection the dependency is
+  // traced and resolves. This exercises the fix WITHOUT `--standalone`, so it
+  // does not touch the standalone `filePathMap`/symlink path at all — proving
+  // the fix is not standalone-specific.
+  it.skipIf(process.platform === 'win32')(
+    'traces a hono dependency for a non-standalone build from a subdirectory',
+    async () => {
+      const monorepoRoot = setupUnitFixture(
+        'commands/build/turborepo-hono-standalone'
+      );
+      const appDir = join(monorepoRoot, 'apps', 'api');
+      const output = join(appDir, '.vercel/output');
+
+      await execa('git', ['init'], { cwd: monorepoRoot });
+      await execa('pnpm', ['install', '--ignore-scripts'], {
+        cwd: monorepoRoot,
+      });
+
+      useUser();
+      useTeams('team_dummy');
+      useProject({
+        ...defaultProject,
+        id: 'prj_turborepo_hono_standalone',
+        name: 'turborepo-hono-standalone',
+        framework: 'hono',
+        rootDirectory: null,
+      });
+
+      // Note: no `--standalone` flag.
+      client.cwd = appDir;
+      client.setArgv('build', '--yes');
+      const exitCode = await build(client);
+      expect(exitCode).toEqual(0);
+
+      const indexFuncDir = join(output, 'functions', 'index.func');
+      expect(await fs.pathExists(indexFuncDir)).toBe(true);
+
+      // The traced dependency resolves at runtime from an isolated copy of the
+      // function (reconstructed via `filePathMap`, as the deploy pipeline
+      // does). Without repo-root detection the dependency is not traced and
+      // this fails with `Cannot find module 'hono'`.
+      await expectModuleResolvesInIsolatedFunc(
+        indexFuncDir,
+        monorepoRoot,
+        'apps/api/src',
+        'hono'
+      );
     }
   );
 });

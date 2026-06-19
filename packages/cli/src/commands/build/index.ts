@@ -643,19 +643,28 @@ async function doBuild(
 
   const workPath = join(cwd, project.settings.rootDirectory || '.');
 
-  // When building a standalone (prebuilt) artifact from a monorepo
-  // subdirectory, dependencies are frequently hoisted to the monorepo root
-  // above `cwd`. Tracing relative to `cwd` then produces function file keys
-  // that escape the function root (`../../node_modules/...`), which breaks
-  // both zipping and runtime module resolution. Resolving the true monorepo
-  // root and using it as `repoRootPath` keeps every traced path anchored
-  // inside the function. Gated behind an opt-in env var while it bakes.
-  const useMonorepoRepoRoot =
-    standalone && process.env.VERCEL_DETECT_REPO_ROOT === '1';
-  const repoRootPath = useMonorepoRepoRoot ? resolveRepoRoot({ cwd }) : cwd;
+  // `repoRootPath` should be the root of the repository/monorepo, but when
+  // `vc build` is invoked from a subdirectory (e.g. `--cwd apps/docs`) it
+  // defaults to `cwd`. That breaks any build whose dependencies live above
+  // `cwd`:
+  //
+  //   * Next.js sets `outputFileTracingRoot` / `turbopack.root` from this
+  //     path, so Turbopack errors ("inferred your workspace root ... couldn't
+  //     find next/package.json") and Webpack `.nft.json` traces omit hoisted
+  //     dependencies (e.g. `sharp`, even `next`), causing runtime
+  //     `Cannot find module` errors.
+  //   * `--standalone` produces function file keys that escape the function
+  //     root (`../../node_modules/...`), breaking zipping and runtime
+  //     resolution.
+  //
+  // Detecting the true repository root (via workspace markers, then git) and
+  // using it as `repoRootPath` fixes all of these consistently — it is not
+  // specific to `--standalone`. Gated behind an opt-in env var while it bakes.
+  const detectRepoRoot = process.env.VERCEL_DETECT_REPO_ROOT === '1';
+  const repoRootPath = detectRepoRoot ? resolveRepoRoot({ cwd }) : cwd;
   if (repoRootPath !== cwd) {
     output.debug(
-      `Standalone build: using monorepo root as repoRootPath: ${repoRootPath} (cwd=${cwd})`
+      `Using detected repository root as repoRootPath: ${repoRootPath} (cwd=${cwd})`
     );
   }
 

@@ -5,12 +5,17 @@ import { getGitRootDirectory } from '../git-helpers';
 /**
  * Resolves the root of the repository/monorepo that contains `cwd`.
  *
- * Standalone (prebuilt) builds run from an app directory but their
- * dependencies are frequently hoisted to the monorepo root above it (e.g.
- * pnpm's `<root>/node_modules/.pnpm/...`). To produce a self-contained
- * function, the build must trace files relative to that true root rather than
- * the app directory — otherwise traced file keys climb out of the function
- * (`../../node_modules/...`) and break both zipping and runtime resolution.
+ * When `vc build` is invoked from a monorepo subdirectory, dependencies are
+ * frequently hoisted to the repository root above it (e.g. pnpm's
+ * `<root>/node_modules/.pnpm/...`). Builders need to trace files relative to
+ * that true root rather than the subdirectory, otherwise:
+ *
+ *   * Next.js sets `outputFileTracingRoot` / `turbopack.root` to the
+ *     subdirectory, so Turbopack errors outright and Webpack `.nft.json`
+ *     traces omit hoisted dependencies (runtime `Cannot find module`), and
+ *   * `--standalone` emits function file keys that climb out of the function
+ *     (`../../node_modules/...`), breaking both zipping and runtime
+ *     resolution.
  *
  * Detection walks up from `cwd` and prefers, in order:
  *

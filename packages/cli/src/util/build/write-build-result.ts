@@ -1005,14 +1005,15 @@ function reanchorSymlinkTarget(key: string, target: string): string {
  * and returns them in a JSON serializable map of repo root
  * relative paths to Lambda destination paths.
  *
- * Standalone builds have two modes:
+ * For standalone builds this has two modes, depending on whether repository
+ * root detection (`VERCEL_DETECT_REPO_ROOT=1`) is enabled:
  *
- *  - **monorepo-root mode** (`VERCEL_DETECT_REPO_ROOT=1`): the build
- *    already traced files relative to the true monorepo root, so traced keys
- *    are anchored inside the function. Files are written directly into the
- *    function and package-manager symlinks are preserved (with their targets
- *    re-anchored), making the function self-contained with no `filePathMap`
- *    indirection. This is the consistent path we are migrating toward.
+ *  - **detected-root mode** (`VERCEL_DETECT_REPO_ROOT=1`): the build traced
+ *    files relative to the true repository root, so traced keys are anchored
+ *    inside the function. Files are written directly into the function and
+ *    package-manager symlinks are preserved (with their targets re-anchored),
+ *    making the function self-contained with no `filePathMap` indirection.
+ *    This is the consistent path we are migrating toward.
  *
  *  - **legacy mode** (default): the build traced relative to `cwd` (the app
  *    dir), so hoisted dependencies produce keys that escape the function
@@ -1026,15 +1027,15 @@ export function filesWithoutFsRefs(
   sharedDest?: string,
   standalone?: boolean
 ): { files: Files; filePathMap?: Record<string, string>; shared?: Files } {
-  const monorepoRootMode = process.env.VERCEL_DETECT_REPO_ROOT === '1';
+  const repoRootDetected = process.env.VERCEL_DETECT_REPO_ROOT === '1';
   let filePathMap: Record<string, string> | undefined;
   const out: Files = {};
   const shared: Files = {};
   for (const [path, file] of Object.entries(files)) {
     if (file.type === 'FileFsRef') {
       if (!filePathMap) filePathMap = {};
-      if (standalone && sharedDest && monorepoRootMode) {
-        // The build traced relative to the true monorepo root, so dependency
+      if (standalone && sharedDest && repoRootDetected) {
+        // The build traced relative to the true repository root, so dependency
         // file keys are already anchored inside the function. Write them
         // directly into the function (no `filePathMap` indirection). Preserve
         // package-manager symlinks so bare imports resolve at runtime,
