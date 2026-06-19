@@ -1,5 +1,11 @@
 # @vercel/python
 
+## 6.46.1
+
+### Patch Changes
+
+- 480ee7c: Record the `python.bundle.totalSizeBytes` build span tag before the bundle size-limit checks, so oversized functions that exceed the limit (and fail the build) still report their size instead of being omitted from telemetry.
+
 ## 6.46.0
 
 ### Minor Changes
