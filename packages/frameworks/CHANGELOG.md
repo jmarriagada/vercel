@@ -1,5 +1,31 @@
 # @vercel/frameworks
 
+## 3.29.1
+
+### Patch Changes
+
+- 3b273ff: lowercase Eve to eve in framework preset
+
+## 3.29.0
+
+### Minor Changes
+
+- 3d8df16: Add bun preset.
+
+### Patch Changes
+
+- 2fd14e0: Replace placeholder Eve framework logos with the official triangle mark used in Eve docs.
+- 68c2fd7: Graduate Eve from experimental frameworks so detection and deploys no longer require `VERCEL_USE_EXPERIMENTAL_FRAMEWORKS`.
+
+## 3.28.1
+
+### Patch Changes
+
+- 4421ad9: Allow the Node framework preset to work without a `package.json`. The `node`
+  framework is now detected from a `server.*` entrypoint alone, and the
+  `@vercel/backends` builder defaults the module format to ESM (`"module"`) when
+  no `package.json` is present instead of erroring with "Unable to resolve format".
+
 ## 3.28.0
 
 ### Minor Changes

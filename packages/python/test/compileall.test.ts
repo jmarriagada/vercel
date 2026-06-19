@@ -53,7 +53,9 @@ describe('isCompileAllEnabled', () => {
     expect(isCompileAllEnabled()).toBe(false);
   });
 
-  it('enables compileall for truthy env values', () => {
+  it('enables compileall on Hive for truthy flag values', () => {
+    process.env.VERCEL_PYTHON_ON_HIVE = '1';
+
     process.env.VERCEL_PYTHON_COMPILEALL = '1';
     expect(isCompileAllEnabled()).toBe(true);
 
@@ -64,7 +66,12 @@ describe('isCompileAllEnabled', () => {
     expect(isCompileAllEnabled()).toBe(true);
   });
 
-  it('keeps compileall disabled for other env values', () => {
+  it('keeps compileall disabled on Hive for non-truthy flag values', () => {
+    process.env.VERCEL_PYTHON_ON_HIVE = '1';
+
+    delete process.env.VERCEL_PYTHON_COMPILEALL;
+    expect(isCompileAllEnabled()).toBe(false);
+
     process.env.VERCEL_PYTHON_COMPILEALL = '';
     expect(isCompileAllEnabled()).toBe(false);
 
@@ -75,28 +82,11 @@ describe('isCompileAllEnabled', () => {
     expect(isCompileAllEnabled()).toBe(false);
   });
 
-  it('enables compileall by default when VERCEL_PYTHON_ON_HIVE is set', () => {
-    delete process.env.VERCEL_PYTHON_COMPILEALL;
+  it('never enables compileall off Hive, even when the flag is truthy', () => {
+    process.env.VERCEL_PYTHON_COMPILEALL = '1';
 
-    process.env.VERCEL_PYTHON_ON_HIVE = '1';
-    expect(isCompileAllEnabled()).toBe(true);
-
-    process.env.VERCEL_PYTHON_ON_HIVE = 'true';
-    expect(isCompileAllEnabled()).toBe(true);
-  });
-
-  it('respects explicit disable even when VERCEL_PYTHON_ON_HIVE is set', () => {
-    process.env.VERCEL_PYTHON_ON_HIVE = '1';
-
-    process.env.VERCEL_PYTHON_COMPILEALL = '0';
+    delete process.env.VERCEL_PYTHON_ON_HIVE;
     expect(isCompileAllEnabled()).toBe(false);
-
-    process.env.VERCEL_PYTHON_COMPILEALL = 'false';
-    expect(isCompileAllEnabled()).toBe(false);
-  });
-
-  it('does not enable compileall for non-truthy VERCEL_PYTHON_ON_HIVE', () => {
-    delete process.env.VERCEL_PYTHON_COMPILEALL;
 
     process.env.VERCEL_PYTHON_ON_HIVE = '0';
     expect(isCompileAllEnabled()).toBe(false);
@@ -110,20 +100,21 @@ describe('isCompileAllEnabled', () => {
 });
 
 describe('shouldUseCompileAll', () => {
-  it('explicit VERCEL_PYTHON_COMPILEALL=1 overrides custom command guard', () => {
+  it('enables compileall on Hive when the flag is set for non-custom builds', () => {
+    process.env.VERCEL_PYTHON_ON_HIVE = '1';
     process.env.VERCEL_PYTHON_COMPILEALL = '1';
 
     expect(
       shouldUseCompileAll({
         isDev: false,
-        hasCustomCommand: true,
+        hasCustomCommand: false,
       })
     ).toBe(true);
   });
 
-  it('Hive auto-enable does not override custom command guard', () => {
-    delete process.env.VERCEL_PYTHON_COMPILEALL;
+  it('does not enable compileall for custom commands, even on Hive with the flag set', () => {
     process.env.VERCEL_PYTHON_ON_HIVE = '1';
+    process.env.VERCEL_PYTHON_COMPILEALL = '1';
 
     expect(
       shouldUseCompileAll({
@@ -133,7 +124,8 @@ describe('shouldUseCompileAll', () => {
     ).toBe(false);
   });
 
-  it('does not enable compileall in dev even when explicitly set', () => {
+  it('does not enable compileall in dev even on Hive with the flag set', () => {
+    process.env.VERCEL_PYTHON_ON_HIVE = '1';
     process.env.VERCEL_PYTHON_COMPILEALL = '1';
 
     expect(
@@ -144,7 +136,8 @@ describe('shouldUseCompileAll', () => {
     ).toBe(false);
   });
 
-  it('enables compileall for non-custom builds when explicitly set', () => {
+  it('does not enable compileall off Hive even when the flag is set', () => {
+    delete process.env.VERCEL_PYTHON_ON_HIVE;
     process.env.VERCEL_PYTHON_COMPILEALL = '1';
 
     expect(
@@ -152,12 +145,12 @@ describe('shouldUseCompileAll', () => {
         isDev: false,
         hasCustomCommand: false,
       })
-    ).toBe(true);
+    ).toBe(false);
   });
 
-  it('does not enable compileall without explicit opt-in or Hive', () => {
+  it('does not enable compileall on Hive without the flag', () => {
+    process.env.VERCEL_PYTHON_ON_HIVE = '1';
     delete process.env.VERCEL_PYTHON_COMPILEALL;
-    delete process.env.VERCEL_PYTHON_ON_HIVE;
 
     expect(
       shouldUseCompileAll({
@@ -169,7 +162,7 @@ describe('shouldUseCompileAll', () => {
 });
 
 describe('runCompileAll', () => {
-  it('passes -j 0 and exclude regex to compileall when provided', async () => {
+  it('passes -j 0, -f, and exclude regex to compileall when provided', async () => {
     mockedExeca.mockResolvedValue({} as any);
     const env = { VIRTUAL_ENV: '/work/.vercel/python/.venv' };
 
@@ -188,6 +181,7 @@ describe('runCompileAll', () => {
         '-q',
         '-j',
         '0',
+        '-f',
         '--invalidation-mode',
         'unchecked-hash',
         '-x',
