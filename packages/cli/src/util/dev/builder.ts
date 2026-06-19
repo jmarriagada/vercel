@@ -584,9 +584,10 @@ export async function getBuildMatches(
         mapToEntrypoint.set(src, originalSrc);
       }
     }
-    // The Go framework preset uses `index.go` as its deployment mount point.
-    // During dev, match the real server entrypoint when that sentinel is absent,
-    // while still passing `index.go` through so @vercel/go owns detection.
+    // The Go framework preset keeps `index.go` as the stable build src for
+    // deployment routing. In dev, if that sentinel file is absent, match one
+    // of the known standalone entrypoints but still pass `index.go` through
+    // as the builder entrypoint so @vercel/go performs the final resolution.
     if (buildConfig.config?.framework === 'go' && !fileList.includes(src)) {
       const originalSrc = src;
       const goEntrypoints = [
