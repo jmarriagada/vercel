@@ -74,3 +74,17 @@ vercel blob empty-store --yes                                         # delete a
 vercel blob list-stores --all --json                                  # list every team store as JSON
 vercel blob list-stores --no-projects                                 # hide the Projects column in table output
 ```
+
+## Non-Interactive / Agent Use
+
+The destructive store commands — `delete-store` and `empty-store` — confirm before acting. `del` does **not** confirm (it deletes immediately).
+
+When stdin is not a TTY, or an agent is detected, or you pass `--non-interactive`, there is no prompt to answer. In that mode a destructive command without `--yes` does **not** silently proceed and does **not** hang — it fails fast: it prints a structured JSON error on stdout (`{"status":"error","reason":"confirmation_required",...}` with a suggested `next` command) and exits non-zero. Pass `--yes` to confirm up front:
+
+```bash
+# Agents / CI — confirm the destructive action explicitly
+vercel blob delete-store <store-id> --yes
+vercel blob empty-store --yes
+```
+
+`--yes` is per-command (only on the commands that confirm a mutation), while `--non-interactive` is a global flag and is auto-set when an agent is detected on a non-TTY stdin. The two are independent: `--non-interactive` suppresses prompts but never implies consent to a destructive mutation, so these commands still require `--yes`. See `global-options.md` for the global behavior.
