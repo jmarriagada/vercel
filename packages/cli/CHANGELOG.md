@@ -1,5 +1,152 @@
 # vercel
 
+## 54.14.4
+
+### Patch Changes
+
+- 4e11013: Keep Build Output API output at the root when generated `experimentalServicesV2` config identifies an already-built entrypoint as a service, and disable immutable static asset env flags for service-specific builds.
+- Updated dependencies [480ee7c]
+  - @vercel/python@6.46.1
+  - @vercel/static-build@2.10.3
+
+## 54.14.3
+
+### Patch Changes
+
+- efc1811: Add `vercel blob signed-token` and `vercel blob presign` commands, and allow `blob presign` to accept explicit delegation/client-signing tokens or issue them automatically when omitted.
+- 7d29e22: Fix the `vercel metrics` function duration example to use the supported metric name.
+- 9afe46d: Unhide the `flags` command in CLI help output.
+- fe6d98b: Add WebSocket support for Python ASGI applications via vendored wsproto
+- Updated dependencies [e84cf48]
+- Updated dependencies [0d9bc23]
+  - @vercel/python@6.46.0
+  - @vercel/node@5.8.17
+
+## 54.14.2
+
+### Patch Changes
+
+- 8e56ad5: Add experimental shim to enable Next.js WebSocket upgrade support in `vc dev`.
+- 07d3fe2: [cli] Add `traces create` as an alias for `curl --trace`
+
+## 54.14.1
+
+### Patch Changes
+
+- 3d6f057: [cli] Make `vercel blob` store commands work non-interactively for agents
+- 28dda45: Update Claude Code Vercel plugin prompts and remember accepted plugin updates for future automatic updates.
+- d55310f: Add CLI UX guidance and improve CLI output consistency.
+- b341a19: Improve CLI version output: the native binary now prints `Vercel CLI <version>` without the Node.js suffix, and `vercel upgrade` reports the version it upgraded to and says "No upgrade available" when already on the latest version.
+- 7f5f0f2: Fix telemetry flushing when running the CLI as a native binary.
+- 7866d3d: Allow `vercel buy addon customEnvironment <quantity>` by adding `customEnvironment` to the CLI add-on allowlist and help examples.
+- b7fbaec: Improve `vc metrics`: source groupable dimensions from the metric schema instead of a hardcoded list, preserve the requested time bounds so the query endpoint owns bucket rounding, and add an optional `--bucket-timezone` flag for calendar bucket alignment (it only affects bucket boundaries, not the `--since`/`--until` range or output timestamps).
+- e9aa6f5: Remove hidden `--functions-beta` / `--no-functions-beta` deploy flags and the size-limit hint messaging
+- fd26487: Remove deprecated `public` from deployment test fixtures and helpers, and stop the CLI from sending the removed `public` field on deploy (including the `--public` flag).
+- 5ed337e: Allow `vercel metrics` to combine repeated `--filter`/`-f` values with OData `and`.
+- aeea9f2: Render the ▲ gutter once per deploy summary: on the Aliased row, falling back to the Production row when no Aliased row will print (`--no-wait`, `--skip-domain`)
+- Updated dependencies [e9aa6f5]
+  - @vercel/python@6.45.1
+
+## 54.14.0
+
+### Minor Changes
+
+- 210748e: [cli] Add `vercel ai-gateway rules` add/list/edit/remove commands
+
+### Patch Changes
+
+- Updated dependencies [d712d41]
+- Updated dependencies [dbb31fc]
+- Updated dependencies [f7f0003]
+  - @vercel/python@6.45.0
+
+## 54.13.0
+
+### Minor Changes
+
+- 128ad88: Add `--category` / `-c` filter to `vercel integration discover` and a new `vercel integration categories` subcommand. The filter scopes marketplace integrations to a single category (e.g. `storage`, `ai`, `monitoring`) — filtering happens server-side. The new `categories` subcommand lists the valid slugs (`Slug | Title` table or `--json` for scripts/agents).
+
+### Patch Changes
+
+- Updated dependencies [c453e66]
+  - @vercel/backends@0.8.14
+  - @vercel/static-build@2.10.3
+  - @vercel/express@0.1.105
+
+## 54.12.2
+
+### Patch Changes
+
+- Updated dependencies [4421ad9]
+  - @vercel/backends@0.8.13
+  - @vercel/static-build@2.10.3
+  - @vercel/express@0.1.104
+
+## 54.12.1
+
+### Patch Changes
+
+- 800286e: `vercel connect create --data` now accepts `@<path>` to read the JSON from a file and `@-` to read it from stdin, so non-managed connector credentials (e.g. client secrets) no longer have to be passed inline where they leak into shell history and process listings. Inline `--data` still works but now warns when it looks like it contains a secret.
+- 800286e: Strip ANSI escape sequences from team-controlled connector names, UIDs, and project names in all `vercel connect` command output (`attach`, `detach`, `remove`, `revoke-tokens`, and the `list` table's type/projects cells), not just the `list` UID/name cells. Prevents terminal escape injection from maliciously-named connectors visible across a team.
+- 1e64d1f: Added `vc api --spec-url <url>` for loading endpoints from a custom OpenAPI spec instead of the default public Vercel spec. Custom specs are fetched fresh, can use the current CLI token to pass Vercel deployment protection via the SSO handshake, and replace the public spec entirely for listing, interactive selection, and tag/operation resolution.
+- Updated dependencies [52f005f]
+- Updated dependencies [2d2aad9]
+- Updated dependencies [01e18e8]
+  - @vercel/backends@0.8.12
+  - @vercel/build-utils@13.30.0
+  - @vercel/next@4.19.0
+  - @vercel/elysia@0.1.93
+  - @vercel/express@0.1.103
+  - @vercel/fastify@0.1.96
+  - @vercel/go@3.9.0
+  - @vercel/h3@0.1.102
+  - @vercel/hono@0.2.96
+  - @vercel/hydrogen@1.4.0
+  - @vercel/koa@0.1.76
+  - @vercel/nestjs@0.2.97
+  - @vercel/node@5.8.17
+  - @vercel/python@6.44.1
+  - @vercel/redwood@2.5.0
+  - @vercel/remix-builder@5.9.1
+  - @vercel/ruby@2.4.0
+  - @vercel/rust@1.3.0
+  - @vercel/static-build@2.10.3
+
+## 54.12.0
+
+### Minor Changes
+
+- 5757bca: [services] add support to `vc dev` for `experimentalServicesV2`.
+
+### Patch Changes
+
+- 663307f: Fix CLI self-upgrade failing with `EUNSUPPORTEDPROTOCOL` inside pnpm/yarn workspaces
+- 32a730e: Elevate maximum maxDuration to 1800s
+- Updated dependencies [4637f0a]
+- Updated dependencies [32a730e]
+- Updated dependencies [c5d53d7]
+- Updated dependencies [a5034c1]
+- Updated dependencies [0c4ea01]
+  - @vercel/python@6.44.1
+  - @vercel/build-utils@13.29.1
+  - @vercel/remix-builder@5.9.1
+  - @vercel/go@3.9.0
+  - @vercel/node@5.8.16
+  - @vercel/static-build@2.10.2
+  - @vercel/backends@0.8.11
+  - @vercel/elysia@0.1.92
+  - @vercel/express@0.1.102
+  - @vercel/fastify@0.1.95
+  - @vercel/h3@0.1.101
+  - @vercel/hono@0.2.95
+  - @vercel/hydrogen@1.4.0
+  - @vercel/koa@0.1.75
+  - @vercel/nestjs@0.2.96
+  - @vercel/next@4.18.0
+  - @vercel/redwood@2.5.0
+  - @vercel/ruby@2.4.0
+  - @vercel/rust@1.3.0
+
 ## 54.11.1
 
 ### Patch Changes
