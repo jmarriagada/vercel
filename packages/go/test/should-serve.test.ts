@@ -31,18 +31,10 @@ describe('shouldServe', () => {
       ).toBe(true);
     });
 
-    it('serves api paths when no other builder matched', async () => {
+    it('serves api paths', async () => {
       expect(
         await shouldServe(makeOptions({ config, requestPath: 'api/hello' }))
       ).toBe(true);
-    });
-
-    it('does not override api paths already matched by another builder', async () => {
-      expect(
-        await shouldServe(
-          makeOptions({ config, requestPath: 'api/hello', hasMatched: true })
-        )
-      ).toBe(false);
     });
   });
 

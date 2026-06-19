@@ -66,11 +66,6 @@ export { diagnostics };
 export const shouldServe: ShouldServe = opts => {
   const framework = opts.config.framework;
   if (framework === 'go' || framework === 'services') {
-    const requestPath = opts.requestPath.replace(/\/$/, '');
-    // Don't override API routes if another builder already matched them
-    if (requestPath.startsWith('api') && opts.hasMatched) {
-      return false;
-    }
     return true;
   }
   return defaultShouldServe(opts);
