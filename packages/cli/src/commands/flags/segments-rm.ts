@@ -1,5 +1,6 @@
 import chalk from 'chalk';
 import type Client from '../../util/client';
+import { isAPIError } from '../../util/errors-ts';
 import { parseArguments } from '../../util/get-args';
 import { getFlagsSpecification } from '../../util/get-flags-specification';
 import { printError } from '../../util/error';
@@ -89,14 +90,8 @@ export default async function segmentsRm(
     }
 
     output.spinner('Fetching segment...');
-    const segment = await getSegment(client, project.id, segmentArg, true);
+    const segment = await getSegment(client, project.id, segmentArg, false);
     output.stopSpinner();
-
-    if ((segment.usedByFlags?.length ?? 0) > 0) {
-      output.warn(
-        `Segment ${chalk.bold(segment.slug)} is used by ${segment.usedByFlags!.length} feature flag${segment.usedByFlags!.length === 1 ? '' : 's'}`
-      );
-    }
 
     if (!skipConfirmation) {
       if (!client.stdin.isTTY) {
@@ -146,11 +141,117 @@ export default async function segmentsRm(
     output.success(`Feature flag segment ${chalk.bold(segment.slug)} deleted`);
   } catch (err) {
     output.stopSpinner();
+    if (handleSegmentInUseError(client, err, segmentArg)) {
+      return 1;
+    }
     printError(err);
     return 1;
   }
 
   return 0;
+}
+
+type SegmentUsageReference = {
+  id?: string;
+  slug?: string;
+  name?: string;
+  label?: string;
+};
+
+function handleSegmentInUseError(
+  client: Client,
+  error: unknown,
+  segmentArg: string | undefined
+): boolean {
+  if (!isAPIError(error) || error.code !== 'SEGMENT_IN_USE') {
+    return false;
+  }
+
+  const usedBy = error.usedBy as
+    | {
+        flags?: SegmentUsageReference[];
+        segments?: SegmentUsageReference[];
+      }
+    | undefined;
+  const flags = usedBy?.flags ?? [];
+  const segments = usedBy?.segments ?? [];
+  const segment = segmentArg ?? '<segment>';
+  const formatReferences = (references: SegmentUsageReference[]) =>
+    references
+      .map(reference => {
+        const primary =
+          reference.name ?? reference.label ?? reference.slug ?? reference.id;
+        if (primary && reference.slug && reference.slug !== primary) {
+          return `${primary} (${reference.slug})`;
+        }
+        return primary ?? 'Unknown reference';
+      })
+      .join(', ');
+  const firstFlag = flags.find(reference => reference.slug || reference.id);
+  const firstSegment = segments.find(
+    reference => reference.slug || reference.id
+  );
+  const inspectSubcommand =
+    firstFlag !== undefined
+      ? `flags inspect ${firstFlag.slug ?? firstFlag.id}`
+      : firstSegment !== undefined
+        ? `flags segments inspect ${firstSegment.slug ?? firstSegment.id}`
+        : undefined;
+  const lines = [`Segment ${segment} is still in use and can't be deleted.`];
+
+  if (flags.length > 0) {
+    lines.push(`Used by feature flags: ${formatReferences(flags)}`);
+  }
+  if (segments.length > 0) {
+    lines.push(`Used by segments: ${formatReferences(segments)}`);
+  }
+
+  const message = lines.join('\n');
+
+  outputAgentError(
+    client,
+    {
+      status: AGENT_STATUS.ERROR,
+      reason: AGENT_REASON.SEGMENT_IN_USE,
+      message,
+      next: [
+        ...(inspectSubcommand
+          ? [
+              {
+                command: buildCommandWithGlobalFlags(
+                  client.argv,
+                  inspectSubcommand
+                ),
+                when: 'inspect one reference that still uses the segment',
+              },
+            ]
+          : []),
+        {
+          command: buildCommandWithGlobalFlags(
+            client.argv,
+            `flags segments rm ${segment} --yes`
+          ),
+          when: 'retry after removing all references',
+        },
+      ],
+    },
+    1
+  );
+
+  if (inspectSubcommand) {
+    lines.push(
+      '',
+      `Run ${getCommandName(inspectSubcommand)} to inspect one reference, remove the segment from each rule, then try deleting the segment again.`
+    );
+  } else {
+    lines.push(
+      '',
+      'Remove every flag or segment rule that references it, then try deleting the segment again.'
+    );
+  }
+
+  output.error(lines.join('\n'));
+  return true;
 }
 
 async function resolveSegmentArg(
@@ -194,7 +295,7 @@ async function resolveSegmentArg(
   }
 
   output.spinner('Fetching segments...');
-  const segments = await getSegments(client, projectId, true);
+  const segments = await getSegments(client, projectId);
   output.stopSpinner();
 
   if (segments.length === 0) {

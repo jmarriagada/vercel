@@ -351,5 +351,30 @@ describe('flags segments', () => {
       expect(exitCode).toEqual(0);
       expect(segmentsList.map(segment => segment.slug)).toEqual(['beta-users']);
     });
+
+    it('shows API reference details when deleting an in-use segment', async () => {
+      segmentsList[0].usedBySegments = ['staff'];
+      client.setArgv('flags', 'segments', 'rm', 'beta-users', '--yes');
+
+      const exitCode = await flags(client);
+
+      expect(exitCode).toEqual(1);
+      expect(client.stderr.getFullOutput()).toContain(
+        "Segment beta-users is still in use and can't be deleted."
+      );
+      expect(client.stderr.getFullOutput()).toContain(
+        'Used by feature flags: my-feature'
+      );
+      expect(client.stderr.getFullOutput()).toContain(
+        'Used by segments: Staff (staff)'
+      );
+      expect(client.stderr.getFullOutput()).toContain(
+        'Run `vercel flags inspect my-feature` to inspect one reference'
+      );
+      expect(segmentsList.map(segment => segment.slug)).toEqual([
+        'beta-users',
+        'staff',
+      ]);
+    });
   });
 });

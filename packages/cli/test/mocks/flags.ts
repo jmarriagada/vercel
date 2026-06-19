@@ -442,6 +442,49 @@ export function useFlags(
         s => s.id === segmentIdOrSlug || s.slug === segmentIdOrSlug
       );
       if (segmentIndex !== -1) {
+        const segment = segmentsList[segmentIndex];
+        if (
+          (segment.usedByFlags?.length ?? 0) > 0 ||
+          (segment.usedBySegments?.length ?? 0) > 0
+        ) {
+          const flags = (segment.usedByFlags ?? []).map(reference => {
+            const flag = flagsList.find(
+              item => item.id === reference || item.slug === reference
+            );
+            return flag
+              ? { id: flag.id, name: flag.slug, slug: flag.slug }
+              : { id: reference };
+          });
+          const segments = (segment.usedBySegments ?? []).map(reference => {
+            const usedBySegment = segmentsList.find(
+              item => item.id === reference || item.slug === reference
+            );
+            return usedBySegment
+              ? {
+                  id: usedBySegment.id,
+                  label: usedBySegment.label,
+                  name: usedBySegment.label,
+                  slug: usedBySegment.slug,
+                }
+              : { id: reference };
+          });
+          const message =
+            flags.length > 0 && segments.length > 0
+              ? 'Segment is still in use by flags and segments'
+              : flags.length > 0
+                ? 'Segment is still in use by flags'
+                : 'Segment is still in use by segments';
+
+          res.status(400).json({
+            error: {
+              code: 'SEGMENT_IN_USE',
+              message,
+              usedBy: { flags, segments },
+            },
+          });
+          return;
+        }
+
         segmentsList.splice(segmentIndex, 1);
         res.status(204).send();
       } else {
