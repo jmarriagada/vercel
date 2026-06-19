@@ -14,7 +14,7 @@ Exchanges a Vercel OIDC token for a Vercel token with a custom audience.
 
 ### options
 
-`ExchangeVercelOidcTokenOptions`
+[`ExchangeVercelOidcTokenOptions`](../interfaces/ExchangeVercelOidcTokenOptions.md)
 
 The options for the exchange.
 
