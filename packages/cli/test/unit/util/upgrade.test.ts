@@ -122,8 +122,31 @@ describe('executeUpgrade', () => {
     const exitCode = await exitCodePromise;
 
     expect(exitCode).toBe(0);
+    // Detection fails (default mock), so falls back to targetVersion
     expect(outputMock.success).toHaveBeenCalledWith(
       'Vercel CLI has been upgraded to v99.9.9 successfully!'
+    );
+  });
+
+  it('reports the actual installed version when it differs from the target version', async () => {
+    const mockProcess = createMockProcess();
+    spawnMock.mockReturnValue(mockProcess as any);
+    // After the install, the installed version is different from the target
+    // (e.g. the prompt showed a stale 54.2.0 but @latest installed 54.14.0)
+    mockInstalledVersion('54.14.0');
+
+    const exitCodePromise = executeUpgrade('54.2.0');
+    await tick();
+
+    mockProcess.emit('close', 0);
+
+    const exitCode = await exitCodePromise;
+
+    expect(exitCode).toBe(0);
+    // Success message should reflect the actually installed version, not the
+    // stale target version that was passed in
+    expect(outputMock.success).toHaveBeenCalledWith(
+      'Vercel CLI has been upgraded to v54.14.0 successfully!'
     );
   });
 

@@ -1,11 +1,13 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import fs from 'fs-extra';
 import sleep from '../../../src/util/sleep';
 // @ts-expect-error Missing types for package
 import tmp from 'tmp-promise';
-import getLatestVersion from '../../../src/util/get-latest-version';
+import getLatestVersion, {
+  fetchLatestVersion,
+} from '../../../src/util/get-latest-version';
 import { join } from 'path';
-import { vi } from 'vitest';
+import { fetchDistTags } from '../../../src/util/get-latest-version/fetch-dist-tags.cjs';
 
 tmp.setGracefulCleanup();
 
@@ -174,6 +176,37 @@ describe('get latest version', () => {
     expect(cache.version).not.toEqual('28.0.0');
     expect(cache.notifyAt).toEqual(undefined);
   });
+
+  it('should not consume notification when consumeNotification is false', async () => {
+    // 1. seed the cache file with an expired cache and past notifyAt
+    await fs.mkdirs(join(cacheDir, 'package-updates'));
+    const originalNotifyAt = Date.now() - 60000;
+    await fs.writeJSON(cacheFile, {
+      expireAt: Date.now() + 10000,
+      notifyAt: originalNotifyAt,
+      version: '28.0.0',
+    });
+
+    // 2. call with consumeNotification: false — should return the version
+    //    but NOT write notifyAt
+    const latest = getLatestVersion({
+      cacheDir,
+      pkg,
+      consumeNotification: false,
+    });
+    expect(latest).toEqual('28.0.0');
+
+    // 3. verify notifyAt was NOT written
+    const cache = await fs.readJSON(cacheFile);
+    expect(cache.notifyAt).toEqual(originalNotifyAt);
+
+    // 4. call again with default (consumeNotification: true) — should
+    //    now write notifyAt
+    getLatestVersion({ cacheDir, pkg });
+    const cacheAfterConsume = await fs.readJSON(cacheFile);
+    expect(cacheAfterConsume.notifyAt).not.toEqual(originalNotifyAt);
+    expect(cacheAfterConsume.notifyAt).toBeGreaterThan(Date.now());
+  });
 });
 
 async function waitForCacheFile() {
@@ -185,3 +218,66 @@ async function waitForCacheFile() {
     }
   }
 }
+
+// Mock fetchDistTags (the dependency of fetchLatestVersion) so we can test
+// fetchLatestVersion's logic without hitting the network.
+vi.mock('../../../src/util/get-latest-version/fetch-dist-tags.cjs', () => ({
+  fetchDistTags: vi.fn(),
+}));
+
+describe('fetchLatestVersion', () => {
+  const fetchDistTagsMock = vi.mocked(fetchDistTags);
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('should return the latest version on a successful response', async () => {
+    fetchDistTagsMock.mockResolvedValue({ latest: '54.14.0' });
+
+    const version = await fetchLatestVersion({ name: 'vercel', timeout: 1000 });
+    expect(version).toEqual('54.14.0');
+  });
+
+  it('should return undefined when fetchDistTags fails', async () => {
+    fetchDistTagsMock.mockResolvedValue(undefined);
+
+    const version = await fetchLatestVersion({ name: 'vercel', timeout: 1000 });
+    expect(version).toEqual(undefined);
+  });
+
+  it('should return undefined when dist-tag is not found', async () => {
+    fetchDistTagsMock.mockResolvedValue({ beta: '54.0.0-beta.1' });
+
+    const version = await fetchLatestVersion({ name: 'vercel', timeout: 1000 });
+    expect(version).toEqual(undefined);
+  });
+
+  it('should support a custom dist-tag', async () => {
+    fetchDistTagsMock.mockResolvedValue({
+      latest: '54.14.0',
+      canary: '54.15.0-canary.0',
+    });
+
+    const version = await fetchLatestVersion({
+      name: 'vercel',
+      distTag: 'canary',
+      timeout: 1000,
+    });
+    expect(version).toEqual('54.15.0-canary.0');
+  });
+
+  it('should pass timeout and name to fetchDistTags', async () => {
+    fetchDistTagsMock.mockResolvedValue({ latest: '1.0.0' });
+
+    await fetchLatestVersion({ name: 'vercel', timeout: 5000 });
+    expect(fetchDistTagsMock).toHaveBeenCalledWith('vercel', { timeout: 5000 });
+  });
+
+  it('should use default timeout of 3000ms', async () => {
+    fetchDistTagsMock.mockResolvedValue({ latest: '1.0.0' });
+
+    await fetchLatestVersion({ name: 'vercel' });
+    expect(fetchDistTagsMock).toHaveBeenCalledWith('vercel', { timeout: 3000 });
+  });
+});
