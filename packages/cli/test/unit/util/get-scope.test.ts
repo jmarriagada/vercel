@@ -2,9 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { client } from '../../mocks/client';
 import { useUser } from '../../mocks/user';
 import { useTeam } from '../../mocks/team';
-import getScope from '../../../src/util/get-scope';
-
-const WHOAMI_INTROSPECTION_ENV = 'VERCEL_CLI_WHOAMI_INTROSPECTION';
+import getScope, { APP_PRINCIPAL_SCOPE_ENV } from '../../../src/util/get-scope';
 
 describe('getScope', () => {
   let mockTeam: ReturnType<typeof useTeam>;
@@ -14,7 +12,7 @@ describe('getScope', () => {
   });
 
   afterEach(() => {
-    delete process.env[WHOAMI_INTROSPECTION_ENV];
+    delete process.env[APP_PRINCIPAL_SCOPE_ENV];
   });
 
   describe('non-northstar', () => {
@@ -75,7 +73,7 @@ describe('getScope', () => {
 
   describe('app principal fallback', () => {
     it('should return app principal scope when user lookup fails and introspection succeeds', async () => {
-      process.env[WHOAMI_INTROSPECTION_ENV] = '1';
+      process.env[APP_PRINCIPAL_SCOPE_ENV] = '1';
       client.scenario.get('/v2/user', (_req, res) => {
         res.status(403).json({
           error: {
@@ -119,7 +117,7 @@ describe('getScope', () => {
     });
 
     it('should raise the introspection error when user lookup and introspection fail', async () => {
-      process.env[WHOAMI_INTROSPECTION_ENV] = '1';
+      process.env[APP_PRINCIPAL_SCOPE_ENV] = '1';
       client.scenario.get('/v2/user', (_req, res) => {
         res.status(403).json({
           error: {

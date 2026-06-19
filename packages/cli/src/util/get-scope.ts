@@ -3,14 +3,14 @@ import type Client from './client';
 import type { Org, Team, User } from '@vercel-internals/types';
 import getUser from './get-user';
 import getTeamById from './teams/get-team-by-id';
-import { InvalidToken, TeamDeleted } from './errors-ts';
+import { TeamDeleted } from './errors-ts';
 import { getLinkFromDir, getVercelDirectory } from './projects/link';
 import { getRepoLink, findProjectsFromPath } from './link/repo';
 import type { RepoProjectsConfig } from './link/repo';
 import output from '../output-manager';
 import { introspectToken } from './introspect-token';
 
-const APP_PRINCIPAL_SCOPE_ENV = 'VERCEL_CLI_WHOAMI_INTROSPECTION';
+export const APP_PRINCIPAL_SCOPE_ENV = 'VERCEL_CLI_WHOAMI_INTROSPECTION';
 
 type AppPrincipalTeam = Pick<Team, 'id' | 'slug' | 'name'>;
 
@@ -87,29 +87,25 @@ export default async function getScope(
   client: Client,
   opts: GetScopeOptions = {}
 ): Promise<BasicScopeContext | ScopeContext | AppPrincipalScopeContext> {
-  let appPrincipalError: unknown;
-  const appPrincipalPromise =
-    opts.allowAppPrincipal && isAppPrincipalScopeEnabled()
-      ? getAppPrincipal(client).catch(error => {
-          appPrincipalError = error;
-          return null;
-        })
-      : null;
+  const allowAppPrincipal =
+    opts.allowAppPrincipal && isAppPrincipalScopeEnabled();
+  let userError: unknown;
+  const [user, appPrincipal] = await Promise.all([
+    getUser(client).catch(error => {
+      if (!allowAppPrincipal) {
+        throw error;
+      }
+      userError = error;
+      return null;
+    }),
+    allowAppPrincipal ? getAppPrincipal(client) : null,
+  ]);
 
-  let user: User;
-  try {
-    user = await getUser(client);
-  } catch (error) {
-    if (error instanceof InvalidToken && appPrincipalPromise) {
-      const appPrincipal = await appPrincipalPromise;
-      if (appPrincipalError) {
-        throw appPrincipalError;
-      }
-      if (appPrincipal) {
-        return createAppPrincipalScopeContext(client, appPrincipal);
-      }
+  if (!user) {
+    if (appPrincipal) {
+      return createAppPrincipalScopeContext(client, appPrincipal);
     }
-    throw error;
+    throw userError;
   }
   let contextName = user.username || user.email;
   let team: Team | null = null;

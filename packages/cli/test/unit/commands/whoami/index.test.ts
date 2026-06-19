@@ -6,12 +6,11 @@ import { useUser } from '../../../mocks/user';
 import { useTeam } from '../../../mocks/team';
 import { setupTmpDir } from '../../../helpers/setup-unit-fixture';
 import whoami from '../../../../src/commands/whoami';
-
-const WHOAMI_INTROSPECTION_ENV = 'VERCEL_CLI_WHOAMI_INTROSPECTION';
+import { APP_PRINCIPAL_SCOPE_ENV } from '../../../../src/util/get-scope';
 
 describe('whoami', () => {
   afterEach(() => {
-    delete process.env[WHOAMI_INTROSPECTION_ENV];
+    delete process.env[APP_PRINCIPAL_SCOPE_ENV];
   });
 
   describe('--help', () => {
@@ -82,7 +81,7 @@ describe('whoami', () => {
   });
 
   it('should print the Vercel App principal when the token is not user-backed', async () => {
-    process.env[WHOAMI_INTROSPECTION_ENV] = '1';
+    process.env[APP_PRINCIPAL_SCOPE_ENV] = '1';
     let resolveIntrospectionStarted: () => void = () => {};
     const introspectionStarted = new Promise<void>(resolve => {
       resolveIntrospectionStarted = resolve;
@@ -231,7 +230,7 @@ describe('whoami', () => {
     });
 
     it('outputs Vercel App principal information as JSON', async () => {
-      process.env[WHOAMI_INTROSPECTION_ENV] = '1';
+      process.env[APP_PRINCIPAL_SCOPE_ENV] = '1';
       client.scenario.get('/v2/user', (_req, res) => {
         res.status(403).json({
           error: {
