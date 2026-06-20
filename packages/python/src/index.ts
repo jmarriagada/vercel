@@ -82,7 +82,7 @@ import {
 } from './compileall';
 import {
   getPyprojectSubscribers,
-  safePathSegment,
+  getSubscriberOutputPath,
   type Subscriber,
 } from './subscribers';
 
@@ -123,8 +123,7 @@ export async function getDevQueueConsumers({
 }): Promise<PythonDevQueueConsumerDescriptor[]> {
   const subscribers = await getPyprojectSubscribers(workPath);
   return subscribers.map(subscriber => {
-    const safeName = safePathSegment(subscriber.name);
-    const outputPath = `_py_subscribers/${safeName}`;
+    const outputPath = getSubscriberOutputPath(subscriber.name);
     return {
       consumer: sanitizeConsumerName(outputPath),
       entrypoint: subscriber.entrypoint,
@@ -1181,8 +1180,7 @@ export const build: BuildVX = async ({
   const subscriberLambdas: Record<string, Lambda> = {};
 
   for (const subscriber of subscribers) {
-    const safeName = safePathSegment(subscriber.name);
-    const outputPath = `_py_subscribers/${safeName}`;
+    const outputPath = getSubscriberOutputPath(subscriber.name);
     const consumer = sanitizeConsumerName(outputPath);
     const experimentalTriggers: TriggerEvent[] = subscriber.topics.map(
       topic => ({

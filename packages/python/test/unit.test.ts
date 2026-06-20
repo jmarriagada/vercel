@@ -75,6 +75,7 @@ import {
 import { VERCEL_WORKERS_VERSION } from '../src/package-versions';
 import { createPyprojectToml } from '../src/install';
 import { getDjangoSettings, runDjangoCollectStatic } from '../src/django';
+import { getSubscriberOutputPath } from '../src/subscribers';
 import {
   FileBlob,
   Span,
@@ -2299,7 +2300,9 @@ describe('pyproject subscribers', () => {
       getDevQueueConsumers({ workPath: mockWorkPath })
     ).resolves.toEqual([
       {
-        consumer: sanitizeConsumerName('_py_subscribers/celery-worker'),
+        consumer: sanitizeConsumerName(
+          getSubscriberOutputPath('celery-worker')
+        ),
         entrypoint: 'worker.py',
         variableName: 'app',
         topics: [
@@ -2358,13 +2361,13 @@ describe('pyproject subscribers', () => {
     });
 
     const output = getBuildOutputV2(result).output as any;
-    const celeryPath = '_py_subscribers/celery-worker';
+    const celeryPath = getSubscriberOutputPath('celery-worker');
     const consumer = sanitizeConsumerName(celeryPath);
 
     expect(output.index).toBeDefined();
     expect(output[celeryPath]).toBeDefined();
-    expect(output['_py_subscribers/celery-worker/celery']).toBeUndefined();
-    expect(output['_py_subscribers/celery-worker/emails']).toBeUndefined();
+    expect(output[`${celeryPath}/celery`]).toBeUndefined();
+    expect(output[`${celeryPath}/emails`]).toBeUndefined();
     expect(output.index.environment.VERCEL_HAS_WORKER_SERVICES).toBe('1');
 
     const celery = output[celeryPath];

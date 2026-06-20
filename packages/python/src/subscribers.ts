@@ -9,6 +9,7 @@ import {
 const SUBSCRIBER_NAME_RE = /^[A-Za-z]([A-Za-z0-9_-]*[A-Za-z0-9])?$/;
 const MODULE_ATTR_RE =
   /^([A-Za-z_][\w]*(?:\.[A-Za-z_][\w]*)*):([A-Za-z_][\w]*)$/;
+const SUBSCRIBER_OUTPUT_DIR = '_py_subscribers';
 
 type SubscriberTriggerDefaults = Omit<
   TriggerEvent,
@@ -92,6 +93,10 @@ export function safePathSegment(value: string): string {
         : `_${char.charCodeAt(0).toString(16).toUpperCase().padStart(2, '0')}`;
     })
     .join('');
+}
+
+export function getSubscriberOutputPath(subscriberName: string): string {
+  return `${SUBSCRIBER_OUTPUT_DIR}/${safePathSegment(subscriberName)}`;
 }
 
 export async function getPyprojectSubscribers(
