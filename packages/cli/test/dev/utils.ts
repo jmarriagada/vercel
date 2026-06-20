@@ -1,5 +1,6 @@
 import fs from 'fs-extra';
 import net from 'net';
+import tls from 'tls';
 import { createHash, randomBytes } from 'crypto';
 import { join, resolve } from 'path';
 import type { ExecaChildProcess } from 'execa';
@@ -153,12 +154,29 @@ export function validateResponseHeaders(res: Response, podId?: string) {
 }
 
 export function webSocketEcho(
-  port: number,
+  target: number | string,
   path: string,
   message: string
 ): Promise<string> {
   return new Promise((resolve, reject) => {
-    const socket = net.connect(port, '127.0.0.1');
+    const targetUrl = typeof target === 'string' ? new URL(target) : null;
+    if (targetUrl && targetUrl.protocol !== 'wss:') {
+      throw new Error(
+        `Unsupported WebSocket URL protocol: ${targetUrl.protocol}`
+      );
+    }
+    const host = targetUrl?.hostname || '127.0.0.1';
+    const port =
+      typeof target === 'number'
+        ? target
+        : Number(
+            targetUrl?.port || (targetUrl?.protocol === 'wss:' ? 443 : 80)
+          );
+    const socket = targetUrl
+      ? tls.connect({ host, port, servername: host })
+      : net.connect(port, host);
+    const connectEvent = targetUrl ? 'secureConnect' : 'connect';
+    const hostHeader = targetUrl?.host || `${host}:${port}`;
     const key = randomBytes(16).toString('base64');
     let buffer: Uint8Array<ArrayBufferLike> = new Uint8Array(0);
     let handshakeComplete = false;
@@ -183,6 +201,14 @@ export function webSocketEcho(
     };
 
     socket.once('error', fail);
+    socket.once('end', () => {
+      fail(new Error('WebSocket connection ended before receiving a response'));
+    });
+    socket.once('close', () => {
+      fail(
+        new Error('WebSocket connection closed before receiving a response')
+      );
+    });
     socket.on('data', chunk => {
       buffer = appendBytes(buffer, toBytes(chunk));
 
@@ -224,18 +250,20 @@ export function webSocketEcho(
       }
     });
 
-    socket.write(
-      [
-        `GET ${path} HTTP/1.1`,
-        `Host: 127.0.0.1:${port}`,
-        'Upgrade: websocket',
-        'Connection: Upgrade',
-        `Sec-WebSocket-Key: ${key}`,
-        'Sec-WebSocket-Version: 13',
-        '',
-        '',
-      ].join('\r\n')
-    );
+    socket.once(connectEvent, () => {
+      socket.write(
+        [
+          `GET ${path} HTTP/1.1`,
+          `Host: ${hostHeader}`,
+          'Upgrade: websocket',
+          'Connection: Upgrade',
+          `Sec-WebSocket-Key: ${key}`,
+          'Sec-WebSocket-Version: 13',
+          '',
+          '',
+        ].join('\r\n')
+      );
+    });
   });
 }
 
@@ -537,7 +565,7 @@ export function testFixtureStdio(
   return async () => {
     const cwd = fixtureAbsolute(directory);
     const token = await fetchCachedToken();
-    let deploymentUrl: string;
+    let deploymentUrl = '';
 
     // Deploy fixture and link project
     if (!skipDeploy) {
@@ -698,7 +726,7 @@ export function testFixtureStdio(
         // @ts-ignore
         await testPath(true, `http://localhost:${port}`, ...args);
       };
-      await fn(helperTestPath, port);
+      await fn(helperTestPath, port, deploymentUrl);
     } finally {
       // @ts-ignore
       await nukeProcessTree(dev.pid);

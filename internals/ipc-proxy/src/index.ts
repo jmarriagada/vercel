@@ -41,6 +41,8 @@ export interface CreateStandaloneLambdaOptions {
   includedFiles?: Files;
   runtimeLanguage: LambdaExecutableRuntimeLanguages;
   /** Defaults to `true`. */
+  supportsMultiPayloads?: boolean;
+  /** Defaults to `true`. */
   supportsResponseStreaming?: boolean;
 }
 
@@ -55,6 +57,7 @@ export async function createStandaloneLambda(
     lambdaOptions,
     includedFiles,
     runtimeLanguage,
+    supportsMultiPayloads = true,
     supportsResponseStreaming = true,
   } = options;
 
@@ -74,6 +77,7 @@ export async function createStandaloneLambda(
     },
     handler: 'executable',
     runtime: 'executable',
+    supportsMultiPayloads,
     supportsResponseStreaming,
     architecture,
     runtimeLanguage,

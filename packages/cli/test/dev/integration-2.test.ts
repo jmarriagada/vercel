@@ -1,6 +1,12 @@
 import assert from 'assert';
 import { isIP } from 'net';
-import { exec, fixture, testFixture, testFixtureStdio } from './utils';
+import {
+  exec,
+  fixture,
+  testFixture,
+  testFixtureStdio,
+  webSocketEcho,
+} from './utils';
 
 test('[vercel dev] validate redirects', async () => {
   const directory = fixture('invalid-redirects');
@@ -185,14 +191,21 @@ test(
 
 test(
   '[vercel dev] Should support Go standalone server mode',
-  testFixtureStdio('go-standalone', async (testPath: any) => {
-    await testPath(200, `/`, 'Standalone Go: /');
-    await testPath(
-      200,
-      `/some/nested/path`,
-      'Standalone Go: /some/nested/path'
-    );
-  })
+  testFixtureStdio(
+    'go-standalone',
+    async (testPath: any, port: number, deploymentUrl: string) => {
+      await testPath(200, `/`, 'Standalone Go: /');
+      await testPath(
+        200,
+        `/some/nested/path`,
+        'Standalone Go: /some/nested/path'
+      );
+      await expect(webSocketEcho(port, '/ws', 'hello')).resolves.toBe('hello');
+      await expect(
+        webSocketEcho(`wss://${deploymentUrl}`, '/ws', 'hello')
+      ).resolves.toBe('hello');
+    }
+  )
 );
 
 test(
