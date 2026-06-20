@@ -62,7 +62,7 @@ import {
   getInstalledPythonsFromFilesystem,
 } from '../src/version';
 import type { PythonConstraint, PythonPackage } from '@vercel/python-analysis';
-import { build, getDevQueueConsumers, prepareCache } from '../src/index';
+import { build, getDevQueueSubscribers, prepareCache } from '../src/index';
 import type { BuildResultV3, BuildResultV2 } from '@vercel/build-utils';
 import { createVenvEnv, getVenvBinDir } from '../src/utils';
 import {
@@ -2297,7 +2297,7 @@ describe('pyproject subscribers', () => {
     );
 
     await expect(
-      getDevQueueConsumers({ workPath: mockWorkPath })
+      getDevQueueSubscribers({ workPath: mockWorkPath })
     ).resolves.toEqual([
       {
         consumer: sanitizeConsumerName(

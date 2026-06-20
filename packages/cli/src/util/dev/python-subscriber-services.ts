@@ -3,17 +3,17 @@ import { isPythonFramework } from '@vercel/build-utils';
 import output from '../../output-manager';
 import type { BuildMatch } from './types';
 
-interface DevQueueConsumerDescriptor {
+interface DevQueueSubscriber {
   consumer: string;
   entrypoint: string;
   variableName: string;
   topics: NonNullable<ExperimentalService['topics']>;
 }
 
-interface BuilderWithDevQueueConsumers {
-  getDevQueueConsumers?: (options: {
+interface BuilderWithDevQueueSubscribers {
+  getDevQueueSubscribers?: (options: {
     workPath: string;
-  }) => Promise<DevQueueConsumerDescriptor[]>;
+  }) => Promise<DevQueueSubscriber[]>;
 }
 
 function getStandalonePythonFrameworkBuildMatch(
@@ -58,13 +58,13 @@ export async function getPyprojectSubscriberServices({
 
   const builder = match.builderWithPkg
     .builder as typeof match.builderWithPkg.builder &
-    BuilderWithDevQueueConsumers;
+    BuilderWithDevQueueSubscribers;
 
-  if (typeof builder.getDevQueueConsumers !== 'function') {
+  if (typeof builder.getDevQueueSubscribers !== 'function') {
     return [];
   }
 
-  const descriptors = await builder.getDevQueueConsumers({ workPath });
+  const descriptors = await builder.getDevQueueSubscribers({ workPath });
   const framework = match.config?.framework || 'python';
 
   return descriptors.map(descriptor => ({

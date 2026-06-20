@@ -101,7 +101,7 @@ export { detectEntrypoint } from './entrypoint';
 
 export const version = -1;
 
-export interface PythonDevQueueConsumerTopic {
+export interface PythonDevQueueSubscriberTopic {
   topic: string;
   retryAfterSeconds?: number;
   initialDelaySeconds?: number;
@@ -109,18 +109,18 @@ export interface PythonDevQueueConsumerTopic {
   maxConcurrency?: number;
 }
 
-export interface PythonDevQueueConsumerDescriptor {
+export interface PythonDevQueueSubscriber {
   consumer: string;
   entrypoint: string;
   variableName: string;
-  topics: PythonDevQueueConsumerTopic[];
+  topics: PythonDevQueueSubscriberTopic[];
 }
 
-export async function getDevQueueConsumers({
+export async function getDevQueueSubscribers({
   workPath,
 }: {
   workPath: string;
-}): Promise<PythonDevQueueConsumerDescriptor[]> {
+}): Promise<PythonDevQueueSubscriber[]> {
   const subscribers = await getPyprojectSubscribers(workPath);
   return subscribers.map(subscriber => ({
     consumer: getSubscriberConsumerName(subscriber.name),
