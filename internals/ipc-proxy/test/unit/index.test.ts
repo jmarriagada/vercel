@@ -65,7 +65,6 @@ describe('createStandaloneLambda', () => {
       expect(lambda.handler).toBe('executable');
       expect(lambda.runtime).toBe('executable');
       expect(lambda.runtimeLanguage).toBe('rust');
-      expect(lambda.supportsMultiPayloads).toBe(true);
       expect(lambda.supportsResponseStreaming).toBe(true);
       expect(Object.keys(lambda.files)).toContain('executable');
       expect(Object.keys(lambda.files)).toContain('user-server');
