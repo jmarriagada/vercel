@@ -28,6 +28,8 @@ import {
   type Files,
   type ShouldServe,
   type TriggerEvent,
+  type DevQueueSubscriber,
+  type GetDevQueueSubscribersOptions,
   FileFsRef,
   PythonFramework,
   type PrepareCache,
@@ -101,27 +103,9 @@ export { detectEntrypoint } from './entrypoint';
 
 export const version = -1;
 
-export interface PythonDevQueueSubscriberTopic {
-  topic: string;
-  retryAfterSeconds?: number;
-  initialDelaySeconds?: number;
-  maxDeliveries?: number;
-  maxConcurrency?: number;
-}
-
-export interface PythonDevQueueSubscriber {
-  name: string;
-  consumer: string;
-  entrypoint: string;
-  variableName: string;
-  topics: PythonDevQueueSubscriberTopic[];
-}
-
 export async function getDevQueueSubscribers({
   workPath,
-}: {
-  workPath: string;
-}): Promise<PythonDevQueueSubscriber[]> {
+}: GetDevQueueSubscribersOptions): Promise<DevQueueSubscriber[]> {
   const subscribers = await getPyprojectSubscribers(workPath);
   return subscribers.map(subscriber => ({
     name: subscriber.name,

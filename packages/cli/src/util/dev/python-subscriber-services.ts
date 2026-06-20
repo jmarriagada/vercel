@@ -3,20 +3,6 @@ import { isPythonFramework } from '@vercel/build-utils';
 import output from '../../output-manager';
 import type { BuildMatch } from './types';
 
-interface DevQueueSubscriber {
-  name: string;
-  consumer: string;
-  entrypoint: string;
-  variableName: string;
-  topics: NonNullable<ExperimentalService['topics']>;
-}
-
-interface BuilderWithDevQueueSubscribers {
-  getDevQueueSubscribers?: (options: {
-    workPath: string;
-  }) => Promise<DevQueueSubscriber[]>;
-}
-
 function getStandalonePythonFrameworkBuildMatch(
   buildMatches: Iterable<BuildMatch>
 ): BuildMatch | null {
@@ -57,8 +43,7 @@ export async function getPyprojectSubscriberServices({
     return [];
   }
 
-  const builder = match.builderWithPkg
-    .builder as BuilderWithDevQueueSubscribers;
+  const { builder } = match.builderWithPkg;
 
   if (typeof builder.getDevQueueSubscribers !== 'function') {
     return [];

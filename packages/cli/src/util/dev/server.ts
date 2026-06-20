@@ -219,17 +219,6 @@ export default class DevServer {
     return true;
   }
 
-  // True when the project runs queue-backed worker services (`experimentalServices`
-  // workers or pyproject.toml subscribers). The web app enqueues to these through
-  // the local dev queue broker.
-  private hasQueueBackedServices(): boolean {
-    return (
-      (this.services ?? [])
-        .filter(isExperimentalService)
-        .some(isQueueBackedService) || this.subscriberServices.length > 0
-    );
-  }
-
   // When pyproject.toml subscribers run, the web app is served on the normal dev
   // path but must share the workers' managed virtualenv and sync its own
   // dependencies, mirroring the `meta` the orchestrator passes its services.
@@ -239,21 +228,18 @@ export default class DevServer {
   // instead of any externally activated venv. `pythonServiceCount` is left unset
   // (defaults to 1): the web app and workers share that single managed venv, so
   // the "multiple managed venvs vs an activated venv" guardrail must NOT fire —
-  // it would otherwise reject a perfectly valid setup where the user simply has
-  // a venv activated.
+  // it would otherwise reject a valid setup where the user simply has a venv
+  // activated.
   private getQueueWebServiceDevMeta(): {
     syncDependencies?: boolean;
     serviceCount?: number;
   } {
-    const pythonWorkers = this.subscriberServices.filter(
-      service => service.runtime === 'python' && isQueueBackedService(service)
-    );
-    if (pythonWorkers.length === 0) {
+    if (this.subscriberServices.length === 0) {
       return {};
     }
     return {
       syncDependencies: true,
-      serviceCount: pythonWorkers.length,
+      serviceCount: this.subscriberServices.length,
     };
   }
 
@@ -898,14 +884,14 @@ export default class DevServer {
       runEnv['VERCEL_REGION'] = 'dev1';
     }
 
-    // Point queue producers (the web app that enqueues) at the local dev queue
-    // broker and disable deployment pinning, mirroring the per-service injection
-    // the orchestrator does in `getV1StartSpec`. This lives alongside the other
-    // platform-simulation vars so it is re-applied on every `_getVercelConfig`
-    // rebuild rather than as a one-shot mutation that later rebuilds would drop.
-    // Only `runEnv`: the worker services receive their own copy from the
-    // orchestrator, and `allEnv` is exposed to the user dev command.
-    if (this.hasQueueBackedServices()) {
+    // Point the web app (the queue producer, served on the normal dev path) at
+    // the local dev queue broker and disable deployment pinning. The subscriber
+    // workers get their own copy from the orchestrator's `getV1StartSpec`. This
+    // lives alongside the other platform-simulation vars so it is re-applied on
+    // every `_getVercelConfig` rebuild rather than as a one-shot mutation that
+    // later rebuilds would drop. Only `runEnv`, since `allEnv` is exposed to the
+    // user dev command.
+    if (this.subscriberServices.length > 0) {
       runEnv['VERCEL_HAS_WORKER_SERVICES'] = '1';
       runEnv['VERCEL_QUEUE_BASE_URL'] = `${this.address.origin}/_svc/_queues`;
       runEnv['VERCEL_QUEUE_TOKEN'] = 'vc-dev-token';
