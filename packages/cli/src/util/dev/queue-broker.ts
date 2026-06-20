@@ -3,11 +3,6 @@
 import ms from 'ms';
 import { randomBytes } from 'crypto';
 import nodeFetch from 'node-fetch';
-import type { ExperimentalService } from '@vercel/fs-detectors';
-import {
-  getServiceQueueTopicConfigs,
-  isQueueBackedService,
-} from '@vercel/build-utils';
 import output from '../../output-manager';
 
 interface StoredMessage {
@@ -72,34 +67,42 @@ export interface EnqueueOptions {
   delaySeconds?: number;
 }
 
+export interface DevQueueConsumerTopic {
+  topic: string;
+  retryAfterSeconds?: number;
+  initialDelaySeconds?: number;
+  maxDeliveries?: number;
+  maxConcurrency?: number;
+}
+
+export interface DevQueueConsumer {
+  name: string;
+  topics: DevQueueConsumerTopic[];
+  getOrigin: () => string | null;
+}
+
 export class QueueBroker {
   private messages = new Map<string, StoredMessage>();
   private consumerGroups: ConsumerGroup[] = [];
   private deliveryState = new Map<string, Map<string, DeliveryState>>();
   private tickTimer: ReturnType<typeof setInterval>;
 
-  constructor(
-    services: ExperimentalService[],
-    private getServiceOrigin: (name: string) => string | null
-  ) {
-    for (const service of services) {
-      if (!isQueueBackedService(service)) continue;
-
-      const topicConfigs = getServiceQueueTopicConfigs(service);
-      for (const topicConfig of topicConfigs) {
+  constructor(consumers: DevQueueConsumer[]) {
+    for (const consumer of consumers) {
+      for (const topicConfig of consumer.topics) {
         const topicPattern = topicConfig.topic;
-        const id = `${service.name}::${topicPattern}`;
+        const id = `${consumer.name}::${topicPattern}`;
         const group: ConsumerGroup = {
           id,
-          name: service.name,
+          name: consumer.name,
           topicPattern,
           topicRegex: topicPatternToRegex(topicPattern),
-          serviceOriginFn: () => this.getServiceOrigin(service.name),
+          serviceOriginFn: consumer.getOrigin,
           retryAfterMs:
             topicConfig.retryAfterSeconds !== undefined
               ? topicConfig.retryAfterSeconds * 1000
               : DEFAULT_RETRY_AFTER,
-          maxDeliveries: DEFAULT_MAX_DELIVERIES,
+          maxDeliveries: topicConfig.maxDeliveries ?? DEFAULT_MAX_DELIVERIES,
           initialDelayMs:
             topicConfig.initialDelaySeconds !== undefined
               ? topicConfig.initialDelaySeconds * 1000
@@ -206,7 +209,9 @@ export class QueueBroker {
       visibilityTimeoutSeconds?: number;
     }
   ): ReceivedMessage[] {
-    const group = this.consumerGroups.find(g => g.name === consumerGroup);
+    const group = this.consumerGroups.find(
+      g => g.name === consumerGroup && g.topicRegex.test(queueName)
+    );
     if (!group) return [];
 
     const groupDeliveries = this.deliveryState.get(group.id);

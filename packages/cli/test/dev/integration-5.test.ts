@@ -971,6 +971,62 @@ describe('[vercel dev] Multi-service auto-detection', () => {
   });
 });
 
+describe('[vercel dev] Pyproject queue subscribers', () => {
+  const resultsDir = join(
+    __dirname,
+    'fixtures',
+    'pyproject-subscriber',
+    '.results'
+  );
+
+  beforeEach(async () => {
+    await fs.remove(resultsDir);
+  });
+
+  test('[vercel dev] web send() triggers pyproject subscriber execution', async () => {
+    const dir = fixture('pyproject-subscriber');
+    const { dev, port, readyResolver } = await testFixture(
+      dir,
+      {
+        skipNpmInstall: true,
+        env: {
+          VERCEL_USE_EXPERIMENTAL_FRAMEWORKS: '1',
+        },
+      },
+      ['--local']
+    );
+
+    try {
+      await readyResolver;
+
+      const enqueueRes = await nodeFetch(`http://localhost:${port}/enqueue`, {
+        method: 'POST',
+      });
+      expect(enqueueRes.status).toBe(200);
+      const enqueueJson = await enqueueRes.json();
+      expect(enqueueJson).toHaveProperty('messageId');
+
+      const resultPath = join(resultsDir, 'result.json');
+      let result: any = null;
+      for (let i = 0; i < 30; i++) {
+        await sleep(500);
+        if (await fs.pathExists(resultPath)) {
+          result = await fs.readJson(resultPath);
+          break;
+        }
+      }
+
+      expect(result).not.toBeNull();
+      expect(result).toHaveProperty('received', true);
+      expect(result.message).toHaveProperty('action', 'test');
+      expect(result.message).toHaveProperty('value', 42);
+      expect(result.messageId).toBe(enqueueJson.messageId);
+    } finally {
+      await dev.kill();
+    }
+  });
+});
+
 describe('[vercel dev] Worker service', () => {
   const resultsDir = join(__dirname, 'fixtures', 'services-worker', '.results');
 

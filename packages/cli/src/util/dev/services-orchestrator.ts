@@ -29,9 +29,6 @@ import {
   runNpmInstall,
   getServiceUrlEnvVars,
   getExperimentalServiceUrlEnvVars,
-  type BuilderV2,
-  type BuilderV3,
-  type BuilderVX,
   type Config,
   type StartDevServerOptions,
 } from '@vercel/build-utils';
@@ -41,6 +38,7 @@ import { getStaticServiceSchedules } from '../service-schedules';
 import output from '../../output-manager';
 import { treeKill } from '../tree-kill';
 import { injectNextDevWebSocketShimIfNeeded } from './next-dev-websocket-shim-injection';
+import { startDevServerWithBuilder } from './builder-dev-server';
 
 const STARTUP_TIMEOUT = ms('5m');
 
@@ -721,11 +719,7 @@ export class ServicesOrchestrator {
         new Set([spec.builderSpec]),
         this.cwd
       );
-      const builder = builders.get(spec.builderSpec)?.builder as
-        | BuilderV2
-        | BuilderV3
-        | BuilderVX
-        | undefined;
+      const builder = builders.get(spec.builderSpec)?.builder;
 
       if (!builder?.startDevServer) {
         return null;
@@ -735,13 +729,8 @@ export class ServicesOrchestrator {
         `Starting ${chalk.bold(name)} using ${chalk.cyan.bold(spec.builderSpec)}`
       );
 
-      injectNextDevWebSocketShimIfNeeded(
-        spec.env,
-        spec.framework?.settings.devCommand?.value || '',
-        { framework: spec.framework?.slug }
-      );
-
-      const result = await builder.startDevServer({
+      const result = await startDevServerWithBuilder({
+        builder,
         entrypoint: spec.entrypoint,
         workPath: spec.rootPath,
         repoRootPath: this.repoRoot,
@@ -749,30 +738,30 @@ export class ServicesOrchestrator {
           ...(spec.builderConfig || {}),
           framework: spec.frameworkForDev,
         },
+        env: spec.env,
         meta: {
-          isDev: true,
-          env: spec.env,
           serviceCount: this.services.length,
           pythonServiceCount: this.pythonServiceCount,
           syncDependencies: true,
           serviceName: name,
         },
         service: spec.servicePayload,
-        files: {},
         onStdout: (data: Buffer) => logger.stdout.write(data),
         onStderr: (data: Buffer) => logger.stderr.write(data),
+        frameworkDevCommand:
+          spec.framework?.settings.devCommand?.value ?? undefined,
+        frameworkSlug: spec.framework?.slug ?? undefined,
       });
 
       if (!result) {
         return null;
       }
 
-      const host = await checkForPort(result.port, STARTUP_TIMEOUT);
-      output.debug(`Service ${name} started on ${host}:${result.port}`);
+      output.debug(`Service ${name} started on ${result.host}:${result.port}`);
 
       return {
         name,
-        host,
+        host: result.host,
         port: result.port,
         pid: result.pid,
         shutdown: result.shutdown,

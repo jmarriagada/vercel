@@ -101,6 +101,42 @@ export { detectEntrypoint } from './entrypoint';
 
 export const version = -1;
 
+export interface PythonDevQueueConsumerTopic {
+  topic: string;
+  retryAfterSeconds?: number;
+  initialDelaySeconds?: number;
+  maxDeliveries?: number;
+  maxConcurrency?: number;
+}
+
+export interface PythonDevQueueConsumerDescriptor {
+  consumer: string;
+  entrypoint: string;
+  variableName: string;
+  topics: PythonDevQueueConsumerTopic[];
+}
+
+export async function getDevQueueConsumers({
+  workPath,
+}: {
+  workPath: string;
+}): Promise<PythonDevQueueConsumerDescriptor[]> {
+  const subscribers = await getPyprojectSubscribers(workPath);
+  return subscribers.map(subscriber => {
+    const safeName = safePathSegment(subscriber.name);
+    const outputPath = `_py_subscribers/${safeName}`;
+    return {
+      consumer: sanitizeConsumerName(outputPath),
+      entrypoint: subscriber.entrypoint,
+      variableName: subscriber.variableName,
+      topics: subscriber.topics.map(topic => ({
+        topic,
+        ...subscriber.triggerDefaults,
+      })),
+    };
+  });
+}
+
 function addFiles(target: Files, source: Files) {
   for (const [p, f] of Object.entries(source)) {
     target[p] = f;

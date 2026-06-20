@@ -1,8 +1,8 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
-import type { ExperimentalService } from '@vercel/fs-detectors';
 import {
-  QueueBroker,
+  QueueBroker as BaseQueueBroker,
   topicPatternToRegex,
+  type DevQueueConsumer,
 } from '../../../../src/util/dev/queue-broker';
 
 vi.mock('../../../../src/output-manager', () => ({
@@ -15,20 +15,23 @@ vi.mock('node-fetch', () => ({
 
 import nodeFetch from 'node-fetch';
 const mockFetch = vi.mocked(nodeFetch);
+let getServiceOrigin: ReturnType<typeof vi.fn>;
+
+class QueueBroker extends BaseQueueBroker {
+  constructor(consumers: DevQueueConsumer[], _legacyOrigin?: unknown) {
+    super(consumers);
+  }
+}
 
 function makeWorkerService(
   name: string,
   topics: string[] = ['default']
-): ExperimentalService {
+): DevQueueConsumer {
   return {
-    schema: 'experimentalServices',
     name,
-    type: 'worker',
-    consumer: name,
-    workspace: '.',
-    builder: { src: 'index.ts', use: '@vercel/node' },
-    topics,
-  } as ExperimentalService;
+    topics: topics.map(topic => ({ topic })),
+    getOrigin: () => getServiceOrigin(name),
+  };
 }
 
 function makeQueueJobService(
@@ -37,28 +40,22 @@ function makeQueueJobService(
     topic: string;
     retryAfterSeconds?: number;
     initialDelaySeconds?: number;
+    maxDeliveries?: number;
   }>
-): ExperimentalService {
+): DevQueueConsumer {
   return {
-    schema: 'experimentalServices',
     name,
-    type: 'job',
-    trigger: 'queue',
-    workspace: '.',
-    builder: { src: 'index.ts', use: '@vercel/node' },
     topics,
-  } as ExperimentalService;
+    getOrigin: () => getServiceOrigin(name),
+  };
 }
 
-function makeWebService(name: string): ExperimentalService {
+function makeWebService(name: string): DevQueueConsumer {
   return {
-    schema: 'experimentalServices',
     name,
-    type: 'web',
-    routePrefix: '/',
-    workspace: '.',
-    builder: { src: 'index.ts', use: '@vercel/node' },
-  } as ExperimentalService;
+    topics: [],
+    getOrigin: () => getServiceOrigin(name),
+  };
 }
 
 /** Extract headers from a specific mockFetch call (defaults to the last one). */
@@ -115,7 +112,6 @@ describe('topicPatternToRegex', () => {
 
 describe('QueueBroker', () => {
   let broker: QueueBroker;
-  let getServiceOrigin: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     vi.useFakeTimers();
@@ -293,6 +289,34 @@ describe('QueueBroker', () => {
       await vi.advanceTimersByTimeAsync(2_000);
       expect(mockFetch).toHaveBeenCalledOnce();
       expect(callHeaders()['ce-vqsconsumergroup']).toBe('processor');
+    });
+
+    it('honors configured maxDeliveries', async () => {
+      mockFetch.mockResolvedValue({ ok: false, status: 500 } as any);
+      broker = new QueueBroker(
+        [
+          makeQueueJobService('processor', [
+            {
+              topic: 'orders',
+              retryAfterSeconds: 1,
+              maxDeliveries: 1,
+            },
+          ]),
+        ],
+        getServiceOrigin
+      );
+
+      const { messageId } = broker.enqueue(
+        'orders',
+        Buffer.from('{}'),
+        'application/json'
+      );
+      await vi.advanceTimersByTimeAsync(0);
+      expect(mockFetch).toHaveBeenCalledOnce();
+
+      await vi.advanceTimersByTimeAsync(1_000);
+      expect(mockFetch).toHaveBeenCalledOnce();
+      expect(broker.receiveById(messageId, 'processor')).toBeNull();
     });
 
     it('does not dispatch delayed messages immediately', async () => {

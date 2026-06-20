@@ -62,7 +62,7 @@ import {
   getInstalledPythonsFromFilesystem,
 } from '../src/version';
 import type { PythonConstraint, PythonPackage } from '@vercel/python-analysis';
-import { build, prepareCache } from '../src/index';
+import { build, getDevQueueConsumers, prepareCache } from '../src/index';
 import type { BuildResultV3, BuildResultV2 } from '@vercel/build-utils';
 import { createVenvEnv, getVenvBinDir } from '../src/utils';
 import {
@@ -2270,6 +2270,56 @@ describe('pyproject subscribers', () => {
     if (fs.existsSync(mockWorkPath)) {
       fs.removeSync(mockWorkPath);
     }
+  });
+
+  it('returns dev queue consumer descriptors matching build consumer names', async () => {
+    fs.writeFileSync(
+      path.join(mockWorkPath, 'worker.py'),
+      'from celery import Celery\napp = Celery("worker")\n'
+    );
+    fs.writeFileSync(
+      path.join(mockWorkPath, 'pyproject.toml'),
+      [
+        '[project]',
+        'name = "x"',
+        'version = "0.0.1"',
+        '',
+        '[tool.vercel.subscribers.celery-worker]',
+        'entrypoint = "worker:app"',
+        'topics = ["celery", "emails"]',
+        'max_deliveries = 3',
+        'retry_after_seconds = 10',
+        'initial_delay_seconds = 0',
+        'max_concurrency = 5',
+        '',
+      ].join('\n')
+    );
+
+    await expect(
+      getDevQueueConsumers({ workPath: mockWorkPath })
+    ).resolves.toEqual([
+      {
+        consumer: sanitizeConsumerName('_py_subscribers/celery-worker'),
+        entrypoint: 'worker.py',
+        variableName: 'app',
+        topics: [
+          {
+            topic: 'celery',
+            maxDeliveries: 3,
+            retryAfterSeconds: 10,
+            initialDelaySeconds: 0,
+            maxConcurrency: 5,
+          },
+          {
+            topic: 'emails',
+            maxDeliveries: 3,
+            retryAfterSeconds: 10,
+            initialDelaySeconds: 0,
+            maxConcurrency: 5,
+          },
+        ],
+      },
+    ]);
   });
 
   it('emits one queue/v2beta worker lambda per subscriber with all topics attached', async () => {

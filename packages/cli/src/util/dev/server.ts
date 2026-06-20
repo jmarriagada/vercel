@@ -39,7 +39,7 @@ import {
   cloneEnv,
   type Env,
   getNodeBinPaths,
-  isQueueBackedService,
+  isPythonFramework,
   type StartDevServerResult,
   FileFsRef,
   type PackageJson,
@@ -97,6 +97,11 @@ import type { ProjectSettings } from '@vercel-internals/types';
 import { treeKill } from '../tree-kill';
 import { ServicesOrchestrator } from './services-orchestrator';
 import { QueueBroker } from './queue-broker';
+import { getExperimentalServiceQueueConsumers } from './queue-consumers';
+import {
+  createPyprojectSubscriberDevController,
+  type PyprojectSubscriberDevController,
+} from './pyproject-subscribers';
 import { injectNextDevWebSocketShimIfNeeded } from './next-dev-websocket-shim-injection';
 import { applyOverriddenHeaders, nodeHeadersToFetchHeaders } from './headers';
 import { formatQueryString, parseQueryString } from './parse-query-string';
@@ -190,6 +195,7 @@ export default class DevServer {
   private services?: Service[];
   private orchestrator?: ServicesOrchestrator;
   private queueBroker?: QueueBroker;
+  private pyprojectSubscriberController?: PyprojectSubscriberDevController;
   private serviceRoutesTable?: Map<string, Route[]>;
 
   private vercelConfigWarning: boolean;
@@ -207,6 +213,85 @@ export default class DevServer {
       return false;
     }
     return true;
+  }
+
+  private getStandalonePythonFrameworkBuildMatch(): BuildMatch | null {
+    if (this.shouldUseServicesOrchestrator()) {
+      return null;
+    }
+
+    const pythonMatches = [...this.buildMatches.values()].filter(match => {
+      const framework =
+        typeof match.config?.framework === 'string'
+          ? match.config.framework
+          : undefined;
+      return (
+        (match.use === '@vercel/python' ||
+          match.builderWithPkg.pkg.name === '@vercel/python') &&
+        match.config?.middleware !== true &&
+        isPythonFramework(framework)
+      );
+    });
+
+    if (pythonMatches.length === 0) {
+      return null;
+    }
+    if (pythonMatches.length > 1) {
+      output.debug(
+        `Skipping pyproject queue subscribers: expected one Python framework build match, found ${pythonMatches.length}`
+      );
+      return null;
+    }
+    return pythonMatches[0];
+  }
+
+  private async setupPyprojectSubscribers(): Promise<void> {
+    const pythonBuildMatch = this.getStandalonePythonFrameworkBuildMatch();
+    if (!pythonBuildMatch) {
+      return;
+    }
+
+    const queueEnv = {
+      VERCEL_HAS_WORKER_SERVICES: '1',
+      VERCEL_QUEUE_BASE_URL: `${this.address.origin}/_svc/_queues`,
+      VERCEL_QUEUE_TOKEN: 'vc-dev-token',
+    };
+    const runEnv = cloneEnv(this.envConfigs.runEnv, queueEnv);
+
+    const controller = await createPyprojectSubscriberDevController({
+      workPath: this.cwd,
+      repoRoot: this.repoRoot,
+      proxyOrigin: this.address.origin,
+      runEnv,
+      pythonBuildMatch,
+    });
+    if (!controller) {
+      return;
+    }
+
+    this.envConfigs.runEnv = runEnv;
+    this.envConfigs.allEnv = cloneEnv(this.envConfigs.allEnv, queueEnv);
+    this.pyprojectSubscriberController = controller;
+    this.queueBroker = new QueueBroker(controller.consumers);
+
+    try {
+      await controller.startAll();
+    } catch (err) {
+      await controller.stopAll().catch(stopErr => {
+        output.debug(`Failed to stop Python queue subscribers: ${stopErr}`);
+      });
+      this.pyprojectSubscriberController = undefined;
+      this.queueBroker?.stop();
+      this.queueBroker = undefined;
+      throw err;
+    }
+
+    output.log(
+      `Started ${controller.consumers.length} ${plural(
+        'Python queue subscriber',
+        controller.consumers.length
+      )}`
+    );
   }
 
   constructor(cwd: string, options: DevServerOptions) {
@@ -1015,14 +1100,12 @@ export default class DevServer {
       this.devProcessOrigin = undefined;
 
       // Instantiate the dev queue broker if any queue-backed services exist.
-      // Queue-backed services are `experimentalServices` feature only.
-      const queueServices = (this.services || [])
-        .filter(isExperimentalService)
-        .filter(isQueueBackedService);
-      if (queueServices.length > 0) {
-        this.queueBroker = new QueueBroker(queueServices, name =>
-          this.orchestrator!.getServiceOrigin(name)
-        );
+      const queueConsumers = getExperimentalServiceQueueConsumers({
+        services: this.services || [],
+        getServiceOrigin: name => this.orchestrator!.getServiceOrigin(name),
+      });
+      if (queueConsumers.length > 0) {
+        this.queueBroker = new QueueBroker(queueConsumers);
       }
 
       let addressFormatted = this.address.toString();
@@ -1064,6 +1147,8 @@ export default class DevServer {
     }
 
     await this.updateBuildMatches(vercelConfig, true);
+
+    await this.setupPyprojectSubscribers();
 
     // Builders that do not define a `shouldServe()` function need to be
     // executed at boot-up time in order to get the initial assets and/or routes
@@ -1219,6 +1304,10 @@ export default class DevServer {
 
     if (this.orchestrator) {
       ops.push(this.orchestrator.stopAll());
+    }
+
+    if (this.pyprojectSubscriberController) {
+      ops.push(this.pyprojectSubscriberController.stopAll());
     }
 
     if (this.queueBroker) {
@@ -1938,7 +2027,7 @@ export default class DevServer {
     }
 
     // Handle /_svc/_queues/* routes for the dev queue proxy
-    if (callLevel === 0 && this.orchestrator) {
+    if (callLevel === 0 && this.queueBroker) {
       const pathname = parsed.pathname || '/';
       if (pathname.startsWith('/_svc/_queues/')) {
         await this.handleQueuesRoute(req, res, pathname);

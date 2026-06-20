@@ -472,6 +472,29 @@ export interface ProjectSettings {
   commandForIgnoringBuildStep?: string | null;
 }
 
+export interface DevQueueConsumerTopic {
+  topic: string;
+  retryAfterSeconds?: number;
+  initialDelaySeconds?: number;
+  maxDeliveries?: number;
+  maxConcurrency?: number;
+}
+
+export interface DevQueueConsumerDescriptor {
+  consumer: string;
+  entrypoint: string;
+  variableName: string;
+  topics: DevQueueConsumerTopic[];
+}
+
+export interface GetDevQueueConsumersOptions {
+  workPath: string;
+}
+
+export type GetDevQueueConsumers = (
+  options: GetDevQueueConsumersOptions
+) => Promise<DevQueueConsumerDescriptor[]>;
+
 /*
  * This is a builder whose build output version may dynamically change.
  */
@@ -482,6 +505,7 @@ export interface BuilderVX {
   prepareCache?: PrepareCache;
   shouldServe?: ShouldServe;
   startDevServer?: StartDevServer;
+  getDevQueueConsumers?: GetDevQueueConsumers;
 }
 
 export interface BuilderV2 {
@@ -491,6 +515,7 @@ export interface BuilderV2 {
   prepareCache?: PrepareCache;
   shouldServe?: ShouldServe;
   startDevServer?: StartDevServer;
+  getDevQueueConsumers?: GetDevQueueConsumers;
 }
 
 export interface BuilderV3 {
@@ -500,6 +525,7 @@ export interface BuilderV3 {
   prepareCache?: PrepareCache;
   shouldServe?: ShouldServe;
   startDevServer?: StartDevServer;
+  getDevQueueConsumers?: GetDevQueueConsumers;
 }
 
 type ImageFormat = 'image/avif' | 'image/webp';
