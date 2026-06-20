@@ -989,9 +989,6 @@ describe('[vercel dev] Pyproject queue subscribers', () => {
       dir,
       {
         skipNpmInstall: true,
-        env: {
-          VERCEL_USE_EXPERIMENTAL_FRAMEWORKS: '1',
-        },
       },
       ['--local']
     );
