@@ -1,12 +1,13 @@
 import json
 
-from vercel.workers import send
+from tasks import process_job  # pyright: ignore[reportImplicitRelativeImport]
 
 
 def app(environ, start_response):
     if environ.get("REQUEST_METHOD") == "POST" and environ.get("PATH_INFO") == "/enqueue":
-        result = send("tasks-topic", {"action": "test", "value": 42})
-        body = json.dumps({"messageId": result.get("messageId")}).encode()
+        request_id = "dev-celery"
+        result = process_job.delay(request_id, 19, 23)
+        body = json.dumps({"requestId": request_id, "taskId": result.id}).encode()
         start_response(
             "200 OK",
             [

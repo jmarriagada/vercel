@@ -983,7 +983,7 @@ describe('[vercel dev] Pyproject queue subscribers', () => {
     await fs.remove(resultsDir);
   });
 
-  test('[vercel dev] web send() triggers pyproject subscriber execution', async () => {
+  test('[vercel dev] Celery task triggers pyproject subscriber execution', async () => {
     const dir = fixture('pyproject-subscriber');
     const { dev, port, readyResolver } = await testFixture(
       dir,
@@ -1004,7 +1004,8 @@ describe('[vercel dev] Pyproject queue subscribers', () => {
       });
       expect(enqueueRes.status).toBe(200);
       const enqueueJson = await enqueueRes.json();
-      expect(enqueueJson).toHaveProperty('messageId');
+      expect(enqueueJson).toHaveProperty('requestId', 'dev-celery');
+      expect(enqueueJson).toHaveProperty('taskId');
 
       const resultPath = join(resultsDir, 'result.json');
       let result: any = null;
@@ -1017,10 +1018,8 @@ describe('[vercel dev] Pyproject queue subscribers', () => {
       }
 
       expect(result).not.toBeNull();
-      expect(result).toHaveProperty('received', true);
-      expect(result.message).toHaveProperty('action', 'test');
-      expect(result.message).toHaveProperty('value', 42);
-      expect(result.messageId).toBe(enqueueJson.messageId);
+      expect(result).toHaveProperty('requestId', 'dev-celery');
+      expect(result).toHaveProperty('sum', 42);
     } finally {
       await dev.kill();
     }
