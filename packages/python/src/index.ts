@@ -110,6 +110,7 @@ export interface PythonDevQueueSubscriberTopic {
 }
 
 export interface PythonDevQueueSubscriber {
+  name: string;
   consumer: string;
   entrypoint: string;
   variableName: string;
@@ -123,6 +124,7 @@ export async function getDevQueueSubscribers({
 }): Promise<PythonDevQueueSubscriber[]> {
   const subscribers = await getPyprojectSubscribers(workPath);
   return subscribers.map(subscriber => ({
+    name: subscriber.name,
     consumer: getSubscriberConsumerName(subscriber.name),
     entrypoint: subscriber.entrypoint,
     variableName: subscriber.variableName,

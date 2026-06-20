@@ -473,6 +473,7 @@ export interface ProjectSettings {
 }
 
 export interface DevQueueSubscriber {
+  name: string;
   consumer: string;
   entrypoint: string;
   variableName: string;

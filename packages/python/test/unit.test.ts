@@ -2300,6 +2300,7 @@ describe('pyproject subscribers', () => {
       getDevQueueSubscribers({ workPath: mockWorkPath })
     ).resolves.toEqual([
       {
+        name: 'celery-worker',
         consumer: sanitizeConsumerName(
           getSubscriberOutputPath('celery-worker')
         ),

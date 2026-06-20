@@ -296,6 +296,26 @@ describe('QueueBroker', () => {
       expect(callHeaders()['ce-vqsconsumergroup']).toBe('processor');
     });
 
+    it('uses service group as the queue consumer while routing to service name', async () => {
+      broker = new QueueBroker(
+        [
+          {
+            ...makeWorkerService('celery-worker', ['tasks-topic']),
+            group: '__py__subscribers_Scelery-worker',
+          },
+        ],
+        getServiceOrigin
+      );
+
+      broker.enqueue('tasks-topic', Buffer.from('{}'), 'application/json');
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(getServiceOrigin).toHaveBeenCalledWith('celery-worker');
+      expect(callHeaders()['ce-vqsconsumergroup']).toBe(
+        '__py__subscribers_Scelery-worker'
+      );
+    });
+
     it('honors configured maxDeliveries', async () => {
       mockFetch.mockResolvedValue({ ok: false, status: 500 } as any);
       broker = new QueueBroker(

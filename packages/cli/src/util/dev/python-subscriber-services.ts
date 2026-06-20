@@ -4,6 +4,7 @@ import output from '../../output-manager';
 import type { BuildMatch } from './types';
 
 interface DevQueueSubscriber {
+  name: string;
   consumer: string;
   entrypoint: string;
   variableName: string;
@@ -57,8 +58,7 @@ export async function getPyprojectSubscriberServices({
   }
 
   const builder = match.builderWithPkg
-    .builder as typeof match.builderWithPkg.builder &
-    BuilderWithDevQueueSubscribers;
+    .builder as BuilderWithDevQueueSubscribers;
 
   if (typeof builder.getDevQueueSubscribers !== 'function') {
     return [];
@@ -69,9 +69,10 @@ export async function getPyprojectSubscriberServices({
 
   return descriptors.map(descriptor => ({
     schema: 'experimentalServices',
-    name: descriptor.consumer,
+    name: descriptor.name,
     type: 'worker',
     trigger: 'queue',
+    group: descriptor.consumer,
     workspace: '.',
     framework,
     runtime: 'python',

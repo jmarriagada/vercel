@@ -95,12 +95,13 @@ export class QueueBroker {
       const topicConfigs = getServiceQueueTopicConfigs(
         service
       ) as DevServiceQueueTopic[];
+      const consumerGroup = service.group || service.name;
       for (const topicConfig of topicConfigs) {
         const topicPattern = topicConfig.topic;
-        const id = `${service.name}::${topicPattern}`;
+        const id = `${consumerGroup}::${topicPattern}`;
         const group: ConsumerGroup = {
           id,
-          name: service.name,
+          name: consumerGroup,
           topicPattern,
           topicRegex: topicPatternToRegex(topicPattern),
           serviceOriginFn: () => this.getServiceOrigin(service.name),
