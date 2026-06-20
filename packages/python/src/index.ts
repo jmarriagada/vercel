@@ -22,7 +22,6 @@ import {
   BUILDER_INSTALLER_STEP,
   BUILDER_COMPILE_STEP,
   BUILDER_PRE_DEPLOY_STEP,
-  sanitizeConsumerName,
   type BuildOptions,
   type GlobOptions,
   type BuildVX,
@@ -82,7 +81,8 @@ import {
 } from './compileall';
 import {
   getPyprojectSubscribers,
-  safePathSegment,
+  getSubscriberConsumerName,
+  getSubscriberOutputPath,
   type Subscriber,
 } from './subscribers';
 
@@ -100,6 +100,38 @@ import {
 export { detectEntrypoint } from './entrypoint';
 
 export const version = -1;
+
+export interface PythonDevQueueConsumerTopic {
+  topic: string;
+  retryAfterSeconds?: number;
+  initialDelaySeconds?: number;
+  maxDeliveries?: number;
+  maxConcurrency?: number;
+}
+
+export interface PythonDevQueueConsumerDescriptor {
+  consumer: string;
+  entrypoint: string;
+  variableName: string;
+  topics: PythonDevQueueConsumerTopic[];
+}
+
+export async function getDevQueueConsumers({
+  workPath,
+}: {
+  workPath: string;
+}): Promise<PythonDevQueueConsumerDescriptor[]> {
+  const subscribers = await getPyprojectSubscribers(workPath);
+  return subscribers.map(subscriber => ({
+    consumer: getSubscriberConsumerName(subscriber.name),
+    entrypoint: subscriber.entrypoint,
+    variableName: subscriber.variableName,
+    topics: subscriber.topics.map(topic => ({
+      topic,
+      ...subscriber.triggerDefaults,
+    })),
+  }));
+}
 
 function addFiles(target: Files, source: Files) {
   for (const [p, f] of Object.entries(source)) {
@@ -1145,9 +1177,8 @@ export const build: BuildVX = async ({
   const subscriberLambdas: Record<string, Lambda> = {};
 
   for (const subscriber of subscribers) {
-    const safeName = safePathSegment(subscriber.name);
-    const outputPath = `_py_subscribers/${safeName}`;
-    const consumer = sanitizeConsumerName(outputPath);
+    const outputPath = getSubscriberOutputPath(subscriber.name);
+    const consumer = getSubscriberConsumerName(subscriber.name);
     const experimentalTriggers: TriggerEvent[] = subscriber.topics.map(
       topic => ({
         type: 'queue/v2beta',

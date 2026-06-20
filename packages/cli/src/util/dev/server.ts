@@ -97,6 +97,7 @@ import type { ProjectSettings } from '@vercel-internals/types';
 import { treeKill } from '../tree-kill';
 import { ServicesOrchestrator } from './services-orchestrator';
 import { QueueBroker } from './queue-broker';
+import { getPyprojectSubscriberServices } from './python-subscriber-services';
 import { injectNextDevWebSocketShimIfNeeded } from './next-dev-websocket-shim-injection';
 import { applyOverriddenHeaders, nodeHeadersToFetchHeaders } from './headers';
 import { formatQueryString, parseQueryString } from './parse-query-string';
@@ -207,6 +208,48 @@ export default class DevServer {
       return false;
     }
     return true;
+  }
+
+  private async setupPyprojectSubscribers(): Promise<void> {
+    if (this.shouldUseServicesOrchestrator()) {
+      return;
+    }
+
+    const services = await getPyprojectSubscriberServices({
+      buildMatches: this.buildMatches.values(),
+      workPath: this.cwd,
+    });
+    if (services.length === 0) {
+      return;
+    }
+
+    const queueEnv = {
+      VERCEL_HAS_WORKER_SERVICES: '1',
+      VERCEL_QUEUE_BASE_URL: `${this.address.origin}/_svc/_queues`,
+      VERCEL_QUEUE_TOKEN: 'vc-dev-token',
+    };
+    this.envConfigs.runEnv = cloneEnv(this.envConfigs.runEnv, queueEnv);
+    this.envConfigs.allEnv = cloneEnv(this.envConfigs.allEnv, queueEnv);
+
+    this.orchestrator = new ServicesOrchestrator({
+      services,
+      cwd: this.cwd,
+      repoRoot: this.repoRoot,
+      env: this.envConfigs.allEnv,
+      proxyOrigin: this.address.origin,
+      useImplicitEnvInjection: false,
+    });
+    await this.orchestrator.startAll();
+    this.queueBroker = new QueueBroker(services, name =>
+      this.orchestrator!.getServiceOrigin(name)
+    );
+
+    output.log(
+      `Started ${services.length} ${plural(
+        'Python queue subscriber',
+        services.length
+      )}`
+    );
   }
 
   constructor(cwd: string, options: DevServerOptions) {
@@ -1065,6 +1108,8 @@ export default class DevServer {
 
     await this.updateBuildMatches(vercelConfig, true);
 
+    await this.setupPyprojectSubscribers();
+
     // Builders that do not define a `shouldServe()` function need to be
     // executed at boot-up time in order to get the initial assets and/or routes
     // that can be served by the builder.
@@ -1126,8 +1171,10 @@ export default class DevServer {
         output.debug(
           `Detected "upgrade" event, but no matching service found for ${pathname}`
         );
-        socket.destroy();
-        return;
+        if (this.shouldUseServicesOrchestrator()) {
+          socket.destroy();
+          return;
+        }
       }
 
       if (this.devProcessOrigin) {
@@ -1188,7 +1235,7 @@ export default class DevServer {
     await devCommandPromise;
 
     // For multi-service mode, URLs were already printed.
-    if (!this.orchestrator?.hasServices()) {
+    if (!this.shouldUseServicesOrchestrator()) {
       let addressFormatted = this.address.toString();
       if (this.address.pathname === '/' && this.address.protocol === 'http:') {
         // log address without trailing slash to maintain backwards compatibility
@@ -1938,7 +1985,7 @@ export default class DevServer {
     }
 
     // Handle /_svc/_queues/* routes for the dev queue proxy
-    if (callLevel === 0 && this.orchestrator) {
+    if (callLevel === 0 && this.queueBroker) {
       const pathname = parsed.pathname || '/';
       if (pathname.startsWith('/_svc/_queues/')) {
         await this.handleQueuesRoute(req, res, pathname);

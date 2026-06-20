@@ -1,4 +1,5 @@
 ---
+'@vercel/build-utils': patch
 '@vercel/python': minor
 ---
 

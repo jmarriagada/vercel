@@ -1,0 +1,15 @@
+[project]
+name = "pyproject-subscriber"
+version = "0.0.0"
+requires-python = ">=3.14"
+dependencies = [
+  "fastapi",
+  "celery>=5.6.3",
+]
+
+[tool.vercel]
+entrypoint = "main:app"
+
+[tool.vercel.subscribers.worker]
+entrypoint = "worker:app"
+topics = ["tasks-topic"]

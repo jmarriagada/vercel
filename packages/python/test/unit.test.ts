@@ -62,7 +62,7 @@ import {
   getInstalledPythonsFromFilesystem,
 } from '../src/version';
 import type { PythonConstraint, PythonPackage } from '@vercel/python-analysis';
-import { build, prepareCache } from '../src/index';
+import { build, getDevQueueConsumers, prepareCache } from '../src/index';
 import type { BuildResultV3, BuildResultV2 } from '@vercel/build-utils';
 import { createVenvEnv, getVenvBinDir } from '../src/utils';
 import {
@@ -75,6 +75,7 @@ import {
 import { VERCEL_WORKERS_VERSION } from '../src/package-versions';
 import { createPyprojectToml } from '../src/install';
 import { getDjangoSettings, runDjangoCollectStatic } from '../src/django';
+import { getSubscriberOutputPath } from '../src/subscribers';
 import {
   FileBlob,
   Span,
@@ -2272,6 +2273,58 @@ describe('pyproject subscribers', () => {
     }
   });
 
+  it('returns dev queue consumer descriptors matching build consumer names', async () => {
+    fs.writeFileSync(
+      path.join(mockWorkPath, 'worker.py'),
+      'from celery import Celery\napp = Celery("worker")\n'
+    );
+    fs.writeFileSync(
+      path.join(mockWorkPath, 'pyproject.toml'),
+      [
+        '[project]',
+        'name = "x"',
+        'version = "0.0.1"',
+        '',
+        '[tool.vercel.subscribers.celery-worker]',
+        'entrypoint = "worker:app"',
+        'topics = ["celery", "emails"]',
+        'max_deliveries = 3',
+        'retry_after_seconds = 10',
+        'initial_delay_seconds = 0',
+        'max_concurrency = 5',
+        '',
+      ].join('\n')
+    );
+
+    await expect(
+      getDevQueueConsumers({ workPath: mockWorkPath })
+    ).resolves.toEqual([
+      {
+        consumer: sanitizeConsumerName(
+          getSubscriberOutputPath('celery-worker')
+        ),
+        entrypoint: 'worker.py',
+        variableName: 'app',
+        topics: [
+          {
+            topic: 'celery',
+            maxDeliveries: 3,
+            retryAfterSeconds: 10,
+            initialDelaySeconds: 0,
+            maxConcurrency: 5,
+          },
+          {
+            topic: 'emails',
+            maxDeliveries: 3,
+            retryAfterSeconds: 10,
+            initialDelaySeconds: 0,
+            maxConcurrency: 5,
+          },
+        ],
+      },
+    ]);
+  });
+
   it('emits one queue/v2beta worker lambda per subscriber with all topics attached', async () => {
     const files = {
       'app.py': new FileBlob({
@@ -2308,13 +2361,13 @@ describe('pyproject subscribers', () => {
     });
 
     const output = getBuildOutputV2(result).output as any;
-    const celeryPath = '_py_subscribers/celery-worker';
+    const celeryPath = getSubscriberOutputPath('celery-worker');
     const consumer = sanitizeConsumerName(celeryPath);
 
     expect(output.index).toBeDefined();
     expect(output[celeryPath]).toBeDefined();
-    expect(output['_py_subscribers/celery-worker/celery']).toBeUndefined();
-    expect(output['_py_subscribers/celery-worker/emails']).toBeUndefined();
+    expect(output[`${celeryPath}/celery`]).toBeUndefined();
+    expect(output[`${celeryPath}/emails`]).toBeUndefined();
     expect(output.index.environment.VERCEL_HAS_WORKER_SERVICES).toBe('1');
 
     const celery = output[celeryPath];

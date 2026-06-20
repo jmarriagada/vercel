@@ -37,6 +37,7 @@ function makeQueueJobService(
     topic: string;
     retryAfterSeconds?: number;
     initialDelaySeconds?: number;
+    maxDeliveries?: number;
   }>
 ): ExperimentalService {
   return {
@@ -293,6 +294,34 @@ describe('QueueBroker', () => {
       await vi.advanceTimersByTimeAsync(2_000);
       expect(mockFetch).toHaveBeenCalledOnce();
       expect(callHeaders()['ce-vqsconsumergroup']).toBe('processor');
+    });
+
+    it('honors configured maxDeliveries', async () => {
+      mockFetch.mockResolvedValue({ ok: false, status: 500 } as any);
+      broker = new QueueBroker(
+        [
+          makeQueueJobService('processor', [
+            {
+              topic: 'orders',
+              retryAfterSeconds: 1,
+              maxDeliveries: 1,
+            },
+          ]),
+        ],
+        getServiceOrigin
+      );
+
+      const { messageId } = broker.enqueue(
+        'orders',
+        Buffer.from('{}'),
+        'application/json'
+      );
+      await vi.advanceTimersByTimeAsync(0);
+      expect(mockFetch).toHaveBeenCalledOnce();
+
+      await vi.advanceTimersByTimeAsync(1_000);
+      expect(mockFetch).toHaveBeenCalledOnce();
+      expect(broker.receiveById(messageId, 'processor')).toBeNull();
     });
 
     it('does not dispatch delayed messages immediately', async () => {
