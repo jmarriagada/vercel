@@ -85,6 +85,11 @@ import {
   safePathSegment,
   type Subscriber,
 } from './subscribers';
+import {
+  getPyprojectCrons,
+  resolvePyprojectCronGroups,
+  type PyprojectCron,
+} from './pyproject-crons';
 
 const writeFile = fs.promises.writeFile;
 const PYTHON_ENTRYPOINT_DOCS_URL =
@@ -462,6 +467,7 @@ export const build: BuildVX = async ({
   const framework = config?.framework;
   let shouldInstallVercelWorkers = config?.hasWorkerServices === true;
   let subscribers: Subscriber[] = [];
+  let pyprojectCronDefinitions: PyprojectCron[] = [];
   let spawnEnv: NodeJS.ProcessEnv | undefined;
   // Custom install command from dashboard/project settings, if any.
   let projectInstallCommand: string | undefined;
@@ -481,17 +487,18 @@ export const build: BuildVX = async ({
     meta,
   });
 
-  // `tool.vercel.subscribers` declares background workers for a standalone
-  // Python app and compiles them into additional queue-triggered Lambdas.
-  // It is intentionally scoped to non-service framework builds:
-  //   - `experimentalServices` projects already declare queue consumers as
-  //     first-class `worker`/`job` services, so a second implicit mechanism
-  //     would be redundant and ambiguous (services can share one pyproject.toml,
-  //     which would duplicate every subscriber across each service build).
+  // `tool.vercel.subscribers` and `tool.vercel.crons` declare background work
+  // for a standalone Python app and compile into additional Lambdas.
+  // They are intentionally scoped to non-service framework builds:
+  //   - `experimentalServices` projects already declare background work as
+  //     first-class services, so a second implicit mechanism would be redundant
+  //     and ambiguous (services can share one pyproject.toml, which would
+  //     duplicate every declaration across each service build).
   //   - Bare `api/**` functions build once per file sharing this workPath, so
   //     emitting subscribers there would duplicate their outputs per build.
   if (!service && isPythonFramework(framework)) {
     subscribers = await getPyprojectSubscribers(workPath);
+    pyprojectCronDefinitions = await getPyprojectCrons(workPath);
     shouldInstallVercelWorkers ||= subscribers.length > 0;
   }
 
@@ -906,7 +913,7 @@ export const build: BuildVX = async ({
   const entrypointWithSuffix = `${entrypoint}${suffix}`;
   debug('Entrypoint with suffix is', entrypointWithSuffix);
 
-  const crons = await getServiceCrons({
+  const serviceCrons = await getServiceCrons({
     service,
     entrypoint,
     rawEntrypoint,
@@ -915,18 +922,31 @@ export const build: BuildVX = async ({
     env: pythonEnv,
     workPath,
   });
+  const pyprojectCronGroups = await resolvePyprojectCronGroups({
+    crons: pyprojectCronDefinitions,
+    pythonBin: getVenvPythonBin(venvPath),
+    env: pythonEnv,
+    workPath,
+  });
+  const pyprojectCrons = pyprojectCronGroups.flatMap(group =>
+    group.crons.map(({ path, schedule }) => ({ path, schedule }))
+  );
+  const crons =
+    serviceCrons?.length || pyprojectCrons.length
+      ? [...(serviceCrons || []), ...pyprojectCrons]
+      : undefined;
 
   // Build trampoline env line for cron routing.
   // Injected into os.environ.update() in the Python trampoline source,
   // not lambdaEnv, because the platform rejects env var names with
   // leading underscores.
   const extraTrampolineEnv: string[] = [];
-  if (crons?.length) {
+  if (serviceCrons?.length) {
     // Single-quote the JSON so embedded double quotes don't need escaping
     // in the surrounding Python dict literal. Backslashes would be
     // misinterpreted by Python's string parser, but cron paths/handlers
     // only contain [a-zA-Z0-9_./:-] so JSON.stringify won't produce any.
-    const json = JSON.stringify(buildCronRouteTable(crons));
+    const json = JSON.stringify(buildCronRouteTable(serviceCrons));
     assert(!json.includes('\\'), `backslash in cron route table: ${json}`);
     extraTrampolineEnv.push(`"__VC_CRON_ROUTES": '${json}'`);
   }
@@ -1182,6 +1202,39 @@ export const build: BuildVX = async ({
     });
   }
 
+  const pyprojectCronLambdas: Record<string, Lambda> = {};
+
+  for (const cronGroup of pyprojectCronGroups) {
+    const routeTable = JSON.stringify(buildCronRouteTable(cronGroup.crons));
+    assert(
+      !routeTable.includes('\\'),
+      `backslash in cron route table: ${routeTable}`
+    );
+
+    pyprojectCronLambdas[cronGroup.outputPath] = new Lambda({
+      files: {
+        ...files,
+        [`${handlerPyFilename}.py`]: new FileBlob({
+          data: createRuntimeTrampoline({
+            moduleName: cronGroup.moduleName,
+            entrypoint: cronGroup.entrypoint,
+            vendorDir,
+            variableName: cronGroup.variableName,
+            extraEnv: [`"__VC_CRON_ROUTES": '${routeTable}'`],
+          }),
+        }),
+      },
+      handler: `${handlerPyFilename}.vc_handler`,
+      runtime: pythonVersion.runtime,
+      architecture: target.architecture,
+      environment: {
+        ...lambdaEnv,
+        VERCEL_SERVICE_TYPE: 'cron',
+      },
+      supportsResponseStreaming: true,
+    });
+  }
+
   // Write project manifest for diagnostics (best-effort, never fails the build).
   // Requires uv.lock to resolve versions and dependency graph.  Skipped in
   // `vercel dev` since the CLI only reads the manifest in `vercel build`.
@@ -1202,8 +1255,8 @@ export const build: BuildVX = async ({
     }
   }
 
-  // Subscribers only attach to framework apps or named services, both of which
-  // already take the V2 path below, so no early V3 return needs to consider them.
+  // Pyproject workers and crons only attach to framework apps, which already
+  // take the V2 path below, so no early V3 return needs to consider them.
   if (!isPythonFramework(framework) && !service?.name) {
     return { resultVersion: 3, result: { output } };
   }
@@ -1220,7 +1273,15 @@ export const build: BuildVX = async ({
   // we still need to provide catch-all route
   const routes = service?.name
     ? undefined
-    : [{ handle: 'filesystem' }, { src: '/(.*)', dest: `/${lambdaPath}` }];
+    : [
+        ...pyprojectCronGroups.map(cronGroup => ({
+          src: `^${cronGroup.routePrefix}/.*$`,
+          dest: `/${cronGroup.outputPath}`,
+          check: true,
+        })),
+        { handle: 'filesystem' },
+        { src: '/(.*)', dest: `/${lambdaPath}` },
+      ];
 
   return {
     resultVersion: 2,
@@ -1228,6 +1289,7 @@ export const build: BuildVX = async ({
       output: {
         [lambdaPath]: output,
         ...subscriberLambdas,
+        ...pyprojectCronLambdas,
         ...staticFiles,
       },
       ...(routes ? { routes } : {}),
