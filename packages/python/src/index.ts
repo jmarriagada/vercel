@@ -1,4 +1,3 @@
-import assert from 'assert';
 import fs from 'fs';
 import { join, dirname, basename, parse } from 'path';
 import {
@@ -57,7 +56,11 @@ import {
 } from './uv';
 import { resolvePythonVersion, pythonVersionString } from './version';
 import { generateProjectManifest } from './diagnostics';
-import { buildCronRouteTable, getServiceCrons } from './crons';
+import {
+  buildCronRouteTable,
+  getServiceCrons,
+  type ServiceCronEntry,
+} from './crons';
 import { startDevServer } from './start-dev-server';
 import {
   runPyprojectScript,
@@ -330,6 +333,11 @@ if os.path.isdir(_vendor):
 
 from vercel_runtime.vc_init import vc_handler
 `;
+}
+
+function createCronRouteTableEnv(crons: ServiceCronEntry[]): string {
+  const routeTable = JSON.stringify(buildCronRouteTable(crons));
+  return `"__VC_CRON_ROUTES": ${JSON.stringify(routeTable)}`;
 }
 
 export async function downloadFilesInWorkPath({
@@ -948,13 +956,7 @@ export const build: BuildVX = async ({
   // leading underscores.
   const extraTrampolineEnv: string[] = [];
   if (serviceCrons?.length) {
-    // Single-quote the JSON so embedded double quotes don't need escaping
-    // in the surrounding Python dict literal. Backslashes would be
-    // misinterpreted by Python's string parser, but cron paths/handlers
-    // only contain [a-zA-Z0-9_./:-] so JSON.stringify won't produce any.
-    const json = JSON.stringify(buildCronRouteTable(serviceCrons));
-    assert(!json.includes('\\'), `backslash in cron route table: ${json}`);
-    extraTrampolineEnv.push(`"__VC_CRON_ROUTES": '${json}'`);
+    extraTrampolineEnv.push(createCronRouteTableEnv(serviceCrons));
   }
 
   const variableName = resolved?.variableName ?? '';
@@ -1211,12 +1213,6 @@ export const build: BuildVX = async ({
   const pyprojectCronLambdas: Record<string, Lambda> = {};
 
   for (const cronGroup of pyprojectCronGroups) {
-    const routeTable = JSON.stringify(buildCronRouteTable(cronGroup.crons));
-    assert(
-      !routeTable.includes('\\'),
-      `backslash in cron route table: ${routeTable}`
-    );
-
     pyprojectCronLambdas[cronGroup.outputPath] = new Lambda({
       files: {
         ...files,
@@ -1226,7 +1222,7 @@ export const build: BuildVX = async ({
             entrypoint: cronGroup.entrypoint,
             vendorDir,
             variableName: cronGroup.variableName,
-            extraEnv: [`"__VC_CRON_ROUTES": '${routeTable}'`],
+            extraEnv: [createCronRouteTableEnv(cronGroup.crons)],
           }),
         }),
       },

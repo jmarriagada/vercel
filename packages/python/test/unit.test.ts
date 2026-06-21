@@ -2452,8 +2452,9 @@ describe('pyproject crons', () => {
     if (!handler || !('data' in handler)) {
       throw new Error('cron handler bootstrap not found');
     }
+    const routeTable = JSON.stringify({ [cronPath]: 'jobs.cleanup:run' });
     expect(handler.data.toString()).toContain(
-      `"__VC_CRON_ROUTES": '{"${cronPath}":"jobs.cleanup:run"}'`
+      `"__VC_CRON_ROUTES": ${JSON.stringify(routeTable)}`
     );
   });
 
