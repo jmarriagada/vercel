@@ -23,7 +23,7 @@ When adding a durable contract, add a row to `SKILL.md` so agents load it only f
 3. Intended project: explicit `--project`, repo-root match, exact folder-name match, selected existing project, or new project.
 4. Project root: inferred root, selected root, or cwd.
 5. Settings: detected framework/settings, explicit overrides, or defaults.
-6. Mutations: create project if needed, write `.vercel/project.json`, update `.gitignore`, optional Git connection, optional env pull.
+6. Mutations: create project if needed, write `.vercel/project.json`, update `.gitignore`, optional Git connection, then pull development env variables.
 
 Rules:
 
@@ -49,7 +49,7 @@ Rules:
 - Link/setup primary completed-phase rows use `✓`: `✓ Linked`, `✓ Created`, `✓ Added`. Discovery, preview, progress, and secondary rows such as `Found existing project`, `Detected`, `Project`, `Directory`, `Config`, `Settings`, and `Source` keep the blank two-space gutter. Never use `▲` for setup/link rows.
 - Default human success output prints the user-facing completion receipt, such as `✓ Linked acme/web` or `✓ Created acme/web`.
 - Do not print `.vercel/project.json`, `.vercel/repo.json`, or a repeated `Directory` row in default human success output when the local target was already shown. Verify link files in tests and expose them through machine/debug/help surfaces when needed.
-- Offer `Pull development environment variables into .env.local?` after linking when TTY and safe.
+- After a successful direct `vc link`, pull development environment variables into `.env.local` automatically. Preserve pre-existing local file content instead of replacing it.
 
 Current gaps to migrate incrementally:
 
@@ -71,7 +71,7 @@ Link prompt map:
 | No project match                   | `Project?` with `Create new project` / `Link existing project`, then `Name?` when creating                                         | require `--yes` or `project_not_found` |
 | Root choices exist                 | `Code directory?`                                                                                                                  | require root flag/config/payload       |
 | Settings differ                    | `Customize settings?`                                                                                                              | require flags/config/payload           |
-| Optional env pull                  | `Pull development environment variables into .env.local?`                                                                          | skip unless explicitly requested       |
+| Development env pull               | Automatically pull into `.env.local` after a successful direct link                                                                 | pull after a successful explicit link |
 | Stale/deleted link                 | show stale link, then concrete relink choice                                                                                       | `action_required: stale_link`          |
 
 Link acceptance matrix:

@@ -13,10 +13,40 @@ import { LinkTelemetryClient } from '../../util/telemetry/commands/link';
 import { getCommandAliases } from '..';
 import getScope, { detectExplicitScope } from '../../util/get-scope';
 import { isPromptCanceledError } from '../../util/input/prompt-cancellation';
+import pull from '../env/pull';
+import { resolveProjectCwd } from '../../util/projects/find-project-root';
 
 const COMMAND_CONFIG = {
   add: getCommandAliases(addSubcommand),
 };
+
+async function pullDevelopmentEnvAfterLink(
+  client: Client,
+  cwd: string
+): Promise<number> {
+  const originalCwd = client.cwd;
+  try {
+    client.cwd = await resolveProjectCwd(cwd);
+    const exitCode = await pull(client, ['--yes'], 'vercel-cli:link', {
+      preserveExisting: true,
+    });
+
+    if (exitCode !== 0) {
+      output.error(
+        'Failed to pull environment variables. You can run `vc env pull` manually.'
+      );
+    }
+
+    return exitCode;
+  } catch (_error) {
+    output.error(
+      'Failed to pull environment variables. You can run `vc env pull` manually.'
+    );
+    return 1;
+  } finally {
+    client.cwd = originalCwd;
+  }
+}
 
 export default async function link(client: Client) {
   try {
@@ -155,11 +185,14 @@ async function linkProject(client: Client) {
       successEmoji: 'success',
       nonInteractive: linkNonInteractive,
       searchAcrossTeams: !explicitScopeProvided,
+      pullEnv: false,
     });
 
     if (typeof link === 'number') {
       return link;
     }
+
+    return await pullDevelopmentEnvAfterLink(client, cwd);
   }
 
   return 0;

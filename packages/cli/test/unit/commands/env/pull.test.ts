@@ -3,7 +3,9 @@ import fs from 'fs-extra';
 import path from 'path';
 import { parse } from 'dotenv';
 import env from '../../../../src/commands/env';
-import { getAcrValuesFromWWWAuthenticate } from '../../../../src/commands/env/pull';
+import pull, {
+  getAcrValuesFromWWWAuthenticate,
+} from '../../../../src/commands/env/pull';
 import { setupUnitFixture } from '../../../helpers/setup-unit-fixture';
 import { client } from '../../../mocks/client';
 import { defaultProject, envs, useProject } from '../../../mocks/project';
@@ -113,6 +115,41 @@ describe('env pull', () => {
         value: 'TRUE',
       },
     ]);
+  });
+
+  it('preserves existing local variables for link-origin pulls', async () => {
+    useUser();
+    useTeams('team_dummy');
+    useProject({
+      ...defaultProject,
+      id: 'vercel-env-pull',
+      name: 'vercel-env-pull',
+    });
+    const cwd = setupUnitFixture('vercel-env-pull');
+    await fs.writeFile(
+      path.join(cwd, '.env.local'),
+      'LOCAL_ONLY=value\n',
+      'utf8'
+    );
+    client.cwd = cwd;
+
+    await expect(
+      pull(client, ['--yes'], 'vercel-cli:link', { preserveExisting: true })
+    ).resolves.toEqual(0);
+
+    let contents = await fs.readFile(path.join(cwd, '.env.local'), 'utf8');
+    expect(contents).toContain('LOCAL_ONLY=value');
+    expect(contents).toContain('SPECIAL_FLAG');
+    expect(contents).toContain('# Vercel CLI environment variables');
+
+    await expect(
+      pull(client, ['--yes'], 'vercel-cli:link', { preserveExisting: true })
+    ).resolves.toEqual(0);
+
+    contents = await fs.readFile(path.join(cwd, '.env.local'), 'utf8');
+    expect(contents.match(/# Vercel CLI environment variables/g)).toHaveLength(
+      1
+    );
   });
 
   it('should retry after fresh authentication when sensitive env vars require a challenge', async () => {

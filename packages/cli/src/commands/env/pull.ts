@@ -1,5 +1,5 @@
 import chalk from 'chalk';
-import { outputFile } from 'fs-extra';
+import { outputFile, readFile } from 'fs-extra';
 import { closeSync, openSync, readSync } from 'fs';
 import { resolve } from 'path';
 import type Client from '../../util/client';
@@ -37,6 +37,12 @@ import {
 import { printAlignedLabel } from '../../util/output/print-aligned-label';
 
 const CONTENTS_PREFIX = '# Created by Vercel CLI\n';
+const LINK_ENV_BLOCK_PREFIX = '# Vercel CLI environment variables\n';
+const LINK_ENV_BLOCK_SUFFIX = '# End Vercel CLI environment variables\n';
+
+export interface EnvPullOptions {
+  preserveExisting?: boolean;
+}
 
 function readHeadSync(path: string, length: number) {
   const buffer = Buffer.alloc(length);
@@ -74,7 +80,8 @@ const VARIABLES_TO_IGNORE = [
 export default async function pull(
   client: Client,
   argv: string[],
-  source: EnvRecordsSource = 'vercel-cli:env:pull'
+  source: EnvRecordsSource = 'vercel-cli:env:pull',
+  options: EnvPullOptions = {}
 ) {
   const telemetryClient = new EnvPullTelemetryClient({
     opts: {
@@ -168,7 +175,8 @@ export default async function pull(
     gitBranch,
     client.cwd,
     source,
-    deploymentId
+    deploymentId,
+    options
   );
 
   return 0;
@@ -183,15 +191,16 @@ export async function envPullCommandLogic(
   gitBranch: string | undefined,
   cwd: string,
   source: EnvRecordsSource,
-  deploymentId?: string
+  deploymentId?: string,
+  { preserveExisting = false }: EnvPullOptions = {}
 ) {
   const fullPath = resolve(cwd, filename);
   const head = tryReadHeadSync(fullPath, Buffer.byteLength(CONTENTS_PREFIX));
   const exists = typeof head !== 'undefined';
 
-  if (head === CONTENTS_PREFIX) {
+  if (head === CONTENTS_PREFIX && !preserveExisting) {
     output.log(`Overwriting existing ${chalk.bold(filename)} file`);
-  } else if (exists && !skipConfirmation) {
+  } else if (exists && !skipConfirmation && !preserveExisting) {
     if (client.nonInteractive) {
       outputActionRequired(client, {
         status: 'action_required',
@@ -249,7 +258,7 @@ export async function envPullCommandLogic(
 
   let deltaString = '';
   let oldEnv;
-  if (exists) {
+  if (exists && !preserveExisting) {
     oldEnv = await createEnvObject(fullPath);
     if (oldEnv) {
       // Removes any double quotes from `records`, if they exist
@@ -270,7 +279,14 @@ export async function envPullCommandLogic(
       .join('\n') +
     '\n';
 
-  await outputFile(fullPath, contents, 'utf8');
+  const existingContents =
+    preserveExisting && exists ? await readFile(fullPath, 'utf8') : undefined;
+  const outputContents =
+    existingContents === undefined
+      ? contents
+      : mergeLinkEnvContents(existingContents, contents);
+
+  await outputFile(fullPath, outputContents, 'utf8');
 
   if (deltaString) {
     output.print('\n' + deltaString);
@@ -295,6 +311,26 @@ export async function envPullCommandLogic(
     `${filename} file${isGitIgnoreUpdated ? ' and added it to .gitignore' : ''}`,
     { gutter: '✓' }
   );
+}
+
+function mergeLinkEnvContents(existing: string, pulled: string): string {
+  const block = `${LINK_ENV_BLOCK_PREFIX}${pulled}${LINK_ENV_BLOCK_SUFFIX}`;
+  const blockStart = existing.indexOf(LINK_ENV_BLOCK_PREFIX);
+
+  if (blockStart !== -1) {
+    const blockEnd = existing.indexOf(LINK_ENV_BLOCK_SUFFIX, blockStart);
+    if (blockEnd !== -1) {
+      return (
+        existing.slice(0, blockStart) +
+        block +
+        existing.slice(blockEnd + LINK_ENV_BLOCK_SUFFIX.length)
+      );
+    }
+  }
+
+  const separator =
+    existing.length === 0 ? '' : existing.endsWith('\n') ? '\n' : '\n\n';
+  return `${existing}${separator}${block}`;
 }
 
 async function pullEnvRecordsForEnvPull(
