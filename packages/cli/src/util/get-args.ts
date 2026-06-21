@@ -22,6 +22,7 @@ export default function getArgs<T extends arg.Spec>(
 
 type ParserOptions = {
   permissive?: boolean;
+  stopAtPositional?: boolean;
 };
 
 /**

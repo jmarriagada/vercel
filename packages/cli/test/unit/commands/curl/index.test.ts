@@ -183,7 +183,7 @@ describe('curl', () => {
       );
     });
 
-    it('should pass native curl flags before --', async () => {
+    it('should pass native curl flags without a separator', async () => {
       client.setArgv(
         'curl',
         'https://example.com/api/hello',
@@ -198,6 +198,7 @@ describe('curl', () => {
       );
       const exitCode = await curl(client);
       expect(exitCode).toEqual(0);
+      expect(client.getFullOutput()).not.toContain('[debug]');
       expect(spawnMock).toHaveBeenCalledWith(
         'curl',
         [
@@ -843,7 +844,7 @@ describe('getDeploymentUrlById', () => {
 });
 
 describe('parseCurlLikeArgs', () => {
-  it('passes short curl flags through before --', () => {
+  it('passes short curl flags through without a separator', () => {
     const parsed = parseCurlLikeArgs(
       ['curl', 'https://example.com', '-X', 'POST', '-d', '{"ok":true}'],
       'curl'
@@ -878,6 +879,24 @@ describe('parseCurlLikeArgs', () => {
 
     expect(parsed.target).toBe('https://example.com');
     expect(parsed.toolFlags).toEqual(['--silent']);
+  });
+
+  it('distinguishes Vercel globals before curl from native flags after it', () => {
+    const parsed = parseCurlLikeArgs(
+      [
+        '--cwd',
+        'apps/web',
+        '-d',
+        'curl',
+        'https://example.com',
+        '-d',
+        '{"ok":true}',
+      ],
+      'curl'
+    );
+
+    expect(parsed.target).toBe('https://example.com');
+    expect(parsed.toolFlags).toEqual(['-d', '{"ok":true}']);
   });
 });
 

@@ -47,7 +47,7 @@ import pkg from './util/pkg';
 import cmd from './util/output/cmd';
 import param from './util/output/param';
 import highlight from './util/output/highlight';
-import { parseArguments } from './util/get-args';
+import { parseInitialArgs } from './util/parse-initial-args';
 import getUser from './util/get-user';
 import getTeams from './util/teams/get-teams';
 import Client from './util/client';
@@ -189,21 +189,10 @@ const main = async () => {
     process.stdin.isTTY = true;
   }
 
-  const parseInitialArgs = () =>
-    parseArguments(
-      process.argv,
-      {
-        '--version': Boolean,
-        '-v': '--version',
-        '--non-interactive': Boolean,
-      },
-      { permissive: true }
-    );
-
   let parsedArgs: ReturnType<typeof parseInitialArgs>;
 
   try {
-    parsedArgs = parseInitialArgs();
+    parsedArgs = parseInitialArgs(process.argv);
     const isDebugging = parsedArgs.flags['--debug'];
     const isNoColor = parsedArgs.flags['--no-color'];
     output.initialize({

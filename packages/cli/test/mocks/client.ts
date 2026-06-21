@@ -17,6 +17,7 @@ import stripAnsi from 'strip-ansi';
 import ansiEscapes from 'ansi-escapes';
 import { TelemetryEventStore } from '../../src/util/telemetry';
 import output from '../../src/output-manager';
+import { parseInitialArgs } from '../../src/util/parse-initial-args';
 
 const ignoredAnsi = new Set([ansiEscapes.cursorHide, ansiEscapes.cursorShow]);
 
@@ -358,11 +359,14 @@ export class MockClient extends Client {
         ? [argvOrFirst, ...rest]
         : [];
 
-    super.setArgv([process.execPath, 'cli.js', ...argv]);
+    const fullArgv = [process.execPath, 'cli.js', ...argv];
+    super.setArgv(fullArgv);
+
+    const parsedArgs = parseInitialArgs(fullArgv);
 
     output.initialize({
-      debug: argv.includes('--debug') || argv.includes('-d'),
-      noColor: argv.includes('--no-color'),
+      debug: !!parsedArgs.flags['--debug'],
+      noColor: !!parsedArgs.flags['--no-color'],
       supportsHyperlink: false,
     });
   }
