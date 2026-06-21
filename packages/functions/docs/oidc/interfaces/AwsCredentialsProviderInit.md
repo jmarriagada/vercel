@@ -1,10 +1,10 @@
 [**@vercel/functions**](../../README.md)
 
-***
+---
 
 # Interface: AwsCredentialsProviderInit
 
-Defined in: [packages/functions/src/oidc/aws-credentials-provider.ts:20](https://github.com/vercel/vercel/blob/main/packages/functions/src/oidc/aws-credentials-provider.ts#L20)
+Defined in: [packages/functions/src/oidc/aws-credentials-provider.ts:20](https://github.com/AbhilashG12/vercel/blob/main/packages/functions/src/oidc/aws-credentials-provider.ts#L20)
 
 The init object for the `awsCredentialsProvider` function.
 
@@ -18,7 +18,7 @@ The init object for the `awsCredentialsProvider` function.
 
 > `optional` **clientConfig?**: `any`
 
-Defined in: node\_modules/.pnpm/@aws-sdk+credential-provider-web-identity@3.609.0\_@aws-sdk+client-sts@3.609.0/node\_modules/@aws-sdk/credential-provider-web-identity/dist-types/fromWebToken.d.ts:135
+Defined in: node_modules/.pnpm/@aws-sdk+credential-provide_d77ba710f29c66a98266862b32c0ea59/node_modules/@aws-sdk/credential-provider-web-identity/dist-types/fromWebToken.d.ts:135
 
 Custom STS client configurations overriding the default ones.
 
@@ -26,13 +26,13 @@ Custom STS client configurations overriding the default ones.
 
 `Omit.clientConfig`
 
-***
+---
 
 ### clientPlugins?
 
 > `optional` **clientPlugins?**: `Pluggable`\<`any`, `any`\>[]
 
-Defined in: node\_modules/.pnpm/@aws-sdk+credential-provider-web-identity@3.609.0\_@aws-sdk+client-sts@3.609.0/node\_modules/@aws-sdk/credential-provider-web-identity/dist-types/fromWebToken.d.ts:139
+Defined in: node_modules/.pnpm/@aws-sdk+credential-provide_d77ba710f29c66a98266862b32c0ea59/node_modules/@aws-sdk/credential-provider-web-identity/dist-types/fromWebToken.d.ts:139
 
 Custom STS client middleware plugin to modify the client default behavior.
 
@@ -40,7 +40,7 @@ Custom STS client middleware plugin to modify the client default behavior.
 
 `Omit.clientPlugins`
 
-***
+---
 
 ### durationSeconds?
 
@@ -52,13 +52,13 @@ The duration, in seconds, of the role session. Defaults to 3600 seconds.
 
 `Omit.durationSeconds`
 
-***
+---
 
 ### logger?
 
 > `optional` **logger?**: `Logger`
 
-Defined in: node\_modules/.pnpm/@aws-sdk+types@3.609.0/node\_modules/@aws-sdk/types/dist-types/credentials.d.ts:31
+Defined in: node_modules/.pnpm/@aws-sdk+types@3.609.0/node_modules/@aws-sdk/types/dist-types/credentials.d.ts:31
 
 This logger is only used to provide information
 on what credential providers were used during resolution.
@@ -69,13 +69,13 @@ It does not log credentials.
 
 `Omit.logger`
 
-***
+---
 
 ### ~~parentClientConfig?~~
 
 > `optional` **parentClientConfig?**: `object`
 
-Defined in: node\_modules/.pnpm/@aws-sdk+types@3.609.0/node\_modules/@aws-sdk/types/dist-types/credentials.d.ts:45
+Defined in: node_modules/.pnpm/@aws-sdk+types@3.609.0/node_modules/@aws-sdk/types/dist-types/credentials.d.ts:45
 
 **`Internal`**
 
@@ -104,7 +104,7 @@ the outer client.
 
 `Omit.parentClientConfig`
 
-***
+---
 
 ### policy?
 
@@ -116,7 +116,7 @@ An IAM policy in JSON format that you want to use as an inline session policy.
 
 `Omit.policy`
 
-***
+---
 
 ### policyArns?
 
@@ -132,7 +132,7 @@ ARNs of the IAM managed policies that you want to use as managed session policie
 
 `Omit.policyArns`
 
-***
+---
 
 ### providerId?
 
@@ -144,7 +144,7 @@ The fully qualified host component of the domain name of the identity provider.
 
 `Omit.providerId`
 
-***
+---
 
 ### roleArn
 
@@ -156,13 +156,13 @@ ARN of the role that the caller is assuming.
 
 `Omit.roleArn`
 
-***
+---
 
 ### roleAssumerWithWebIdentity?
 
 > `optional` **roleAssumerWithWebIdentity?**: (`params`) => [`Promise`](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Promise)\<`AwsCredentialIdentity`\>
 
-Defined in: node\_modules/.pnpm/@aws-sdk+credential-provider-web-identity@3.609.0\_@aws-sdk+client-sts@3.609.0/node\_modules/@aws-sdk/credential-provider-web-identity/dist-types/fromWebToken.d.ts:130
+Defined in: node_modules/.pnpm/@aws-sdk+credential-provide_d77ba710f29c66a98266862b32c0ea59/node_modules/@aws-sdk/credential-provider-web-identity/dist-types/fromWebToken.d.ts:130
 
 A function that assumes a role with web identity and returns a promise fulfilled with credentials for the assumed role.
 
@@ -180,13 +180,13 @@ A function that assumes a role with web identity and returns a promise fulfilled
 
 `Omit.roleAssumerWithWebIdentity`
 
-***
+---
 
 ### roleSessionName?
 
 > `optional` **roleSessionName?**: `string`
 
-Defined in: node\_modules/.pnpm/@aws-sdk+credential-provider-web-identity@3.609.0\_@aws-sdk+client-sts@3.609.0/node\_modules/@aws-sdk/credential-provider-web-identity/dist-types/fromWebToken.d.ts:123
+Defined in: node_modules/.pnpm/@aws-sdk+credential-provide_d77ba710f29c66a98266862b32c0ea59/node_modules/@aws-sdk/credential-provider-web-identity/dist-types/fromWebToken.d.ts:123
 
 An identifier for the assumed role session.
 

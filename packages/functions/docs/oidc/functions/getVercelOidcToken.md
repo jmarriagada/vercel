@@ -1,6 +1,6 @@
 [**@vercel/functions**](../../README.md)
 
-***
+---
 
 # ~~Function: getVercelOidcToken()~~
 
@@ -41,18 +41,22 @@ or the token refresh request fails.
 
 ```js
 // Using the OIDC token
-getVercelOidcToken().then((token) => {
-  console.log('OIDC Token:', token);
-}).catch((error) => {
-  console.error('Error:', error.message);
-});
+getVercelOidcToken()
+  .then(token => {
+    console.log('OIDC Token:', token);
+  })
+  .catch(error => {
+    console.error('Error:', error.message);
+  });
 ```
 
 ```js
 // Using the OIDC token with explicit team and project (supports IDs and slugs)
-getVercelOidcToken({ team: 'my-team', project: 'my-project' }).then((token) => {
-  console.log('OIDC Token:', token);
-}).catch((error) => {
-  console.error('Error:', error.message);
-});
+getVercelOidcToken({ team: 'my-team', project: 'my-project' })
+  .then(token => {
+    console.log('OIDC Token:', token);
+  })
+  .catch(error => {
+    console.error('Error:', error.message);
+  });
 ```

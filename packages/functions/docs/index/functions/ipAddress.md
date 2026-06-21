@@ -1,12 +1,12 @@
 [**@vercel/functions**](../../README.md)
 
-***
+---
 
 # Function: ipAddress()
 
 > **ipAddress**(`input`): `string` \| `undefined`
 
-Defined in: [packages/functions/src/headers.ts:131](https://github.com/vercel/vercel/blob/main/packages/functions/src/headers.ts#L131)
+Defined in: [packages/functions/src/headers.ts:131](https://github.com/AbhilashG12/vercel/blob/main/packages/functions/src/headers.ts#L131)
 
 Returns the IP address of the request from the headers.
 

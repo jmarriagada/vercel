@@ -1,12 +1,12 @@
 [**@vercel/functions**](../../README.md)
 
-***
+---
 
 # Function: attachDatabasePool()
 
 > **attachDatabasePool**(`dbPool`): `void`
 
-Defined in: [packages/functions/src/db-connections/index.ts:225](https://github.com/vercel/vercel/blob/main/packages/functions/src/db-connections/index.ts#L225)
+Defined in: [packages/functions/src/db-connections/index.ts:225](https://github.com/AbhilashG12/vercel/blob/main/packages/functions/src/db-connections/index.ts#L225)
 
 **`Experimental`**
 
@@ -22,6 +22,7 @@ idle database connections to be removed from the pool.
 `DbPool`
 
 The database pool object. The supported pool types are:
+
 - PostgreSQL (pg)
 - MySQL2
 - MariaDB

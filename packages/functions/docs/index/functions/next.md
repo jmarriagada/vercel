@@ -1,12 +1,12 @@
 [**@vercel/functions**](../../README.md)
 
-***
+---
 
 # Function: next()
 
 > **next**(`init?`): [`Response`](https://developer.mozilla.org/docs/Web/API/Response)
 
-Defined in: [packages/functions/src/middleware.ts:145](https://github.com/vercel/vercel/blob/main/packages/functions/src/middleware.ts#L145)
+Defined in: [packages/functions/src/middleware.ts:145](https://github.com/AbhilashG12/vercel/blob/main/packages/functions/src/middleware.ts#L145)
 
 Returns a Response that instructs the system to continue processing the request.
 
@@ -42,6 +42,6 @@ import { next } from '@vercel/edge';
 export default function middleware(_req: Request) {
   return next({
     headers: { 'x-from-middleware': 'true' },
-  })
+  });
 }
 ```

@@ -4,7 +4,7 @@
 
 # Interface: AwsCredentialsProviderInit
 
-Defined in: [packages/oidc-aws-credentials-provider/src/aws-credentials-provider.ts:21](https://github.com/vercel/vercel/blob/main/packages/oidc-aws-credentials-provider/src/aws-credentials-provider.ts#L21)
+Defined in: [packages/oidc-aws-credentials-provider/src/aws-credentials-provider.ts:21](https://github.com/AbhilashG12/vercel/blob/main/packages/oidc-aws-credentials-provider/src/aws-credentials-provider.ts#L21)
 
 The init object for the `awsCredentialsProvider` function.
 
@@ -18,7 +18,7 @@ The init object for the `awsCredentialsProvider` function.
 
 > `optional` **clientConfig?**: `any`
 
-Defined in: node_modules/.pnpm/@aws-sdk+credential-provider-web-identity@3.609.0_@aws-sdk+client-sts@3.609.0/node_modules/@aws-sdk/credential-provider-web-identity/dist-types/fromWebToken.d.ts:135
+Defined in: node_modules/.pnpm/@aws-sdk+credential-provide_d77ba710f29c66a98266862b32c0ea59/node_modules/@aws-sdk/credential-provider-web-identity/dist-types/fromWebToken.d.ts:135
 
 Custom STS client configurations overriding the default ones.
 
@@ -32,7 +32,7 @@ Custom STS client configurations overriding the default ones.
 
 > `optional` **clientPlugins?**: `Pluggable`\<`any`, `any`\>[]
 
-Defined in: node_modules/.pnpm/@aws-sdk+credential-provider-web-identity@3.609.0_@aws-sdk+client-sts@3.609.0/node_modules/@aws-sdk/credential-provider-web-identity/dist-types/fromWebToken.d.ts:139
+Defined in: node_modules/.pnpm/@aws-sdk+credential-provide_d77ba710f29c66a98266862b32c0ea59/node_modules/@aws-sdk/credential-provider-web-identity/dist-types/fromWebToken.d.ts:139
 
 Custom STS client middleware plugin to modify the client default behavior.
 
@@ -162,7 +162,7 @@ ARN of the role that the caller is assuming.
 
 > `optional` **roleAssumerWithWebIdentity?**: (`params`) => [`Promise`](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Promise)\<`AwsCredentialIdentity`\>
 
-Defined in: node_modules/.pnpm/@aws-sdk+credential-provider-web-identity@3.609.0_@aws-sdk+client-sts@3.609.0/node_modules/@aws-sdk/credential-provider-web-identity/dist-types/fromWebToken.d.ts:130
+Defined in: node_modules/.pnpm/@aws-sdk+credential-provide_d77ba710f29c66a98266862b32c0ea59/node_modules/@aws-sdk/credential-provider-web-identity/dist-types/fromWebToken.d.ts:130
 
 A function that assumes a role with web identity and returns a promise fulfilled with credentials for the assumed role.
 
@@ -186,7 +186,7 @@ A function that assumes a role with web identity and returns a promise fulfilled
 
 > `optional` **roleSessionName?**: `string`
 
-Defined in: node_modules/.pnpm/@aws-sdk+credential-provider-web-identity@3.609.0_@aws-sdk+client-sts@3.609.0/node_modules/@aws-sdk/credential-provider-web-identity/dist-types/fromWebToken.d.ts:123
+Defined in: node_modules/.pnpm/@aws-sdk+credential-provide_d77ba710f29c66a98266862b32c0ea59/node_modules/@aws-sdk/credential-provider-web-identity/dist-types/fromWebToken.d.ts:123
 
 An identifier for the assumed role session.
 

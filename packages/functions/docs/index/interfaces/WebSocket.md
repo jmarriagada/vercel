@@ -1,10 +1,10 @@
 [**@vercel/functions**](../../README.md)
 
-***
+---
 
 # Interface: WebSocket
 
-Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d.ts:438
+Defined in: node_modules/.pnpm/@types+ws@8.18.1/node_modules/@types/ws/index.d.ts:438
 
 ## Extends
 
@@ -16,31 +16,31 @@ Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d
 
 > **binaryType**: `"nodebuffer"` \| `"arraybuffer"` \| `"fragments"`
 
-Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d.ts:51
+Defined in: node_modules/.pnpm/@types+ws@8.18.1/node_modules/@types/ws/index.d.ts:51
 
 #### Inherited from
 
 `WebSocketAlias.binaryType`
 
-***
+---
 
 ### bufferedAmount
 
 > `readonly` **bufferedAmount**: `number`
 
-Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d.ts:52
+Defined in: node_modules/.pnpm/@types+ws@8.18.1/node_modules/@types/ws/index.d.ts:52
 
 #### Inherited from
 
 `WebSocketAlias.bufferedAmount`
 
-***
+---
 
 ### CLOSED
 
 > `readonly` **CLOSED**: `3`
 
-Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d.ts:72
+Defined in: node_modules/.pnpm/@types+ws@8.18.1/node_modules/@types/ws/index.d.ts:72
 
 The connection is closed.
 
@@ -48,13 +48,13 @@ The connection is closed.
 
 `WebSocketAlias.CLOSED`
 
-***
+---
 
 ### CLOSING
 
 > `readonly` **CLOSING**: `2`
 
-Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d.ts:70
+Defined in: node_modules/.pnpm/@types+ws@8.18.1/node_modules/@types/ws/index.d.ts:70
 
 The connection is in the process of closing.
 
@@ -62,13 +62,13 @@ The connection is in the process of closing.
 
 `WebSocketAlias.CLOSING`
 
-***
+---
 
 ### CONNECTING
 
 > `readonly` **CONNECTING**: `0`
 
-Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d.ts:66
+Defined in: node_modules/.pnpm/@types+ws@8.18.1/node_modules/@types/ws/index.d.ts:66
 
 The connection is not yet open.
 
@@ -76,25 +76,25 @@ The connection is not yet open.
 
 `WebSocketAlias.CONNECTING`
 
-***
+---
 
 ### extensions
 
 > `readonly` **extensions**: `string`
 
-Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d.ts:53
+Defined in: node_modules/.pnpm/@types+ws@8.18.1/node_modules/@types/ws/index.d.ts:53
 
 #### Inherited from
 
 `WebSocketAlias.extensions`
 
-***
+---
 
 ### isPaused
 
 > `readonly` **isPaused**: `boolean`
 
-Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d.ts:55
+Defined in: node_modules/.pnpm/@types+ws@8.18.1/node_modules/@types/ws/index.d.ts:55
 
 Indicates whether the websocket is paused
 
@@ -102,61 +102,61 @@ Indicates whether the websocket is paused
 
 `WebSocketAlias.isPaused`
 
-***
+---
 
 ### onclose
 
 > **onclose**: ((`event`) => `void`) \| `null`
 
-Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d.ts:76
+Defined in: node_modules/.pnpm/@types+ws@8.18.1/node_modules/@types/ws/index.d.ts:76
 
 #### Inherited from
 
 `WebSocketAlias.onclose`
 
-***
+---
 
 ### onerror
 
 > **onerror**: ((`event`) => `void`) \| `null`
 
-Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d.ts:75
+Defined in: node_modules/.pnpm/@types+ws@8.18.1/node_modules/@types/ws/index.d.ts:75
 
 #### Inherited from
 
 `WebSocketAlias.onerror`
 
-***
+---
 
 ### onmessage
 
 > **onmessage**: ((`event`) => `void`) \| `null`
 
-Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d.ts:77
+Defined in: node_modules/.pnpm/@types+ws@8.18.1/node_modules/@types/ws/index.d.ts:77
 
 #### Inherited from
 
 `WebSocketAlias.onmessage`
 
-***
+---
 
 ### onopen
 
 > **onopen**: ((`event`) => `void`) \| `null`
 
-Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d.ts:74
+Defined in: node_modules/.pnpm/@types+ws@8.18.1/node_modules/@types/ws/index.d.ts:74
 
 #### Inherited from
 
 `WebSocketAlias.onopen`
 
-***
+---
 
 ### OPEN
 
 > `readonly` **OPEN**: `1`
 
-Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d.ts:68
+Defined in: node_modules/.pnpm/@types+ws@8.18.1/node_modules/@types/ws/index.d.ts:68
 
 The connection is open and ready to communicate.
 
@@ -164,25 +164,25 @@ The connection is open and ready to communicate.
 
 `WebSocketAlias.OPEN`
 
-***
+---
 
 ### protocol
 
 > `readonly` **protocol**: `string`
 
-Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d.ts:56
+Defined in: node_modules/.pnpm/@types+ws@8.18.1/node_modules/@types/ws/index.d.ts:56
 
 #### Inherited from
 
 `WebSocketAlias.protocol`
 
-***
+---
 
 ### readyState
 
 > `readonly` **readyState**: `0` \| `1` \| `2` \| `3`
 
-Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d.ts:58
+Defined in: node_modules/.pnpm/@types+ws@8.18.1/node_modules/@types/ws/index.d.ts:58
 
 The current state of the connection
 
@@ -190,13 +190,13 @@ The current state of the connection
 
 `WebSocketAlias.readyState`
 
-***
+---
 
 ### url
 
 > `readonly` **url**: `string`
 
-Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d.ts:63
+Defined in: node_modules/.pnpm/@types+ws@8.18.1/node_modules/@types/ws/index.d.ts:63
 
 #### Inherited from
 
@@ -208,7 +208,7 @@ Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d
 
 > `optional` **\[captureRejectionSymbol\]**(`error`, `event`, ...`args`): `void`
 
-Defined in: node\_modules/.pnpm/@types+node@20.11.0/node\_modules/@types/node/events.d.ts:112
+Defined in: node_modules/.pnpm/@types+node@20.11.0/node_modules/@types/node/events.d.ts:112
 
 #### Parameters
 
@@ -232,19 +232,19 @@ Defined in: node\_modules/.pnpm/@types+node@20.11.0/node\_modules/@types/node/ev
 
 `WebSocketAlias.[captureRejectionSymbol]`
 
-***
+---
 
 ### addEventListener()
 
 > **addEventListener**\<`K`\>(`type`, `listener`, `options?`): `void`
 
-Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d.ts:117
+Defined in: node_modules/.pnpm/@types+ws@8.18.1/node_modules/@types/ws/index.d.ts:117
 
 #### Type Parameters
 
 ##### K
 
-`K` *extends* keyof `WebSocketEventMap`
+`K` _extends_ keyof `WebSocketEventMap`
 
 #### Parameters
 
@@ -268,7 +268,7 @@ Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d
 
 `WebSocketAlias.addEventListener`
 
-***
+---
 
 ### addListener()
 
@@ -276,7 +276,7 @@ Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d
 
 > **addListener**(`event`, `listener`): `this`
 
-Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d.ts:171
+Defined in: node_modules/.pnpm/@types+ws@8.18.1/node_modules/@types/ws/index.d.ts:171
 
 Alias for `emitter.on(eventName, listener)`.
 
@@ -306,7 +306,7 @@ v0.1.26
 
 > **addListener**(`event`, `listener`): `this`
 
-Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d.ts:172
+Defined in: node_modules/.pnpm/@types+ws@8.18.1/node_modules/@types/ws/index.d.ts:172
 
 ##### Parameters
 
@@ -330,7 +330,7 @@ Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d
 
 > **addListener**(`event`, `listener`): `this`
 
-Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d.ts:173
+Defined in: node_modules/.pnpm/@types+ws@8.18.1/node_modules/@types/ws/index.d.ts:173
 
 ##### Parameters
 
@@ -354,7 +354,7 @@ Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d
 
 > **addListener**(`event`, `listener`): `this`
 
-Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d.ts:174
+Defined in: node_modules/.pnpm/@types+ws@8.18.1/node_modules/@types/ws/index.d.ts:174
 
 ##### Parameters
 
@@ -378,7 +378,7 @@ Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d
 
 > **addListener**(`event`, `listener`): `this`
 
-Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d.ts:175
+Defined in: node_modules/.pnpm/@types+ws@8.18.1/node_modules/@types/ws/index.d.ts:175
 
 ##### Parameters
 
@@ -402,7 +402,7 @@ Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d
 
 > **addListener**(`event`, `listener`): `this`
 
-Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d.ts:176
+Defined in: node_modules/.pnpm/@types+ws@8.18.1/node_modules/@types/ws/index.d.ts:176
 
 ##### Parameters
 
@@ -426,7 +426,7 @@ Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d
 
 > **addListener**(`event`, `listener`): `this`
 
-Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d.ts:177
+Defined in: node_modules/.pnpm/@types+ws@8.18.1/node_modules/@types/ws/index.d.ts:177
 
 ##### Parameters
 
@@ -450,7 +450,7 @@ Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d
 
 > **addListener**(`event`, `listener`): `this`
 
-Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d.ts:178
+Defined in: node_modules/.pnpm/@types+ws@8.18.1/node_modules/@types/ws/index.d.ts:178
 
 ##### Parameters
 
@@ -474,7 +474,7 @@ Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d
 
 > **addListener**(`event`, `listener`): `this`
 
-Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d.ts:182
+Defined in: node_modules/.pnpm/@types+ws@8.18.1/node_modules/@types/ws/index.d.ts:182
 
 ##### Parameters
 
@@ -494,13 +494,13 @@ Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d
 
 `WebSocketAlias.addListener`
 
-***
+---
 
 ### close()
 
 > **close**(`code?`, `data?`): `void`
 
-Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d.ts:87
+Defined in: node_modules/.pnpm/@types+ws@8.18.1/node_modules/@types/ws/index.d.ts:87
 
 #### Parameters
 
@@ -520,13 +520,13 @@ Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d
 
 `WebSocketAlias.close`
 
-***
+---
 
 ### emit()
 
 > **emit**(`eventName`, ...`args`): `boolean`
 
-Defined in: node\_modules/.pnpm/@types+node@20.11.0/node\_modules/@types/node/events.d.ts:807
+Defined in: node_modules/.pnpm/@types+node@20.11.0/node_modules/@types/node/events.d.ts:807
 
 Synchronously calls each of the listeners registered for the event named`eventName`, in the order they were registered, passing the supplied arguments
 to each.
@@ -588,13 +588,13 @@ v0.1.26
 
 `WebSocketAlias.emit`
 
-***
+---
 
 ### eventNames()
 
 > **eventNames**(): (`string` \| `symbol`)[]
 
-Defined in: node\_modules/.pnpm/@types+node@20.11.0/node\_modules/@types/node/events.d.ts:870
+Defined in: node_modules/.pnpm/@types+node@20.11.0/node_modules/@types/node/events.d.ts:870
 
 Returns an array listing the events for which the emitter has registered
 listeners. The values in the array are strings or `Symbol`s.
@@ -625,13 +625,13 @@ v6.0.0
 
 `WebSocketAlias.eventNames`
 
-***
+---
 
 ### getMaxListeners()
 
 > **getMaxListeners**(): `number`
 
-Defined in: node\_modules/.pnpm/@types+node@20.11.0/node\_modules/@types/node/events.d.ts:722
+Defined in: node_modules/.pnpm/@types+node@20.11.0/node_modules/@types/node/events.d.ts:722
 
 Returns the current max listener value for the `EventEmitter` which is either
 set by `emitter.setMaxListeners(n)` or defaults to defaultMaxListeners.
@@ -648,13 +648,13 @@ v1.0.0
 
 `WebSocketAlias.getMaxListeners`
 
-***
+---
 
 ### listenerCount()
 
 > **listenerCount**(`eventName`, `listener?`): `number`
 
-Defined in: node\_modules/.pnpm/@types+node@20.11.0/node\_modules/@types/node/events.d.ts:816
+Defined in: node_modules/.pnpm/@types+node@20.11.0/node_modules/@types/node/events.d.ts:816
 
 Returns the number of listeners listening for the event named `eventName`.
 If `listener` is provided, it will return how many times the listener is found
@@ -686,18 +686,18 @@ v3.2.0
 
 `WebSocketAlias.listenerCount`
 
-***
+---
 
 ### listeners()
 
 > **listeners**(`eventName`): [`Function`](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Function)[]
 
-Defined in: node\_modules/.pnpm/@types+node@20.11.0/node\_modules/@types/node/events.d.ts:735
+Defined in: node_modules/.pnpm/@types+node@20.11.0/node_modules/@types/node/events.d.ts:735
 
 Returns a copy of the array of listeners for the event named `eventName`.
 
 ```js
-server.on('connection', (stream) => {
+server.on('connection', stream => {
   console.log('someone connected!');
 });
 console.log(util.inspect(server.listeners('connection')));
@@ -722,7 +722,7 @@ v0.1.26
 
 `WebSocketAlias.listeners`
 
-***
+---
 
 ### off()
 
@@ -730,7 +730,7 @@ v0.1.26
 
 > **off**(`event`, `listener`): `this`
 
-Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d.ts:158
+Defined in: node_modules/.pnpm/@types+ws@8.18.1/node_modules/@types/ws/index.d.ts:158
 
 Alias for `emitter.removeListener()`.
 
@@ -760,7 +760,7 @@ v10.0.0
 
 > **off**(`event`, `listener`): `this`
 
-Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d.ts:159
+Defined in: node_modules/.pnpm/@types+ws@8.18.1/node_modules/@types/ws/index.d.ts:159
 
 ##### Parameters
 
@@ -784,7 +784,7 @@ Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d
 
 > **off**(`event`, `listener`): `this`
 
-Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d.ts:160
+Defined in: node_modules/.pnpm/@types+ws@8.18.1/node_modules/@types/ws/index.d.ts:160
 
 ##### Parameters
 
@@ -808,7 +808,7 @@ Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d
 
 > **off**(`event`, `listener`): `this`
 
-Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d.ts:161
+Defined in: node_modules/.pnpm/@types+ws@8.18.1/node_modules/@types/ws/index.d.ts:161
 
 ##### Parameters
 
@@ -832,7 +832,7 @@ Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d
 
 > **off**(`event`, `listener`): `this`
 
-Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d.ts:162
+Defined in: node_modules/.pnpm/@types+ws@8.18.1/node_modules/@types/ws/index.d.ts:162
 
 ##### Parameters
 
@@ -856,7 +856,7 @@ Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d
 
 > **off**(`event`, `listener`): `this`
 
-Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d.ts:163
+Defined in: node_modules/.pnpm/@types+ws@8.18.1/node_modules/@types/ws/index.d.ts:163
 
 ##### Parameters
 
@@ -880,7 +880,7 @@ Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d
 
 > **off**(`event`, `listener`): `this`
 
-Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d.ts:164
+Defined in: node_modules/.pnpm/@types+ws@8.18.1/node_modules/@types/ws/index.d.ts:164
 
 ##### Parameters
 
@@ -904,7 +904,7 @@ Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d
 
 > **off**(`event`, `listener`): `this`
 
-Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d.ts:165
+Defined in: node_modules/.pnpm/@types+ws@8.18.1/node_modules/@types/ws/index.d.ts:165
 
 ##### Parameters
 
@@ -928,7 +928,7 @@ Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d
 
 > **off**(`event`, `listener`): `this`
 
-Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d.ts:169
+Defined in: node_modules/.pnpm/@types+ws@8.18.1/node_modules/@types/ws/index.d.ts:169
 
 ##### Parameters
 
@@ -948,7 +948,7 @@ Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d
 
 `WebSocketAlias.off`
 
-***
+---
 
 ### on()
 
@@ -956,7 +956,7 @@ Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d
 
 > **on**(`event`, `listener`): `this`
 
-Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d.ts:132
+Defined in: node_modules/.pnpm/@types+ws@8.18.1/node_modules/@types/ws/index.d.ts:132
 
 Adds the `listener` function to the end of the listeners array for the
 event named `eventName`. No checks are made to see if the `listener` has
@@ -964,7 +964,7 @@ already been added. Multiple calls passing the same combination of `eventName`an
 times.
 
 ```js
-server.on('connection', (stream) => {
+server.on('connection', stream => {
   console.log('someone connected!');
 });
 ```
@@ -1013,7 +1013,7 @@ v0.1.101
 
 > **on**(`event`, `listener`): `this`
 
-Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d.ts:133
+Defined in: node_modules/.pnpm/@types+ws@8.18.1/node_modules/@types/ws/index.d.ts:133
 
 ##### Parameters
 
@@ -1037,7 +1037,7 @@ Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d
 
 > **on**(`event`, `listener`): `this`
 
-Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d.ts:134
+Defined in: node_modules/.pnpm/@types+ws@8.18.1/node_modules/@types/ws/index.d.ts:134
 
 ##### Parameters
 
@@ -1061,7 +1061,7 @@ Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d
 
 > **on**(`event`, `listener`): `this`
 
-Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d.ts:135
+Defined in: node_modules/.pnpm/@types+ws@8.18.1/node_modules/@types/ws/index.d.ts:135
 
 ##### Parameters
 
@@ -1085,7 +1085,7 @@ Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d
 
 > **on**(`event`, `listener`): `this`
 
-Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d.ts:136
+Defined in: node_modules/.pnpm/@types+ws@8.18.1/node_modules/@types/ws/index.d.ts:136
 
 ##### Parameters
 
@@ -1109,7 +1109,7 @@ Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d
 
 > **on**(`event`, `listener`): `this`
 
-Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d.ts:137
+Defined in: node_modules/.pnpm/@types+ws@8.18.1/node_modules/@types/ws/index.d.ts:137
 
 ##### Parameters
 
@@ -1133,7 +1133,7 @@ Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d
 
 > **on**(`event`, `listener`): `this`
 
-Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d.ts:138
+Defined in: node_modules/.pnpm/@types+ws@8.18.1/node_modules/@types/ws/index.d.ts:138
 
 ##### Parameters
 
@@ -1157,7 +1157,7 @@ Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d
 
 > **on**(`event`, `listener`): `this`
 
-Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d.ts:139
+Defined in: node_modules/.pnpm/@types+ws@8.18.1/node_modules/@types/ws/index.d.ts:139
 
 ##### Parameters
 
@@ -1181,7 +1181,7 @@ Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d
 
 > **on**(`event`, `listener`): `this`
 
-Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d.ts:143
+Defined in: node_modules/.pnpm/@types+ws@8.18.1/node_modules/@types/ws/index.d.ts:143
 
 ##### Parameters
 
@@ -1201,7 +1201,7 @@ Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d
 
 `WebSocketAlias.on`
 
-***
+---
 
 ### once()
 
@@ -1209,13 +1209,13 @@ Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d
 
 > **once**(`event`, `listener`): `this`
 
-Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d.ts:145
+Defined in: node_modules/.pnpm/@types+ws@8.18.1/node_modules/@types/ws/index.d.ts:145
 
 Adds a **one-time**`listener` function for the event named `eventName`. The
 next time `eventName` is triggered, this listener is removed and then invoked.
 
 ```js
-server.once('connection', (stream) => {
+server.once('connection', stream => {
   console.log('Ah, we have our first user!');
 });
 ```
@@ -1264,7 +1264,7 @@ v0.3.0
 
 > **once**(`event`, `listener`): `this`
 
-Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d.ts:146
+Defined in: node_modules/.pnpm/@types+ws@8.18.1/node_modules/@types/ws/index.d.ts:146
 
 ##### Parameters
 
@@ -1288,7 +1288,7 @@ Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d
 
 > **once**(`event`, `listener`): `this`
 
-Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d.ts:147
+Defined in: node_modules/.pnpm/@types+ws@8.18.1/node_modules/@types/ws/index.d.ts:147
 
 ##### Parameters
 
@@ -1312,7 +1312,7 @@ Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d
 
 > **once**(`event`, `listener`): `this`
 
-Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d.ts:148
+Defined in: node_modules/.pnpm/@types+ws@8.18.1/node_modules/@types/ws/index.d.ts:148
 
 ##### Parameters
 
@@ -1336,7 +1336,7 @@ Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d
 
 > **once**(`event`, `listener`): `this`
 
-Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d.ts:149
+Defined in: node_modules/.pnpm/@types+ws@8.18.1/node_modules/@types/ws/index.d.ts:149
 
 ##### Parameters
 
@@ -1360,7 +1360,7 @@ Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d
 
 > **once**(`event`, `listener`): `this`
 
-Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d.ts:150
+Defined in: node_modules/.pnpm/@types+ws@8.18.1/node_modules/@types/ws/index.d.ts:150
 
 ##### Parameters
 
@@ -1384,7 +1384,7 @@ Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d
 
 > **once**(`event`, `listener`): `this`
 
-Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d.ts:151
+Defined in: node_modules/.pnpm/@types+ws@8.18.1/node_modules/@types/ws/index.d.ts:151
 
 ##### Parameters
 
@@ -1408,7 +1408,7 @@ Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d
 
 > **once**(`event`, `listener`): `this`
 
-Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d.ts:152
+Defined in: node_modules/.pnpm/@types+ws@8.18.1/node_modules/@types/ws/index.d.ts:152
 
 ##### Parameters
 
@@ -1432,7 +1432,7 @@ Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d
 
 > **once**(`event`, `listener`): `this`
 
-Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d.ts:156
+Defined in: node_modules/.pnpm/@types+ws@8.18.1/node_modules/@types/ws/index.d.ts:156
 
 ##### Parameters
 
@@ -1452,13 +1452,13 @@ Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d
 
 `WebSocketAlias.once`
 
-***
+---
 
 ### pause()
 
 > **pause**(): `void`
 
-Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d.ts:109
+Defined in: node_modules/.pnpm/@types+ws@8.18.1/node_modules/@types/ws/index.d.ts:109
 
 Pause the websocket causing it to stop emitting events. Some events can still be
 emitted after this is called, until all buffered data is consumed. This method
@@ -1472,13 +1472,13 @@ is a noop if the ready state is `CONNECTING` or `CLOSED`.
 
 `WebSocketAlias.pause`
 
-***
+---
 
 ### ping()
 
 > **ping**(`data?`, `mask?`, `cb?`): `void`
 
-Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d.ts:88
+Defined in: node_modules/.pnpm/@types+ws@8.18.1/node_modules/@types/ws/index.d.ts:88
 
 #### Parameters
 
@@ -1502,13 +1502,13 @@ Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d
 
 `WebSocketAlias.ping`
 
-***
+---
 
 ### pong()
 
 > **pong**(`data?`, `mask?`, `cb?`): `void`
 
-Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d.ts:89
+Defined in: node_modules/.pnpm/@types+ws@8.18.1/node_modules/@types/ws/index.d.ts:89
 
 #### Parameters
 
@@ -1532,13 +1532,13 @@ Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d
 
 `WebSocketAlias.pong`
 
-***
+---
 
 ### prependListener()
 
 > **prependListener**(`eventName`, `listener`): `this`
 
-Defined in: node\_modules/.pnpm/@types+node@20.11.0/node\_modules/@types/node/events.d.ts:834
+Defined in: node_modules/.pnpm/@types+node@20.11.0/node_modules/@types/node/events.d.ts:834
 
 Adds the `listener` function to the _beginning_ of the listeners array for the
 event named `eventName`. No checks are made to see if the `listener` has
@@ -1546,7 +1546,7 @@ already been added. Multiple calls passing the same combination of `eventName`an
 times.
 
 ```js
-server.prependListener('connection', (stream) => {
+server.prependListener('connection', stream => {
   console.log('someone connected!');
 });
 ```
@@ -1579,19 +1579,19 @@ v6.0.0
 
 `WebSocketAlias.prependListener`
 
-***
+---
 
 ### prependOnceListener()
 
 > **prependOnceListener**(`eventName`, `listener`): `this`
 
-Defined in: node\_modules/.pnpm/@types+node@20.11.0/node\_modules/@types/node/events.d.ts:850
+Defined in: node_modules/.pnpm/@types+node@20.11.0/node_modules/@types/node/events.d.ts:850
 
 Adds a **one-time**`listener` function for the event named `eventName` to the _beginning_ of the listeners array. The next time `eventName` is triggered, this
 listener is removed, and then invoked.
 
 ```js
-server.prependOnceListener('connection', (stream) => {
+server.prependOnceListener('connection', stream => {
   console.log('Ah, we have our first user!');
 });
 ```
@@ -1624,13 +1624,13 @@ v6.0.0
 
 `WebSocketAlias.prependOnceListener`
 
-***
+---
 
 ### rawListeners()
 
 > **rawListeners**(`eventName`): [`Function`](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Function)[]
 
-Defined in: node\_modules/.pnpm/@types+node@20.11.0/node\_modules/@types/node/events.d.ts:766
+Defined in: node_modules/.pnpm/@types+node@20.11.0/node_modules/@types/node/events.d.ts:766
 
 Returns a copy of the array of listeners for the event named `eventName`,
 including any wrappers (such as those created by `.once()`).
@@ -1678,13 +1678,13 @@ v9.4.0
 
 `WebSocketAlias.rawListeners`
 
-***
+---
 
 ### removeAllListeners()
 
 > **removeAllListeners**(`event?`): `this`
 
-Defined in: node\_modules/.pnpm/@types+node@20.11.0/node\_modules/@types/node/events.d.ts:706
+Defined in: node_modules/.pnpm/@types+node@20.11.0/node_modules/@types/node/events.d.ts:706
 
 Removes all listeners, or those of the specified `eventName`.
 
@@ -1712,19 +1712,19 @@ v0.1.26
 
 `WebSocketAlias.removeAllListeners`
 
-***
+---
 
 ### removeEventListener()
 
 > **removeEventListener**\<`K`\>(`type`, `listener`): `void`
 
-Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d.ts:124
+Defined in: node_modules/.pnpm/@types+ws@8.18.1/node_modules/@types/ws/index.d.ts:124
 
 #### Type Parameters
 
 ##### K
 
-`K` *extends* keyof `WebSocketEventMap`
+`K` _extends_ keyof `WebSocketEventMap`
 
 #### Parameters
 
@@ -1744,7 +1744,7 @@ Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d
 
 `WebSocketAlias.removeEventListener`
 
-***
+---
 
 ### removeListener()
 
@@ -1752,12 +1752,12 @@ Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d
 
 > **removeListener**(`event`, `listener`): `this`
 
-Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d.ts:184
+Defined in: node_modules/.pnpm/@types+ws@8.18.1/node_modules/@types/ws/index.d.ts:184
 
 Removes the specified `listener` from the listener array for the event named`eventName`.
 
 ```js
-const callback = (stream) => {
+const callback = stream => {
   console.log('someone connected!');
 };
 server.on('connection', callback);
@@ -1860,7 +1860,7 @@ v0.1.26
 
 > **removeListener**(`event`, `listener`): `this`
 
-Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d.ts:185
+Defined in: node_modules/.pnpm/@types+ws@8.18.1/node_modules/@types/ws/index.d.ts:185
 
 ##### Parameters
 
@@ -1884,7 +1884,7 @@ Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d
 
 > **removeListener**(`event`, `listener`): `this`
 
-Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d.ts:186
+Defined in: node_modules/.pnpm/@types+ws@8.18.1/node_modules/@types/ws/index.d.ts:186
 
 ##### Parameters
 
@@ -1908,7 +1908,7 @@ Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d
 
 > **removeListener**(`event`, `listener`): `this`
 
-Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d.ts:187
+Defined in: node_modules/.pnpm/@types+ws@8.18.1/node_modules/@types/ws/index.d.ts:187
 
 ##### Parameters
 
@@ -1932,7 +1932,7 @@ Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d
 
 > **removeListener**(`event`, `listener`): `this`
 
-Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d.ts:188
+Defined in: node_modules/.pnpm/@types+ws@8.18.1/node_modules/@types/ws/index.d.ts:188
 
 ##### Parameters
 
@@ -1956,7 +1956,7 @@ Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d
 
 > **removeListener**(`event`, `listener`): `this`
 
-Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d.ts:189
+Defined in: node_modules/.pnpm/@types+ws@8.18.1/node_modules/@types/ws/index.d.ts:189
 
 ##### Parameters
 
@@ -1980,7 +1980,7 @@ Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d
 
 > **removeListener**(`event`, `listener`): `this`
 
-Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d.ts:190
+Defined in: node_modules/.pnpm/@types+ws@8.18.1/node_modules/@types/ws/index.d.ts:190
 
 ##### Parameters
 
@@ -2004,7 +2004,7 @@ Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d
 
 > **removeListener**(`event`, `listener`): `this`
 
-Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d.ts:191
+Defined in: node_modules/.pnpm/@types+ws@8.18.1/node_modules/@types/ws/index.d.ts:191
 
 ##### Parameters
 
@@ -2028,7 +2028,7 @@ Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d
 
 > **removeListener**(`event`, `listener`): `this`
 
-Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d.ts:195
+Defined in: node_modules/.pnpm/@types+ws@8.18.1/node_modules/@types/ws/index.d.ts:195
 
 ##### Parameters
 
@@ -2048,13 +2048,13 @@ Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d
 
 `WebSocketAlias.removeListener`
 
-***
+---
 
 ### resume()
 
 > **resume**(): `void`
 
-Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d.ts:114
+Defined in: node_modules/.pnpm/@types+ws@8.18.1/node_modules/@types/ws/index.d.ts:114
 
 Make a paused socket resume emitting events. This method is a noop if the ready
 state is `CONNECTING` or `CLOSED`.
@@ -2067,7 +2067,7 @@ state is `CONNECTING` or `CLOSED`.
 
 `WebSocketAlias.resume`
 
-***
+---
 
 ### send()
 
@@ -2075,7 +2075,7 @@ state is `CONNECTING` or `CLOSED`.
 
 > **send**(`data`, `cb?`): `void`
 
-Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d.ts:91
+Defined in: node_modules/.pnpm/@types+ws@8.18.1/node_modules/@types/ws/index.d.ts:91
 
 ##### Parameters
 
@@ -2099,7 +2099,7 @@ Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d
 
 > **send**(`data`, `options`, `cb?`): `void`
 
-Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d.ts:92
+Defined in: node_modules/.pnpm/@types+ws@8.18.1/node_modules/@types/ws/index.d.ts:92
 
 ##### Parameters
 
@@ -2137,13 +2137,13 @@ Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d
 
 `WebSocketAlias.send`
 
-***
+---
 
 ### setMaxListeners()
 
 > **setMaxListeners**(`n`): `this`
 
-Defined in: node\_modules/.pnpm/@types+node@20.11.0/node\_modules/@types/node/events.d.ts:716
+Defined in: node_modules/.pnpm/@types+node@20.11.0/node_modules/@types/node/events.d.ts:716
 
 By default `EventEmitter`s will print a warning if more than `10` listeners are
 added for a particular event. This is a useful default that helps finding
@@ -2170,13 +2170,13 @@ v0.3.5
 
 `WebSocketAlias.setMaxListeners`
 
-***
+---
 
 ### terminate()
 
 > **terminate**(): `void`
 
-Defined in: node\_modules/.pnpm/@types+ws@8.18.1/node\_modules/@types/ws/index.d.ts:102
+Defined in: node_modules/.pnpm/@types+ws@8.18.1/node_modules/@types/ws/index.d.ts:102
 
 #### Returns
 
