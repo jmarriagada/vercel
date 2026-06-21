@@ -824,6 +824,79 @@ describe('link', () => {
     });
   });
 
+  describe('prompt cancellation', () => {
+    it('cancels with Escape before linking', async () => {
+      const cwd = setupTmpDir();
+      useUser({ version: 'northstar' });
+      useTeams('team_dummy');
+      useUnknownProject();
+
+      client.cwd = cwd;
+      const exitCodePromise = link(client);
+
+      await expect(client.stderr).toOutput('Which team?');
+      client.events.keypress('escape');
+
+      await expect(exitCodePromise).resolves.toEqual(0);
+      await expect(client.stderr).toOutput('Canceled.');
+      expect(await pathExists(join(cwd, '.vercel/project.json'))).toBe(false);
+    });
+
+    it('cancels with Escape from the project name prompt without linking', async () => {
+      const cwd = setupTmpDir();
+      useUser({ version: 'northstar' });
+      useTeams('team_dummy');
+      useUnknownProject();
+
+      client.cwd = cwd;
+      const exitCodePromise = link(client);
+
+      await expect(client.stderr).toOutput('Which team?');
+      client.stdin.write('\n');
+
+      await expect(client.stderr).toOutput('Project?');
+      client.stdin.write('\n');
+
+      await expect(client.stderr).toOutput('Name?');
+      client.events.keypress('escape');
+
+      await expect(exitCodePromise).resolves.toEqual(0);
+      await expect(client.stderr).toOutput('Canceled.');
+      expect(await pathExists(join(cwd, '.vercel/project.json'))).toBe(false);
+    });
+
+    it('skips the optional environment pull when canceled with Escape', async () => {
+      const cwd = setupTmpDir();
+      useUser({ version: 'northstar' });
+      const [team] = useTeams('team_dummy') as Team[];
+      const { project } = useProject({
+        ...defaultProject,
+        id: basename(cwd),
+        name: basename(cwd),
+      });
+      useUnknownProject();
+
+      client.cwd = cwd;
+      client.setArgv('--project', project.name!);
+      const exitCodePromise = link(client);
+
+      await expect(client.stderr).toOutput('Link directory to project?');
+      client.stdin.write('y\n');
+
+      await expect(client.stderr).toOutput(
+        `✓ Linked          ${team.slug}/${project.name}`
+      );
+      await expect(client.stderr).toOutput(
+        'Pull development environment variables into .env.local?'
+      );
+      client.events.keypress('escape');
+
+      await expect(exitCodePromise).resolves.toEqual(0);
+      expect(mockPull).not.toHaveBeenCalled();
+      expect(await pathExists(join(cwd, '.vercel/project.json'))).toBe(true);
+    });
+  });
+
   describe('--confirm', () => {
     it('should track use of `--confirm` flag', async () => {
       useUser();

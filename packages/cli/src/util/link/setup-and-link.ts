@@ -58,6 +58,7 @@ import {
 } from './services-setup';
 import searchProjectAcrossTeams from '../projects/search-project-across-teams';
 import type { CrossTeamMatch } from '../projects/search-project-across-teams';
+import { isPromptCanceledError } from '../input/prompt-cancellation';
 
 export interface SetupAndLinkOptions {
   autoConfirm?: boolean;
@@ -201,10 +202,14 @@ async function maybePullEnvAfterLink(
 
   const pullEnvConfirmed =
     autoConfirm ||
-    (await client.input.confirm(
-      'Pull development environment variables into .env.local?',
-      true
-    ));
+    (await client.input
+      .confirm('Pull development environment variables into .env.local?', true)
+      .catch(error => {
+        if (isPromptCanceledError(error)) {
+          return false;
+        }
+        throw error;
+      }));
 
   if (!pullEnvConfirmed) {
     return;
@@ -847,6 +852,9 @@ export default async function setupAndLink(
 
     return { status: 'linked', org, project };
   } catch (err) {
+    if (isPromptCanceledError(err)) {
+      throw err;
+    }
     if (isAPIError(err) && err.code === 'too_many_projects') {
       output.prettyError(err);
       return { status: 'error', exitCode: 1, reason: 'TOO_MANY_PROJECTS' };
@@ -909,6 +917,9 @@ export async function connectGitRepository(
       repoPath: `${repoInfo.org}/${repoInfo.repo}`,
     });
   } catch (error) {
+    if (isPromptCanceledError(error)) {
+      return;
+    }
     // Silently ignore git connection errors to not disrupt the main flow
     output.debug(`Failed to connect git repository: ${error}`);
   }

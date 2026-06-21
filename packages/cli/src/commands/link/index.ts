@@ -12,12 +12,25 @@ import output from '../../output-manager';
 import { LinkTelemetryClient } from '../../util/telemetry/commands/link';
 import { getCommandAliases } from '..';
 import getScope, { detectExplicitScope } from '../../util/get-scope';
+import { isPromptCanceledError } from '../../util/input/prompt-cancellation';
 
 const COMMAND_CONFIG = {
   add: getCommandAliases(addSubcommand),
 };
 
 export default async function link(client: Client) {
+  try {
+    return await client.withEscapePromptCancellation(() => linkProject(client));
+  } catch (error) {
+    if (isPromptCanceledError(error)) {
+      output.print('  Canceled.\n');
+      return 0;
+    }
+    throw error;
+  }
+}
+
+async function linkProject(client: Client) {
   let parsedArgs = null;
 
   const flagsSpecification = getFlagsSpecification(linkCommand.options);
@@ -65,6 +78,9 @@ export default async function link(client: Client) {
     try {
       await addRepoLink(client, client.cwd, { yes });
     } catch (err) {
+      if (isPromptCanceledError(err)) {
+        throw err;
+      }
       output.prettyError(err);
       return 1;
     }
@@ -116,6 +132,9 @@ export default async function link(client: Client) {
     try {
       await ensureRepoLink(client, cwd, { yes, overwrite: true });
     } catch (err) {
+      if (isPromptCanceledError(err)) {
+        throw err;
+      }
       output.prettyError(err);
       return 1;
     }
