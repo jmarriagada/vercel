@@ -131,6 +131,13 @@ export class RootTelemetryClient extends TelemetryClient {
     });
   }
 
+  trackCliCommandDeployButton(actual: string) {
+    this.trackCliCommand({
+      command: 'deploy-button',
+      value: actual,
+    });
+  }
+
   trackCliCommandDeployHooks(actual: string) {
     this.trackCliCommand({
       command: 'deploy-hooks',
