@@ -2035,11 +2035,26 @@ describe('link', () => {
       useUser({ version: 'northstar' });
       const cwd = setupTmpDir();
       const [team] = useTeams('team_dummy') as Team[];
-      const { project } = useProject({
+      const project = {
         ...defaultProject,
         id: basename(cwd),
         name: basename(cwd),
+      };
+      let searchedProjectName: string | undefined;
+      let searchedTeamId: string | undefined;
+      client.scenario.get('/v9/projects', (req, res) => {
+        if (typeof req.query.search === 'string') {
+          searchedProjectName = req.query.search;
+          searchedTeamId = req.query.teamId as string | undefined;
+          return res.json({ projects: [project], pagination: {} });
+        }
+
+        return res.json({
+          projects: [project],
+          pagination: { count: 101, next: 1 },
+        });
       });
+      useProject(project);
       useUnknownProject();
 
       client.cwd = cwd;
@@ -2059,9 +2074,10 @@ describe('link', () => {
       await expect(client.stderr).toOutput('Project?');
       client.stdin.write('\n');
 
-      // Mock pagination returns {}, so hasMoreProjects is true → text input
-      await expect(client.stderr).toOutput('Existing project name?');
-      client.stdin.write(`${basename(cwd)}\n`);
+      await expect(client.stderr).toOutput('Search existing project');
+      client.stdin.write(`${basename(cwd)}`);
+      await expect(client.stderr).toOutput(project.name!);
+      client.stdin.write('\n');
 
       await expect(client.stderr).toOutput(
         `✓ Linked          ${team.slug}/${project.name}`
@@ -2074,6 +2090,11 @@ describe('link', () => {
 
       const exitCode = await exitCodePromise;
       expect(exitCode).toEqual(0);
+      expect(searchedProjectName).toEqual(project.name);
+      expect(searchedTeamId).toEqual(team.id);
+      expect(client.stderr.getFullOutput()).not.toContain(
+        'Existing project name?'
+      );
     });
 
     it('should fall through to selectOrg when no project found across teams', async () => {

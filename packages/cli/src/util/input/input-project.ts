@@ -1,4 +1,5 @@
 import type Client from '../client';
+import type { FetchOptions } from '../client';
 import getProjectByIdOrName from '../projects/get-project-by-id-or-name';
 import chalk from 'chalk';
 import { ProjectNotFound } from '../../util/errors-ts';
@@ -113,22 +114,28 @@ export default async function inputProject(
         `No existing projects found under ${chalk.bold(org.slug)}. Creating new project.`
       );
     } else if (hasMoreProjects) {
-      let toLink: Project;
-      await client.input.text({
-        message: 'Existing project name?',
-        validate: async val => {
-          if (!val) {
-            return 'Project name cannot be empty';
+      return await client.input.search<Project>({
+        message: 'Search existing project:',
+        source: async (term, { signal }) => {
+          if (!term) {
+            return [];
           }
-          const project = await getProjectByIdOrName(client, val, org.id);
-          if (project instanceof ProjectNotFound) {
-            return 'Project not found';
-          }
-          toLink = project;
-          return true;
+
+          const { projects } = await client.fetch<{ projects: Project[] }>(
+            `/v9/projects?search=${encodeURIComponent(term)}&limit=20`,
+            {
+              accountId: org.id,
+              // node-fetch uses its own AbortSignal type.
+              signal: signal as FetchOptions['signal'],
+            }
+          );
+
+          return projects.map(project => ({
+            name: project.name,
+            value: project,
+          }));
         },
       });
-      return toLink!;
     } else {
       const choices = projects
         .sort((a, b) => b.updatedAt - a.updatedAt)
