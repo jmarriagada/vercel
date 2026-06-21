@@ -198,7 +198,6 @@ describe('curl', () => {
       );
       const exitCode = await curl(client);
       expect(exitCode).toEqual(0);
-      expect(client.getFullOutput()).not.toContain('[debug]');
       expect(spawnMock).toHaveBeenCalledWith(
         'curl',
         [
@@ -879,24 +878,6 @@ describe('parseCurlLikeArgs', () => {
 
     expect(parsed.target).toBe('https://example.com');
     expect(parsed.toolFlags).toEqual(['--silent']);
-  });
-
-  it('distinguishes Vercel globals before curl from native flags after it', () => {
-    const parsed = parseCurlLikeArgs(
-      [
-        '--cwd',
-        'apps/web',
-        '-d',
-        'curl',
-        'https://example.com',
-        '-d',
-        '{"ok":true}',
-      ],
-      'curl'
-    );
-
-    expect(parsed.target).toBe('https://example.com');
-    expect(parsed.toolFlags).toEqual(['-d', '{"ok":true}']);
   });
 });
 

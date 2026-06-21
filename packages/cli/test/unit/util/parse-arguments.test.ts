@@ -54,4 +54,30 @@ describe('parseArguments', () => {
       args: ['--nonsense'],
     });
   });
+
+  it('stops parsing flags after the first positional argument', () => {
+    expect(
+      parseArguments(
+        ['curl', 'https://example.com', '-d', '{"ok":true}'],
+        {},
+        { permissive: true, stopAtPositional: true }
+      )
+    ).toEqual({
+      args: ['curl', 'https://example.com', '-d', '{"ok":true}'],
+      flags: {},
+    });
+  });
+
+  it('still parses flags before the first positional argument', () => {
+    expect(
+      parseArguments(
+        ['-d', 'curl', 'https://example.com', '-d', '{"ok":true}'],
+        {},
+        { permissive: true, stopAtPositional: true }
+      )
+    ).toEqual({
+      args: ['curl', 'https://example.com', '-d', '{"ok":true}'],
+      flags: { '--debug': true },
+    });
+  });
 });
