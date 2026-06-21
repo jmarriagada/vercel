@@ -913,27 +913,33 @@ export const build: BuildVX = async ({
   const entrypointWithSuffix = `${entrypoint}${suffix}`;
   debug('Entrypoint with suffix is', entrypointWithSuffix);
 
-  const serviceCrons = await getServiceCrons({
-    service,
-    entrypoint,
-    rawEntrypoint,
-    handlerFunction,
-    pythonBin: getVenvPythonBin(venvPath),
-    env: pythonEnv,
-    workPath,
-  });
-  const pyprojectCronGroups = await resolvePyprojectCronGroups({
-    crons: pyprojectCronDefinitions,
-    pythonBin: getVenvPythonBin(venvPath),
-    env: pythonEnv,
-    workPath,
-  });
+  const pythonBin = getVenvPythonBin(venvPath);
+  const serviceCrons = service
+    ? await getServiceCrons({
+        service,
+        entrypoint,
+        rawEntrypoint,
+        handlerFunction,
+        pythonBin,
+        env: pythonEnv,
+        workPath,
+      })
+    : undefined;
+  const pyprojectCronGroups = service
+    ? []
+    : await resolvePyprojectCronGroups({
+        crons: pyprojectCronDefinitions,
+        pythonBin,
+        env: pythonEnv,
+        workPath,
+      });
   const pyprojectCrons = pyprojectCronGroups.flatMap(group =>
     group.crons.map(({ path, schedule }) => ({ path, schedule }))
   );
-  const crons =
-    serviceCrons?.length || pyprojectCrons.length
-      ? [...(serviceCrons || []), ...pyprojectCrons]
+  const crons = service
+    ? serviceCrons
+    : pyprojectCrons.length > 0
+      ? pyprojectCrons
       : undefined;
 
   // Build trampoline env line for cron routing.
