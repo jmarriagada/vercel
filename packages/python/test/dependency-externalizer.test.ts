@@ -209,20 +209,8 @@ describe('dependency externalizer support', () => {
   });
 
   describe('Lambda size constants', () => {
-    it('LAMBDA_SIZE_THRESHOLD_BYTES is 245 MB by default', () => {
-      expect(LAMBDA_SIZE_THRESHOLD_BYTES).toBe(245 * 1024 * 1024);
-    });
-
-    it('LAMBDA_SIZE_THRESHOLD_BYTES is 240 MB when otel layer is present', async () => {
-      process.env.VERCEL_DEPLOYMENT_HAS_OTEL_LAYER = '1';
-      try {
-        vi.resetModules();
-        const mod = await import('../src/dependency-externalizer');
-        expect(mod.LAMBDA_SIZE_THRESHOLD_BYTES).toBe(240 * 1024 * 1024);
-      } finally {
-        delete process.env.VERCEL_DEPLOYMENT_HAS_OTEL_LAYER;
-        vi.resetModules();
-      }
+    it('LAMBDA_SIZE_THRESHOLD_BYTES is 225 MB', () => {
+      expect(LAMBDA_SIZE_THRESHOLD_BYTES).toBe(225 * 1024 * 1024);
     });
 
     it('LAMBDA_EPHEMERAL_STORAGE_BYTES is 500 MB', () => {
@@ -923,7 +911,7 @@ version = "8.1.7"
       const tempDir = path.join(tmpdir(), `dep-ext-analyze-${Date.now()}`);
       fs.mkdirSync(tempDir, { recursive: true });
 
-      // Create a sparse file that reports > 245 MB without using real disk space
+      // Create a sparse file that reports > 225 MB without using real disk space
       const bigFilePath = path.join(tempDir, 'big-file.dat');
       const fd = fs.openSync(bigFilePath, 'w');
       fs.ftruncateSync(fd, LAMBDA_SIZE_THRESHOLD_BYTES + 1024 * 1024);
