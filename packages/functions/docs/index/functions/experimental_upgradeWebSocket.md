@@ -1,12 +1,12 @@
 [**@vercel/functions**](../../README.md)
 
-***
+---
 
-# Function: experimental\_upgradeWebSocket()
+# Function: experimental_upgradeWebSocket()
 
-> **experimental\_upgradeWebSocket**(`handler`, `options?`): [`Promise`](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Promise)\<[`Response`](https://developer.mozilla.org/docs/Web/API/Response)\>
+> **experimental_upgradeWebSocket**(`handler`, `options?`): [`Promise`](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Promise)\<[`Response`](https://developer.mozilla.org/docs/Web/API/Response)\>
 
-Defined in: [packages/functions/src/websocket/index.ts:22](https://github.com/vercel/vercel/blob/main/packages/functions/src/websocket/index.ts#L22)
+Defined in: [packages/functions/src/websocket/index.ts:22](https://github.com/AbhilashG12/vercel/blob/main/packages/functions/src/websocket/index.ts#L22)
 
 ## Parameters
 

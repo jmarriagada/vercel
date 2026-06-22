@@ -248,25 +248,68 @@ export async function* fetchAllRequestLogs(
   let remaining = options.limit ?? 100;
   let hasMore = true;
 
+  // Anchor the initial upper bound
+  let currentUntil = options.until || new Date().toISOString();
+  let lastTimestamp = new Date(currentUntil).getTime();
+
+  const seenIds = new Set<string>();
+
   while (hasMore && remaining > 0) {
     const response = await fetchRequestLogs(client, {
       ...options,
       page,
+      until: currentUntil,
     });
 
     if (!response.logs || response.logs.length === 0) {
       break;
     }
 
+    let newLogsYielded = 0;
+
     for (const log of response.logs) {
+      // Only deduplicate if a valid, non-empty requestId exists
+      if (log.id && seenIds.has(log.id)) {
+        continue;
+      }
+      if (log.id) {
+        seenIds.add(log.id);
+      }
+
       yield log;
+      newLogsYielded++;
       remaining--;
+
       if (remaining <= 0) {
         return;
       }
     }
 
     hasMore = response.pagination?.hasMore ?? false;
-    page++;
+
+    if (hasMore) {
+      const oldestLogOnPage = response.logs[response.logs.length - 1];
+      const oldestTimestamp = oldestLogOnPage?.timestamp ?? lastTimestamp;
+
+      if (oldestTimestamp === lastTimestamp) {
+        // We are currently navigating a same-millisecond log cluster.
+        if (newLogsYielded === 0) {
+          // INFINITE LOOP ESCAPE HATCH:
+          // The backend ignored our `page` parameter and returned the exact same block of logs.
+          // To prevent hanging the CLI, we forcefully subtract 1ms to break out of the cluster.
+          currentUntil = new Date(oldestTimestamp - 1).toISOString();
+          lastTimestamp = oldestTimestamp - 1;
+          page = 0;
+        } else {
+          // `page` is working. We successfully yielded new logs from this exact millisecond.
+          page++;
+        }
+      } else {
+        // We successfully advanced past the cluster naturally.
+        currentUntil = new Date(oldestTimestamp).toISOString();
+        lastTimestamp = oldestTimestamp;
+        page = 0;
+      }
+    }
   }
 }

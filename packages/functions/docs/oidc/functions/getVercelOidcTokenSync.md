@@ -1,6 +1,6 @@
 [**@vercel/functions**](../../README.md)
 
-***
+---
 
 # ~~Function: getVercelOidcTokenSync()~~
 
