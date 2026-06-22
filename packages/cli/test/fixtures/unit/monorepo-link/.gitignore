@@ -1,5 +1,0 @@
-dist
-!/.vercel
-.vercel/output
-# Ignore .vercel directories generated in subdirectories by tests
-*/.vercel

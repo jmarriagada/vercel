@@ -1,6 +1,0 @@
-{
-  "$schema": "https://openapi.vercel.sh/vercel.json",
-  "framework": "elysia",
-  "installCommand": "pnpm install",
-  "bunVersion": "1.x"
-}

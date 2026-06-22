@@ -1,8 +1,0 @@
-{
-  "projectId": "prj_workflow_example",
-  "orgId": "team_dummy",
-  "settings": {
-    "framework": null,
-    "rootDirectory": "workbench/example"
-  }
-}

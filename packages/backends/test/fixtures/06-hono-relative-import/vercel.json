@@ -1,7 +1,0 @@
-{
-  "functions": {
-    "index.ts": {
-      "excludeFiles": "echo.ts"
-    }
-  }
-}

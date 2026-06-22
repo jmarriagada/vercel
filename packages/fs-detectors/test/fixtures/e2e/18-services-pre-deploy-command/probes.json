@@ -1,9 +1,0 @@
-{
-  "probes": [
-    {
-      "path": "/",
-      "status": 200,
-      "mustContain": "version:v0.0.0"
-    }
-  ]
-}

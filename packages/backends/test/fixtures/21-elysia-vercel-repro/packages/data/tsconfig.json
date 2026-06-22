@@ -1,9 +1,0 @@
-{
-  "extends": "../../tsconfig.base.json",
-  "compilerOptions": {
-    "paths": {
-      "@repro/shared/*": ["../shared/src/*"]
-    }
-  },
-  "include": ["src/**/*"]
-}

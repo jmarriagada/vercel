@@ -1,1 +1,0 @@
-{"probes":[{"path":"/","status":200,"mustContain":"Hello from Django"},{"path":"/static/app/style.css","status":404}]}

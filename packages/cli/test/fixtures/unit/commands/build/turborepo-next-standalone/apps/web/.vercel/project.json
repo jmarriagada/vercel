@@ -1,8 +1,0 @@
-{
-  "projectId": "prj_turborepo_next_standalone",
-  "orgId": "team_dummy",
-  "settings": {
-    "framework": "nextjs",
-    "rootDirectory": null
-  }
-}

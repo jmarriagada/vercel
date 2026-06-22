@@ -1,7 +1,0 @@
-{
-  "functions": {
-    "index.ts": {
-      "includeFiles": "pug-views/**"
-    }
-  }
-}

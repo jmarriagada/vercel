@@ -1,7 +1,0 @@
-{
-  "name": "@workflow/example-app",
-  "private": true,
-  "type": "module",
-  "version": "0.0.2-alpha.18",
-  "license": "Apache-2.0"
-}

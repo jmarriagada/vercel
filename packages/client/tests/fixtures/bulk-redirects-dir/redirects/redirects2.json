@@ -1,7 +1,0 @@
-[
-  {
-    "source": "/old-path-2",
-    "destination": "/new-path-2",
-    "permanent": false
-  }
-]

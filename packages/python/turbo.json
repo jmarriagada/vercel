@@ -1,9 +1,0 @@
-{
-  "$schema": "https://turborepo.org/schema.json",
-  "extends": ["//"],
-  "tasks": {
-    "test-e2e": {
-      "env": ["VERCEL_RUNTIME_PYTHON", "VERCEL_WORKERS_PYTHON"]
-    }
-  }
-}
