@@ -16,7 +16,7 @@ const DYNAMIC_SCHEDULE = '<dynamic>';
 const scriptPath = join(__dirname, '..', 'templates', 'vc_cron_detect.py');
 const script = fs.readFileSync(scriptPath, 'utf-8');
 
-interface DynamicCronEntry {
+export interface DynamicCronEntry {
   module_function: string;
   schedule: string;
 }
@@ -183,7 +183,7 @@ async function getServiceCronsDynamic(opts: {
 /**
  * Call a Python function to dynamically detect cron entries.
  */
-async function detectDynamicCrons(opts: {
+export async function detectDynamicCrons(opts: {
   pythonBin: string;
   env: NodeJS.ProcessEnv;
   workPath: string;

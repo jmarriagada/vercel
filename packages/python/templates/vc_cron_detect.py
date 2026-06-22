@@ -58,7 +58,16 @@ def main():
             if not (isinstance(item, (list, tuple)) and len(item) == 2):
                 _error(f"Each cron entry must be a (module:function, schedule) pair, got: {item!r}")
             module_function, schedule = item
-            entries.append({"module_function": str(module_function), "schedule": str(schedule)})
+            if not isinstance(module_function, str) or not isinstance(
+                schedule, str
+            ):
+                _error(
+                    "Each cron entry must contain string values for "
+                    f"module:function and schedule, got: {item!r}"
+                )
+            entries.append(
+                {"module_function": module_function, "schedule": schedule}
+            )
         print(json.dumps({"entries": entries}))
     except Exception as exc:
         _error(f"Error calling '{module_name}.{attr_name}.get_crons()': {exc}")

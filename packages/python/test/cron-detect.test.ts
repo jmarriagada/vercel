@@ -230,6 +230,29 @@ registry = Registry()
     ).rejects.toThrow(/must be a.*pair/);
   });
 
+  it('reports error when get_crons entry values are not strings', async () => {
+    await setupWorkDir({
+      'jobs/cleanup.py': `
+class Registry:
+    def get_crons(self):
+        return [(123, None)]
+
+registry = Registry()
+`,
+    });
+
+    await expect(
+      getServiceCrons({
+        service: { type: 'cron', name: 'cleanup', schedule: '<dynamic>' },
+        entrypoint: 'jobs/cleanup.py',
+        handlerFunction: 'registry',
+        pythonBin,
+        env: { ...process.env, PYTHONPATH: workDir },
+        workPath: workDir,
+      })
+    ).rejects.toThrow(/must contain string values/);
+  });
+
   it('reports error when get_crons returns empty iterable', async () => {
     await setupWorkDir({
       'jobs/cleanup.py': `

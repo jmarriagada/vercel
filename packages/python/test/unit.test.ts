@@ -2386,6 +2386,194 @@ describe('pyproject subscribers', () => {
   });
 });
 
+describe('pyproject crons', () => {
+  let mockWorkPath: string;
+  const mockedExeca = vi.mocked(execa);
+
+  beforeEach(() => {
+    mockWorkPath = path.join(tmpdir(), `python-crons-${Date.now()}`);
+    fs.mkdirSync(mockWorkPath, { recursive: true });
+    makeMockPython('3.11');
+  });
+
+  afterEach(() => {
+    mockedExeca.mockReset();
+    if (fs.existsSync(mockWorkPath)) {
+      fs.removeSync(mockWorkPath);
+    }
+  });
+
+  it('emits a scheduled cron lambda for an explicit schedule', async () => {
+    const files = {
+      'app.py': new FileBlob({
+        data: 'def app(environ, start_response): pass\n',
+      }),
+      'jobs/cleanup.py': new FileBlob({
+        data: 'def run(): pass\n',
+      }),
+      'pyproject.toml': new FileBlob({
+        data: [
+          '[project]',
+          'name = "x"',
+          'version = "0.0.1"',
+          '',
+          '[tool.vercel.crons.cleanup]',
+          'entrypoint = "jobs.cleanup:run"',
+          'schedule = "0 3 * * *"',
+          '',
+        ].join('\n'),
+      }),
+    } as Record<string, FileBlob>;
+
+    const result = await build({
+      workPath: mockWorkPath,
+      files,
+      entrypoint: 'app.py',
+      meta: { isDev: false },
+      config: { framework: 'flask' },
+      repoRootPath: mockWorkPath,
+    });
+
+    const buildOutput = getBuildOutputV2(result) as any;
+    const cronPath = '/_py_crons/cleanup/crons/jobs/cleanup/run';
+    const cronLambda = buildOutput.output['_py_crons/cleanup/index'];
+
+    expect(buildOutput.crons).toEqual([
+      { path: cronPath, schedule: '0 3 * * *' },
+    ]);
+    expect(buildOutput.routes[0]).toEqual({
+      src: '^/_py_crons/cleanup/crons/.*$',
+      dest: '/_py_crons/cleanup/index',
+      check: true,
+    });
+    expect(cronLambda.environment.VERCEL_SERVICE_TYPE).toBe('cron');
+
+    const handler = cronLambda.files?.['vc__handler__python.py'];
+    if (!handler || !('data' in handler)) {
+      throw new Error('cron handler bootstrap not found');
+    }
+    const routeTable = JSON.stringify({ [cronPath]: 'jobs.cleanup:run' });
+    expect(handler.data.toString()).toContain(
+      `"__VC_CRON_ROUTES": ${JSON.stringify(routeTable)}`
+    );
+  });
+
+  it('derives multiple schedules from get_crons when schedule is omitted', async () => {
+    mockedExeca.mockImplementation(async (_pythonBin, args) => {
+      if (args[2] !== 'jobs.registry' || args[3] !== 'crontab') {
+        return undefined as any;
+      }
+      return {
+        stdout: JSON.stringify({
+          entries: [
+            {
+              module_function: 'jobs.cleanup:daily',
+              schedule: '0 3 * * *',
+            },
+            {
+              module_function: 'jobs.reports:weekly',
+              schedule: '0 6 * * 1',
+            },
+          ],
+        }),
+      } as any;
+    });
+
+    const files = {
+      'app.py': new FileBlob({
+        data: 'def app(environ, start_response): pass\n',
+      }),
+      'jobs/registry.py': new FileBlob({
+        data: [
+          'class CronTab:',
+          '    def get_crons(self):',
+          '        return []',
+          '',
+          'crontab = CronTab()',
+          '',
+        ].join('\n'),
+      }),
+      'jobs/cleanup.py': new FileBlob({ data: 'def daily(): pass\n' }),
+      'jobs/reports.py': new FileBlob({ data: 'def weekly(): pass\n' }),
+      'pyproject.toml': new FileBlob({
+        data: [
+          '[project]',
+          'name = "x"',
+          'version = "0.0.1"',
+          '',
+          '[tool.vercel.crons.scheduler]',
+          'entrypoint = "jobs.registry:crontab"',
+          '',
+        ].join('\n'),
+      }),
+    } as Record<string, FileBlob>;
+
+    const result = await build({
+      workPath: mockWorkPath,
+      files,
+      entrypoint: 'app.py',
+      meta: { isDev: false },
+      config: { framework: 'flask' },
+      repoRootPath: mockWorkPath,
+    });
+
+    const buildOutput = getBuildOutputV2(result) as any;
+    expect(buildOutput.crons).toEqual([
+      {
+        path: '/_py_crons/scheduler/crons/jobs/cleanup/daily',
+        schedule: '0 3 * * *',
+      },
+      {
+        path: '/_py_crons/scheduler/crons/jobs/reports/weekly',
+        schedule: '0 6 * * 1',
+      },
+    ]);
+    expect(buildOutput.output['_py_crons/scheduler/index']).toBeDefined();
+    expect(
+      Object.keys(buildOutput.output).filter(path =>
+        path.startsWith('_py_crons/')
+      )
+    ).toEqual(['_py_crons/scheduler/index']);
+    expect(mockedExeca).toHaveBeenCalledWith(
+      expect.any(String),
+      ['-c', expect.any(String), 'jobs.registry', 'crontab'],
+      expect.objectContaining({ cwd: mockWorkPath })
+    );
+  });
+
+  it('rejects the dynamic schedule sentinel in favor of omission', async () => {
+    const files = {
+      'app.py': new FileBlob({
+        data: 'def app(environ, start_response): pass\n',
+      }),
+      'jobs/registry.py': new FileBlob({ data: 'crontab = object()\n' }),
+      'pyproject.toml': new FileBlob({
+        data: [
+          '[project]',
+          'name = "x"',
+          'version = "0.0.1"',
+          '',
+          '[tool.vercel.crons.scheduler]',
+          'entrypoint = "jobs.registry:crontab"',
+          'schedule = "<dynamic>"',
+          '',
+        ].join('\n'),
+      }),
+    } as Record<string, FileBlob>;
+
+    await expect(
+      build({
+        workPath: mockWorkPath,
+        files,
+        entrypoint: 'app.py',
+        meta: { isDev: false },
+        config: { framework: 'flask' },
+        repoRootPath: mockWorkPath,
+      })
+    ).rejects.toThrow(/must omit field "schedule"/);
+  });
+});
+
 describe('cron service build result', () => {
   let mockWorkPath: string;
 
