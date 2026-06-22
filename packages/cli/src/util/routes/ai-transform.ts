@@ -95,6 +95,7 @@ export function generatedRouteToAddInput(
             type: 'request.path',
             op: action.requestPath.op,
             args: action.requestPath.value,
+            ...(action.requestPath.env && { env: action.requestPath.env }),
           });
         } else if (action.subType === 'response-headers' && action.headers) {
           for (const h of action.headers) {
@@ -317,6 +318,7 @@ export function routingRuleToCurrentRoute(
       requestPath: {
         value: requestPath.args,
         op: requestPath.op,
+        ...(requestPath.env && { env: requestPath.env }),
       },
     });
   }
@@ -391,8 +393,11 @@ export function printGeneratedRoutePreview(generated: GeneratedRoute): void {
       action.requestPath
     ) {
       output.print(`  ${chalk.cyan('Request Path:')}\n`);
+      const env = action.requestPath.env?.length
+        ? chalk.gray(` (env: ${action.requestPath.env.join(', ')})`)
+        : '';
       output.print(
-        `    ${chalk.yellow(action.requestPath.op)} ${chalk.cyan('path')} = ${action.requestPath.value}\n`
+        `    ${chalk.yellow(action.requestPath.op)} ${chalk.cyan('path')} = ${action.requestPath.value}${env}\n`
       );
     } else if (action.type === 'modify' && action.headers) {
       const label =

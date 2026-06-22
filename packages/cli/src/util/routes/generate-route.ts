@@ -18,7 +18,7 @@ export interface CurrentRouteInput {
     dest?: string;
     status?: number;
     headers?: Array<{ key: string; value?: string; op: string }>;
-    requestPath?: { value: string; op: string };
+    requestPath?: { value: string; op: string; env?: string[] };
   }>;
 }
 
@@ -50,7 +50,11 @@ export interface GeneratedRoute {
     dest?: string;
     status?: number;
     headers?: Array<{ key: string; value?: string; op: GeneratedHeaderOp }>;
-    requestPath?: { value: string; op: GeneratedPathTransformOp };
+    requestPath?: {
+      value: string;
+      op: GeneratedPathTransformOp;
+      env?: string[];
+    };
   }>;
 }
 

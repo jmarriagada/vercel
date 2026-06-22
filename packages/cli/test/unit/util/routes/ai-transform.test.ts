@@ -266,7 +266,11 @@ describe('ai-transform', () => {
           {
             type: 'modify',
             subType: 'transform-request-path',
-            requestPath: { value: '/internal/$1', op: 'set' },
+            requestPath: {
+              value: '/$PATH_PREFIX/$1',
+              op: 'set',
+              env: ['PATH_PREFIX'],
+            },
           },
           {
             type: 'modify',
@@ -282,12 +286,38 @@ describe('ai-transform', () => {
         {
           type: 'request.path',
           op: 'set',
-          args: '/internal/$1',
+          args: '/$PATH_PREFIX/$1',
+          env: ['PATH_PREFIX'],
         },
         {
           type: 'request.path',
           op: 'set',
           args: '/rewritten/$1',
+        },
+      ]);
+    });
+
+    it('should preserve path-to-regexp request path args', () => {
+      const generated: GeneratedRoute = {
+        name: 'Path Transform',
+        description: '',
+        pathCondition: { value: '/api/:path*', syntax: 'path-to-regexp' },
+        actions: [
+          {
+            type: 'modify',
+            subType: 'transform-request-path',
+            requestPath: { value: '/:path*', op: 'set' },
+          },
+        ],
+      };
+
+      const result = generatedRouteToAddInput(generated);
+
+      expect(result.route.transforms).toEqual([
+        {
+          type: 'request.path',
+          op: 'set',
+          args: '/:path*',
         },
       ]);
     });
@@ -613,7 +643,8 @@ describe('ai-transform', () => {
             {
               type: 'request.path',
               op: 'set',
-              args: '/internal/$1',
+              args: '/$PATH_PREFIX/$1',
+              env: ['PATH_PREFIX'],
             },
             {
               type: 'request.path',
@@ -637,8 +668,9 @@ describe('ai-transform', () => {
           type: 'modify',
           subType: 'transform-request-path',
           requestPath: {
-            value: '/internal/$1',
+            value: '/$PATH_PREFIX/$1',
             op: 'set',
+            env: ['PATH_PREFIX'],
           },
         },
         {
@@ -652,9 +684,47 @@ describe('ai-transform', () => {
       ]);
     });
 
-    it('should default srcSyntax to regex when undefined', () => {
+    it('should preserve request path args when editing a path-to-regexp route', () => {
       const rule = {
         id: 'r10',
+        name: 'Path',
+        route: {
+          src: '/api/:path*',
+          transforms: [
+            {
+              type: 'request.path',
+              op: 'set',
+              args: '/:path*',
+            },
+          ],
+        },
+        srcSyntax: 'path-to-regexp',
+        enabled: true,
+        position: 9,
+        routeType: 'transform',
+      } as RoutingRule;
+
+      const result = routingRuleToCurrentRoute(rule);
+
+      expect(
+        result.actions.filter(
+          a => a.type === 'modify' && a.subType === 'transform-request-path'
+        )
+      ).toEqual([
+        {
+          type: 'modify',
+          subType: 'transform-request-path',
+          requestPath: {
+            value: '/:path*',
+            op: 'set',
+          },
+        },
+      ]);
+    });
+
+    it('should default srcSyntax to regex when undefined', () => {
+      const rule = {
+        id: 'r11',
         name: 'No Syntax',
         route: { src: '^/test$', dest: '/dest' },
         enabled: true,

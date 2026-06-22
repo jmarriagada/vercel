@@ -146,6 +146,7 @@ export interface TargetTransform {
 export interface PathTransform {
   type: 'request.path';
   op: 'set';
+  /** Uses `:param` for path-to-regexp routes and `$1`/`$name` for regex routes. */
   args: string;
   /** Environment variables referenced in args. The proxy only expands listed vars. */
   env?: string[];
