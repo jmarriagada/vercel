@@ -1864,7 +1864,12 @@ describe('link', () => {
       client.stdin.write('\n');
 
       await expect(client.stderr).toOutput('Search existing project');
-      client.stdin.write(`${basename(cwd)}`);
+      for (let i = 0; i < project.name!.length; i++) {
+        client.stdin.write(project.name![i]);
+        await vi.waitFor(() => {
+          expect(searchedProjectName).toEqual(project.name!.slice(0, i + 1));
+        });
+      }
       await expect(client.stderr).toOutput(project.name!);
       client.stdin.write('\n');
 
