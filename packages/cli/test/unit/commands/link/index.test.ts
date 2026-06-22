@@ -1881,18 +1881,31 @@ describe('link', () => {
       );
     });
 
-    it('should fall through to selectOrg when no project found across teams', async () => {
+    it('should search teams after selected SSO teams have no project match', async () => {
       useUser({ version: 'northstar' });
       const cwd = setupTmpDir();
       useTeams('team_dummy');
+      const playground = createTeam(
+        'team_playground',
+        'internal-playground',
+        'Internal Playground'
+      );
+      (playground as Team & { limited?: boolean }).limited = true;
       useUnknownProject();
 
       client.cwd = cwd;
       const exitCodePromise = link(client);
 
       await expect(client.stderr).toOutput('Directory');
-      // No match found during cross-team search, should go to selectOrg
+      await expect(client.stderr).toOutput('Select teams that require SSO');
+      client.stdin.write(' \n');
+
+      await expect(client.stderr).toOutput(
+        'No matching projects found in the selected teams.'
+      );
       await expect(client.stderr).toOutput('Which team?');
+      client.stdin.write('playground');
+      await expect(client.stderr).toOutput(playground.name);
       client.stdin.write('\n');
 
       // inputProject runs auto-detect (skipAutoDetect=false), finds nothing
@@ -1915,6 +1928,9 @@ describe('link', () => {
 
       const exitCode = await exitCodePromise;
       expect(exitCode).toEqual(0);
+
+      const projectJson = await readJSON(join(cwd, '.vercel/project.json'));
+      expect(projectJson.orgId).toEqual(playground.id);
     });
 
     it('should only search the explicit scope when --scope is provided', async () => {

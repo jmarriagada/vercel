@@ -501,6 +501,7 @@ export default async function setupAndLink(
   output.print('\n');
 
   let skipAutoDetect = false;
+  let searchableTeamPicker = false;
   if (searchAcrossTeams) {
     // Search for existing projects across all teams
     let crossTeamMatches: CrossTeamMatch[] = [];
@@ -582,6 +583,7 @@ export default async function setupAndLink(
       }
       if (limitedTeamMatches.length === 0) {
         output.print('  No matching projects found in the selected teams.\n');
+        searchableTeamPicker = true;
       }
       skipAutoDetect =
         skipAutoDetect ||
@@ -593,7 +595,12 @@ export default async function setupAndLink(
   }
 
   try {
-    org = await selectOrg(client, 'Which team?', autoConfirm);
+    org = await selectOrg(
+      client,
+      'Which team?',
+      autoConfirm,
+      searchableTeamPicker
+    );
   } catch (err: unknown) {
     if (isAPIError(err)) {
       if (err.code === 'NOT_AUTHORIZED') {

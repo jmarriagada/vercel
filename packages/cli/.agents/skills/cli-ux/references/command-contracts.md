@@ -43,6 +43,7 @@ Rules:
 - Use `requires SSO` / `teams that require SSO`; do not use `SSO-protected` in new human copy.
 - `--scope` may remain compatibility input; user-facing copy uses `team`.
 - Use `Which team?`, `Name?`, `Customize settings?`, and `Loading teams…`.
+- After a manual SSO fallback finds no project, `Which team?` filters loaded team names and slugs by substring; do not rely on prefix-only typeahead.
 - Ask `Code directory?` only for real root ambiguity.
 - Compress framework detection: `Detected Next.js` for defaults; include parenthesized build/output details only when non-default, non-obvious, or needed for the next decision.
 - Print aligned result rows with `printAlignedLabel()`: `Linked`, `Created`, `Added`, and optional follow-up state.
