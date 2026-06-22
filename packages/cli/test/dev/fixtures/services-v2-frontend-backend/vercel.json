@@ -28,10 +28,23 @@
       "root": "frontend",
       "framework": "vite"
     },
+    "data_api": {
+      "root": "data-api",
+      "framework": "fastapi",
+      "entrypoint": "server.py"
+    },
     "backend": {
       "root": "backend",
       "framework": "fastapi",
       "entrypoint": "server.py",
+      "bindings": [
+        {
+          "type": "service",
+          "service": "data_api",
+          "format": "url",
+          "env": "DATA_API_URL"
+        }
+      ],
       "redirects": [
         {
           "source": "/api/old",

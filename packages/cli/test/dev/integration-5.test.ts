@@ -715,6 +715,26 @@ describe('[vercel dev] Multi-service with experimentalServicesV2', () => {
       validateResponseHeaders(frontend);
       const frontendHtml = await frontend.text();
       expect(frontendHtml).toContain('Frontend in frontend/ directory');
+
+      // service binding
+      const bindingInfo = await nodeFetch(
+        `http://localhost:${port}/api/binding-info`
+      );
+      expect(bindingInfo.status).toBe(200);
+      const bindingInfoJson = await bindingInfo.json();
+      expect(bindingInfoJson.data_api_url).toMatch(
+        /^http:\/\/127\.0\.0\.1:\d+\/$/
+      );
+
+      const callBinding = await nodeFetch(
+        `http://localhost:${port}/api/call-binding`
+      );
+      expect(callBinding.status).toBe(200);
+      const callBindingJson = await callBinding.json();
+      expect(callBindingJson).toMatchObject({
+        service: 'data_api',
+        items: ['a', 'b', 'c'],
+      });
     } finally {
       await dev.kill();
     }
