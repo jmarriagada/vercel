@@ -1,5 +1,36 @@
 # vercel
 
+## 54.15.0
+
+### Minor Changes
+
+- d99dbf8: Add `vercel domains verify <domain>` for DNS misconfiguration feedback. The command checks the domain's DNS configuration, reports dashboard-aligned configuration and project-verification states, triggers a verification re-check when needed, and lists actionable fixes: recommended A/CNAME records, Vercel nameservers, conflicting records, DNSSEC guidance, and the TXT ownership challenge. Domains eligible for automatic configuration also receive a Domain Connect URL, with manual DNS guidance as a fallback. Supports `--project`, `--strict`, and `--format json`; non-interactive runs emit structured status, simultaneous issue details, automatic-configuration metadata, and shell-safe, context-preserving next commands. Human and structured output share one diagnosis so status, remediation, and exit behavior stay consistent. The command exits non-zero when action is required so scripts and agents can gate on it.
+- a5245fd: Add `vercel flags segments` commands for listing, inspecting, creating, updating, and deleting feature flag segments.
+
+  Examples:
+
+  ```bash
+  vercel flags segments ls
+  vercel flags segments inspect beta-users --json
+  vercel flags segments create beta-users --label "Beta users" --add include:user.id=user_123 --add include:user.id=user_456
+  vercel flags segments create enterprise-users --label "Enterprise users" --add rule:user.plan:eq:enterprise
+  vercel flags segments update beta-users --add include:user.id=user_789 --remove include:user.id=user_123
+  vercel flags segments update enterprise-users --add rule:user.email:ends-with:@company.com --remove rule:user.plan:eq:pro
+  vercel flags segments update enterprise-users --data '{"rules":[],"include":{"user":{"email":[{"value":"me@company.com"}]}},"exclude":{}}'
+  vercel flags segments rm beta-users --yes
+  ```
+
+### Patch Changes
+
+- 970b82b: Fix Windows standalone binary builds with the custom Node.js 24 small-ICU runtime and a compatible Windows toolchain.
+- 300af0d: Increase Connex setup polling timeout to 115 minutes.
+- 4253eaa: Avoid applying the current Git branch to explicitly selected projects in `vc logs`, and follow the latest READY production deployment when using `--project --follow`.
+- a19feac: Rename the `gantt` value for `vercel traces get --view` to `waterfall`.
+- Updated dependencies [82b3c3c]
+- Updated dependencies [f076559]
+  - @vercel/python@6.47.1
+  - @vercel/static-build@2.10.3
+
 ## 54.14.5
 
 ### Patch Changes

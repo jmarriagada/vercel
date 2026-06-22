@@ -1,5 +1,11 @@
 # @vercel/fs-detectors
 
+## 6.9.2
+
+### Patch Changes
+
+- edb5429: Strip trailing slashes from `experimentalServicesV2` service `root` so a config like `"root": "frontend/"` no longer double-prefixes builder paths (e.g. `frontend/frontend/package.json`)
+
 ## 6.9.1
 
 ### Patch Changes
