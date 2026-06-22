@@ -45,10 +45,9 @@ export default async function whoami(client: Client): Promise<number> {
 
   const scope = await getScope(client, {
     resolveLocalScope: true,
-    allowAppPrincipal: true,
   });
   const isAppPrincipal = isAppPrincipalScopeContext(scope);
-  const { team } = scope;
+  const team = isAppPrincipal ? scope.appPrincipal.team : scope.team;
 
   // A local override exists when the effective team (from the linked project)
   // differs from the globally-selected team (from `vc switch`). We only treat

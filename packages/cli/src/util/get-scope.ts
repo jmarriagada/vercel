@@ -23,7 +23,7 @@ export interface AppPrincipalScopeContext {
     name?: string;
     team: AppPrincipalTeam | null;
   };
-  team: AppPrincipalTeam | null;
+  team: null;
   globalTeam: null;
   linkedRepo: null;
   isCrossTeamRepo: false;
@@ -60,7 +60,6 @@ interface BasicScopeContext {
 interface GetScopeOptions {
   getTeam?: boolean;
   resolveLocalScope?: boolean;
-  allowAppPrincipal?: boolean;
 }
 
 interface GetScopeWithLocalScopeOptions extends GetScopeOptions {
@@ -73,22 +72,17 @@ interface GetScopeWithoutLocalScopeOptions extends GetScopeOptions {
 
 export default function getScope(
   client: Client,
-  opts: GetScopeWithLocalScopeOptions & { allowAppPrincipal: true }
+  opts: GetScopeWithLocalScopeOptions
 ): Promise<ScopeContext | AppPrincipalScopeContext>;
 export default function getScope(
   client: Client,
-  opts: GetScopeWithLocalScopeOptions
-): Promise<ScopeContext>;
-export default function getScope(
-  client: Client,
   opts?: GetScopeWithoutLocalScopeOptions
-): Promise<BasicScopeContext>;
+): Promise<BasicScopeContext | AppPrincipalScopeContext>;
 export default async function getScope(
   client: Client,
   opts: GetScopeOptions = {}
 ): Promise<BasicScopeContext | ScopeContext | AppPrincipalScopeContext> {
-  const allowAppPrincipal =
-    opts.allowAppPrincipal && isAppPrincipalScopeEnabled();
+  const allowAppPrincipal = isAppPrincipalScopeEnabled();
   let userError: unknown;
   const [user, appPrincipal] = await Promise.all([
     getUser(client).catch(error => {
@@ -299,7 +293,7 @@ function createAppPrincipalScopeContext(
       appPrincipal.team?.slug ?? appPrincipal.name ?? appPrincipal.id,
     user: null,
     appPrincipal,
-    team: appPrincipal.team,
+    team: null,
     globalTeam: null,
     linkedRepo: null,
     isCrossTeamRepo: false,

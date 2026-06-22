@@ -22,7 +22,7 @@ describe('getScope', () => {
 
     it('should return user if team is unspecified', async () => {
       const { contextName, team, user } = await getScope(client);
-      await expect(user.id).toEqual(mockUser.id);
+      await expect(user?.id).toEqual(mockUser.id);
       await expect(team).toBeNull();
       await expect(contextName).toEqual(mockUser.username);
     });
@@ -30,7 +30,7 @@ describe('getScope', () => {
     it('should return team if team is specified', async () => {
       client.config.currentTeam = mockTeam.id;
       const { contextName, team, user } = await getScope(client);
-      await expect(user.id).toEqual(mockUser.id);
+      await expect(user?.id).toEqual(mockUser.id);
       await expect(team?.id).toEqual(mockTeam.id);
       await expect(contextName).toEqual(mockTeam.slug);
     });
@@ -40,7 +40,7 @@ describe('getScope', () => {
       const { contextName, team, user } = await getScope(client, {
         getTeam: false,
       });
-      await expect(user.id).toEqual(mockUser.id);
+      await expect(user?.id).toEqual(mockUser.id);
       await expect(team).toBeNull();
       await expect(contextName).toEqual(mockUser.username);
     });
@@ -56,7 +56,7 @@ describe('getScope', () => {
 
     it('should return default team', async () => {
       const { contextName, team, user } = await getScope(client);
-      await expect(user.id).toEqual(mockUser.id);
+      await expect(user?.id).toEqual(mockUser.id);
       await expect(team?.id).toEqual(mockTeam.id);
       await expect(contextName).toEqual(mockTeam.slug);
     });
@@ -65,7 +65,7 @@ describe('getScope', () => {
       const { contextName, team, user } = await getScope(client, {
         getTeam: false,
       });
-      await expect(user.id).toEqual(mockUser.id);
+      await expect(user?.id).toEqual(mockUser.id);
       await expect(team).toBeNull();
       await expect(contextName).toEqual(mockUser.username);
     });
@@ -99,7 +99,6 @@ describe('getScope', () => {
 
       const scope = await getScope(client, {
         resolveLocalScope: true,
-        allowAppPrincipal: true,
       });
 
       expect(scope.user).toBeNull();
@@ -113,7 +112,7 @@ describe('getScope', () => {
         },
       });
       expect(scope.contextName).toEqual('vercel');
-      expect(scope.team?.slug).toEqual('vercel');
+      expect(scope.team).toBeNull();
     });
 
     it('should raise the introspection error when user lookup and introspection fail', async () => {
@@ -138,7 +137,6 @@ describe('getScope', () => {
       await expect(
         getScope(client, {
           resolveLocalScope: true,
-          allowAppPrincipal: true,
         })
       ).rejects.toMatchObject({
         status: 500,
