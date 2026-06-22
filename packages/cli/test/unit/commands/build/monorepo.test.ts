@@ -10,6 +10,7 @@ import execa from 'execa';
 import {
   FileFsRef,
   NodejsLambda,
+  download,
   glob,
   isExternalSymlinkTarget,
 } from '@vercel/build-utils';
@@ -135,6 +136,62 @@ async function assertStandaloneSharedOutput(outputDir: string) {
       expect(value).toContain('.vercel/output/shared');
     }
   }
+}
+
+/**
+ * Verify a bare module specifier resolves from inside a built `.func` directory
+ * the way it would on a deployed Lambda.
+ *
+ * The traced dependency bytes being present in the function is not sufficient:
+ * Node resolves bare imports (e.g. `require('hono')`) by walking up
+ * `node_modules` directories from the importing file. pnpm provides that link
+ * via a relative symlink (e.g. `node_modules/<pkg>` ->
+ * `../../node_modules/.pnpm/.../node_modules/<pkg>`). If that symlink is
+ * dropped or points outside the function, resolution fails at runtime
+ * (`Cannot find module '<pkg>'`) even though the bytes were packaged.
+ *
+ * To catch that, the function is copied to an ISOLATED location (outside the
+ * monorepo) so there is no parent `node_modules` to mask the failure, and the
+ * resolution is performed by a fresh Node process rooted in the copy — this
+ * mirrors `/var/task` on the deployed Lambda. The probe script is written
+ * inside the copy and run with an empty `NODE_PATH` so the only modules it can
+ * find are the ones actually packaged into the function.
+ *
+ * The function is reconstructed exactly like the deploy pipeline does — the
+ * `.func` directory is globbed and the `filePathMap` is hydrated into real
+ * `FileFsRef`s — then materialized (via `download`, which also writes the
+ * symlinks) into the isolated root. This is the same path that produces the
+ * `/var/task` contents on a deployed Lambda.
+ *
+ * @param funcDir absolute path to the built `*.func` directory
+ * @param workPath the build cwd used to hydrate `filePathMap` values
+ * @param fromRelDir func-relative directory to resolve from (the handler's dir)
+ * @param specifier the bare module specifier to resolve (e.g. `hono`)
+ */
+async function expectModuleResolvesInIsolatedFunc(
+  funcDir: string,
+  workPath: string,
+  fromRelDir: string,
+  specifier: string
+): Promise<void> {
+  const lambda = await createLambdaFromFuncDir(funcDir, workPath);
+  const isolatedRoot = await mkdtemp(join(tmpdir(), 'isolated-func-'));
+  const isolated = join(isolatedRoot, 'task');
+  await fs.mkdirp(isolated);
+  // Materialize the reconstructed Lambda (real dependency bytes + symlinks)
+  // into the isolated root, mirroring how the deployed function is unpacked.
+  await download(lambda.files ?? {}, isolated);
+  const probeDir = join(isolated, fromRelDir);
+  await fs.mkdirp(probeDir);
+  const probe = join(probeDir, '__resolve-probe.cjs');
+  await writeFile(probe, `require.resolve(${JSON.stringify(specifier)});`);
+  await expect(
+    execa('node', [probe], {
+      cwd: isolated,
+      env: { ...process.env, NODE_PATH: '' },
+    }),
+    `expected "${specifier}" to resolve from ${fromRelDir} inside the isolated function`
+  ).resolves.toMatchObject({ exitCode: 0 });
 }
 
 /**
@@ -548,6 +605,61 @@ describe('monorepo builds with VERCEL_BUILD_MONOREPO_SUPPORT', () => {
   );
 
   it.skipIf(process.platform === 'win32')(
+    'should package traced dependencies for hono --standalone from a monorepo subdirectory',
+    async () => {
+      const monorepoRoot = setupUnitFixture(
+        'commands/build/turborepo-hono-standalone'
+      );
+      const appDir = join(monorepoRoot, 'apps', 'api');
+      const output = join(appDir, '.vercel/output');
+
+      await execa('git', ['init'], { cwd: monorepoRoot });
+      await execa('pnpm', ['install', '--ignore-scripts'], {
+        cwd: monorepoRoot,
+      });
+
+      useUser();
+      useTeams('team_dummy');
+      useProject({
+        ...defaultProject,
+        id: 'prj_turborepo_hono_standalone',
+        name: 'turborepo-hono-standalone',
+        framework: 'hono',
+        rootDirectory: null,
+      });
+
+      client.cwd = appDir;
+      client.setArgv('build', '--standalone', '--yes', '--debug');
+      const exitCode = await build(client);
+
+      expect(exitCode).toEqual(0);
+
+      const indexFuncDir = join(output, 'functions', 'index.func');
+      expect(await fs.pathExists(indexFuncDir)).toBe(true);
+
+      const honoFiles = await glob(
+        'node_modules/.pnpm/**/node_modules/hono/**',
+        {
+          cwd: indexFuncDir,
+        }
+      );
+      expect(Object.keys(honoFiles).length).toBeGreaterThan(0);
+
+      // The traced `hono` bytes being present is not enough — Node must be able
+      // to resolve `import 'hono'` from the handler at runtime via the pnpm
+      // symlink. Verify resolution in an isolated copy of the function so a
+      // parent `node_modules` can't mask a dropped/broken symlink. This is the
+      // exact failure customers reported: `Cannot find package 'hono'`.
+      await expectModuleResolvesInIsolatedFunc(
+        indexFuncDir,
+        monorepoRoot,
+        'apps/api/src',
+        'hono'
+      );
+    }
+  );
+
+  it.skipIf(process.platform === 'win32')(
     'should build a pnpm nextjs monorepo with --standalone for prebuilt deploy',
     async () => {
       const rootDirectory = 'apps/web';
@@ -672,6 +784,22 @@ describe('monorepo builds with VERCEL_BUILD_MONOREPO_SUPPORT', () => {
       const lambda = await createLambdaFromFuncDir(indexFuncDir, appDir);
       const zip = await lambda.createZip();
       expect(zip.length).toBeGreaterThan(0);
+
+      // Re-anchoring the bytes is not enough: the Next launcher loads the
+      // compiled server at runtime via the pnpm symlink (`node_modules/next` ->
+      // `../../node_modules/.pnpm/.../next`). That symlink must be preserved
+      // and re-anchored so it resolves inside the function — otherwise the
+      // deploy fails with `Cannot find module 'next/dist/...'`. We resolve the
+      // exact compiled entry the launcher requires (not the bare `next`
+      // package, whose `package.json` Next intentionally omits from the trace).
+      // Resolve from an isolated copy so a parent `node_modules` can't mask
+      // the failure.
+      await expectModuleResolvesInIsolatedFunc(
+        indexFuncDir,
+        appDir,
+        '.',
+        'next/dist/compiled/next-server/server.runtime.prod.js'
+      );
     }
   );
 });
