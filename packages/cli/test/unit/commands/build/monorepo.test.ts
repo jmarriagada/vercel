@@ -925,3 +925,119 @@ describe('repository-root detection builds (VERCEL_DETECT_REPO_ROOT)', () => {
     }
   );
 });
+
+// Per-directory link resolution, gated behind `VERCEL_RESOLVE_ROOT_DIRECTORY`.
+//
+// A project linked in place (`apps/api/.vercel/project.json`) is anchored by
+// the link's physical location. Running `vc build` from there should resolve
+// the repository root and express the project as its path relative to that
+// root — regardless of whether the `rootDirectory` setting is null (config #3)
+// or a redundant restatement of the location (config #4, a common
+// misconfiguration). The latter previously produced a broken `apps/api/apps/api`
+// path; here it must "just work".
+describe('per-directory link resolution (VERCEL_RESOLVE_ROOT_DIRECTORY)', () => {
+  beforeEach(() => {
+    delete process.env.__VERCEL_BUILD_RUNNING;
+    delete process.env.VERCEL_TRACING_DISABLE_AUTOMATIC_FETCH_INSTRUMENTATION;
+    process.env.VERCEL_RESOLVE_ROOT_DIRECTORY = '1';
+  });
+
+  afterEach(() => {
+    delete process.env.VERCEL_RESOLVE_ROOT_DIRECTORY;
+  });
+
+  async function setupApiFixture(rootDirectorySetting: string | null) {
+    const monorepoRoot = setupUnitFixture(
+      'commands/build/turborepo-hono-standalone'
+    );
+    const appDir = join(monorepoRoot, 'apps', 'api');
+
+    await execa('git', ['init'], { cwd: monorepoRoot });
+    await execa('pnpm', ['install', '--ignore-scripts'], {
+      cwd: monorepoRoot,
+    });
+
+    // Write the per-directory link's `project.json` with the desired
+    // `rootDirectory` setting (the fixture is a throwaway temp copy).
+    const projectJsonPath = join(appDir, '.vercel', 'project.json');
+    await writeFile(
+      projectJsonPath,
+      JSON.stringify({
+        projectId: 'prj_turborepo_hono_standalone',
+        orgId: 'team_dummy',
+        settings: {
+          framework: 'hono',
+          rootDirectory: rootDirectorySetting,
+          nodeVersion: '24.x',
+        },
+      })
+    );
+
+    useUser();
+    useTeams('team_dummy');
+    useProject({
+      ...defaultProject,
+      id: 'prj_turborepo_hono_standalone',
+      name: 'turborepo-hono-standalone',
+      framework: 'hono',
+      rootDirectory: rootDirectorySetting,
+    });
+
+    return { monorepoRoot, appDir };
+  }
+
+  it.skipIf(process.platform === 'win32')(
+    'builds from a subdirectory with a null rootDirectory (config #3)',
+    async () => {
+      const { monorepoRoot, appDir } = await setupApiFixture(null);
+      const output = join(appDir, '.vercel/output');
+
+      client.cwd = appDir;
+      client.setArgv('build', '--yes');
+      const exitCode = await build(client);
+      expect(exitCode).toEqual(0);
+
+      const indexFuncDir = join(output, 'functions', 'index.func');
+      expect(await fs.pathExists(indexFuncDir)).toBe(true);
+
+      const vcConfig = await fs.readJSON(join(indexFuncDir, '.vc-config.json'));
+      expect(vcConfig.handler).toEqual('apps/api/src/index.js');
+
+      await expectModuleResolvesInIsolatedFunc(
+        indexFuncDir,
+        monorepoRoot,
+        'apps/api/src',
+        'hono'
+      );
+    }
+  );
+
+  it.skipIf(process.platform === 'win32')(
+    'absorbs a redundant rootDirectory restating the location (config #4)',
+    async () => {
+      // The common misconfiguration: a link at `apps/api` whose project also
+      // has `rootDirectory: "apps/api"`. Previously this double-appended into
+      // `apps/api/apps/api` and crashed; now it just works.
+      const { monorepoRoot, appDir } = await setupApiFixture('apps/api');
+      const output = join(appDir, '.vercel/output');
+
+      client.cwd = appDir;
+      client.setArgv('build', '--yes');
+      const exitCode = await build(client);
+      expect(exitCode).toEqual(0);
+
+      const indexFuncDir = join(output, 'functions', 'index.func');
+      expect(await fs.pathExists(indexFuncDir)).toBe(true);
+
+      const vcConfig = await fs.readJSON(join(indexFuncDir, '.vc-config.json'));
+      expect(vcConfig.handler).toEqual('apps/api/src/index.js');
+
+      await expectModuleResolvesInIsolatedFunc(
+        indexFuncDir,
+        monorepoRoot,
+        'apps/api/src',
+        'hono'
+      );
+    }
+  );
+});

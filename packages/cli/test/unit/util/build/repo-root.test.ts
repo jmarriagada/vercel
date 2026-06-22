@@ -6,6 +6,7 @@ import execa from 'execa';
 import {
   resolveRepoRoot,
   findWorkspaceRoot,
+  resolvePerDirectoryLinkRoot,
 } from '../../../../src/util/build/repo-root';
 
 const mkdirp = (p: string) => mkdir(p, { recursive: true });
@@ -147,6 +148,76 @@ describe('repo-root', () => {
       // No workspace marker, and tmpdir is not inside a git repo.
       const resolved = resolveRepoRoot({ cwd: appDir });
       expect(resolved).toEqual(appDir);
+    });
+  });
+
+  describe('resolvePerDirectoryLinkRoot', () => {
+    async function setupMonorepo() {
+      const appDir = join(root, 'apps', 'api');
+      await mkdirp(appDir);
+      await writeFile(
+        join(root, 'pnpm-workspace.yaml'),
+        'packages:\n  - apps/*\n'
+      );
+      return appDir;
+    }
+
+    it('resolves a null rootDirectory to the link location (config #3)', async () => {
+      const appDir = await setupMonorepo();
+      const result = resolvePerDirectoryLinkRoot(appDir, null);
+      expect(result.repoRoot).toEqual(root);
+      expect(result.resolvedRootDirectory).toEqual('apps/api');
+      expect(result.advisory).toBeUndefined();
+    });
+
+    it('absorbs a redundant rootDirectory equal to the location (config #4)', async () => {
+      const appDir = await setupMonorepo();
+      const result = resolvePerDirectoryLinkRoot(appDir, 'apps/api');
+      expect(result.repoRoot).toEqual(root);
+      expect(result.resolvedRootDirectory).toEqual('apps/api');
+      // Redundant restatement is absorbed silently — no advisory.
+      expect(result.advisory).toBeUndefined();
+    });
+
+    it('absorbs a redundant rootDirectory with ./ and trailing slash noise', async () => {
+      const appDir = await setupMonorepo();
+      const result = resolvePerDirectoryLinkRoot(appDir, './apps/api/');
+      expect(result.resolvedRootDirectory).toEqual('apps/api');
+      expect(result.advisory).toBeUndefined();
+    });
+
+    it('ignores a mismatched rootDirectory and returns an advisory', async () => {
+      const appDir = await setupMonorepo();
+      const result = resolvePerDirectoryLinkRoot(appDir, 'apps/web');
+      // Location wins: still resolves to the link's own location.
+      expect(result.resolvedRootDirectory).toEqual('apps/api');
+      expect(result.advisory).toMatch(
+        /Ignoring "rootDirectory" setting "apps\/web"/
+      );
+      expect(result.advisory).toMatch(/always builds from "apps\/api"/);
+    });
+
+    it('treats a deeper rootDirectory as a mismatch (no deeper offset)', async () => {
+      // A link at apps/api with rootDirectory "server" does NOT build
+      // apps/api/server — the link location is authoritative.
+      const appDir = await setupMonorepo();
+      const result = resolvePerDirectoryLinkRoot(appDir, 'server');
+      expect(result.resolvedRootDirectory).toEqual('apps/api');
+      expect(result.advisory).toMatch(
+        /Ignoring "rootDirectory" setting "server"/
+      );
+    });
+
+    it('returns empty resolvedRootDirectory when the link is at the repo root', async () => {
+      await writeFile(
+        join(root, 'pnpm-workspace.yaml'),
+        'packages:\n  - apps/*\n'
+      );
+      // Link anchored at the root itself: nothing to re-anchor, setting keeps
+      // its normal meaning (handled by the caller's default path).
+      const result = resolvePerDirectoryLinkRoot(root, 'apps/api');
+      expect(result.resolvedRootDirectory).toEqual('');
+      expect(result.advisory).toBeUndefined();
     });
   });
 });
