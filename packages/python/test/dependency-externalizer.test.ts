@@ -7,7 +7,6 @@ import {
   calculateBundleSize,
   getPackagesReachableOnPlatform,
   lambdaKnapsack,
-  shouldShowFunctionsBetaHint,
   LAMBDA_SIZE_THRESHOLD_BYTES,
   LAMBDA_EPHEMERAL_STORAGE_BYTES,
   HIVE_LAMBDA_SIZE_BYTES,
@@ -244,43 +243,6 @@ describe('dependency externalizer support', () => {
       expect(HIVE_LAMBDA_SIZE_BYTES).toBeGreaterThan(
         LAMBDA_EPHEMERAL_STORAGE_BYTES
       );
-    });
-  });
-
-  describe('shouldShowFunctionsBetaHint', () => {
-    const originalEnv = process.env.VERCEL_FUNCTIONS_BETA_HINT;
-
-    afterEach(() => {
-      if (originalEnv === undefined) {
-        delete process.env.VERCEL_FUNCTIONS_BETA_HINT;
-      } else {
-        process.env.VERCEL_FUNCTIONS_BETA_HINT = originalEnv;
-      }
-    });
-
-    it('returns true when VERCEL_FUNCTIONS_BETA_HINT is "1"', () => {
-      process.env.VERCEL_FUNCTIONS_BETA_HINT = '1';
-      expect(shouldShowFunctionsBetaHint()).toBe(true);
-    });
-
-    it('returns true when VERCEL_FUNCTIONS_BETA_HINT is "true"', () => {
-      process.env.VERCEL_FUNCTIONS_BETA_HINT = 'true';
-      expect(shouldShowFunctionsBetaHint()).toBe(true);
-    });
-
-    it('returns false when VERCEL_FUNCTIONS_BETA_HINT is unset', () => {
-      delete process.env.VERCEL_FUNCTIONS_BETA_HINT;
-      expect(shouldShowFunctionsBetaHint()).toBe(false);
-    });
-
-    it('returns false when VERCEL_FUNCTIONS_BETA_HINT is "0"', () => {
-      process.env.VERCEL_FUNCTIONS_BETA_HINT = '0';
-      expect(shouldShowFunctionsBetaHint()).toBe(false);
-    });
-
-    it('returns false when VERCEL_FUNCTIONS_BETA_HINT is an unrecognised value', () => {
-      process.env.VERCEL_FUNCTIONS_BETA_HINT = 'yes';
-      expect(shouldShowFunctionsBetaHint()).toBe(false);
     });
   });
 
@@ -1046,6 +1008,93 @@ version = "8.1.7"
       try {
         const result = await ext.analyze(files);
         expect(result.runtimeInstallEnabled).toBe(false);
+      } finally {
+        fs.removeSync(tempDir);
+      }
+    });
+
+    it('invokes onSized with the size even when the bundle exceeds the Hive limit and throws', async () => {
+      process.env.VERCEL_PYTHON_ON_HIVE = '1';
+
+      const tempDir = path.join(tmpdir(), `dep-ext-onsized-hive-${Date.now()}`);
+      fs.mkdirSync(tempDir, { recursive: true });
+
+      // Sparse file just over the 1 GB Hive limit (no real disk usage).
+      const bigFilePath = path.join(tempDir, 'big-file.dat');
+      const fd = fs.openSync(bigFilePath, 'w');
+      const oversized = HIVE_LAMBDA_SIZE_BYTES + 1024 * 1024;
+      fs.ftruncateSync(fd, oversized);
+      fs.closeSync(fd);
+
+      const ext = new PythonDependencyExternalizer({
+        venvPath: tempDir,
+        vendorDir: '_vendor',
+        workPath: tempDir,
+        uvLockPath: path.join(tempDir, 'uv.lock'),
+        uvProjectDir: tempDir,
+        projectName: 'test-project',
+        pythonMajor: 3,
+        pythonMinor: 12,
+        pythonPath: '/usr/bin/python3',
+        hasCustomCommand: false,
+      });
+
+      const files = {
+        'big-file.dat': new FileFsRef({ fsPath: bigFilePath }),
+      };
+
+      const onSized = vi.fn();
+
+      try {
+        await expect(ext.analyze(files, { onSized })).rejects.toThrow(
+          'exceeds the extended function size limit'
+        );
+        // The callback must have fired before the throw, carrying the size.
+        expect(onSized).toHaveBeenCalledTimes(1);
+        expect(onSized).toHaveBeenCalledWith({
+          totalSizeBytes: oversized,
+          runtimeInstallEnabled: false,
+        });
+      } finally {
+        fs.removeSync(tempDir);
+      }
+    });
+
+    it('invokes onSized on the under-threshold success path', async () => {
+      delete process.env.VERCEL_PYTHON_ON_HIVE;
+
+      const tempDir = path.join(tmpdir(), `dep-ext-onsized-ok-${Date.now()}`);
+      fs.mkdirSync(tempDir, { recursive: true });
+
+      const smallFilePath = path.join(tempDir, 'small-file.dat');
+      fs.writeFileSync(smallFilePath, 'a'.repeat(100));
+
+      const ext = new PythonDependencyExternalizer({
+        venvPath: tempDir,
+        vendorDir: '_vendor',
+        workPath: tempDir,
+        uvLockPath: path.join(tempDir, 'uv.lock'),
+        uvProjectDir: tempDir,
+        projectName: 'test-project',
+        pythonMajor: 3,
+        pythonMinor: 12,
+        pythonPath: '/usr/bin/python3',
+        hasCustomCommand: false,
+      });
+
+      const files = {
+        'small-file.dat': new FileFsRef({ fsPath: smallFilePath }),
+      };
+
+      const onSized = vi.fn();
+
+      try {
+        await ext.analyze(files, { onSized });
+        expect(onSized).toHaveBeenCalledTimes(1);
+        expect(onSized).toHaveBeenCalledWith({
+          totalSizeBytes: 100,
+          runtimeInstallEnabled: false,
+        });
       } finally {
         fs.removeSync(tempDir);
       }
