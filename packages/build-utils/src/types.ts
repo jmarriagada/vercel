@@ -4,6 +4,7 @@ import type FileBlob from './file-blob';
 import type { Lambda, LambdaArchitecture } from './lambda';
 import type { Prerender } from './prerender';
 import type { EdgeFunction } from './edge-function';
+import type { ContainerImage } from './container-image';
 import type { Span } from './trace';
 import type {
   HasField,
@@ -647,6 +648,8 @@ export interface ExperimentalServiceV2 {
   runtime?: string;
   /** Resolved entrypoint, relative to the service root. */
   entrypoint?: string;
+  /** Command override for `runtime: "container"` services. */
+  command?: string[];
   /** Builder selected by the resolver. */
   builder: Builder;
   installCommand?: string;
@@ -776,7 +779,7 @@ export interface BuildResultV2Typical {
   routes?: any[];
   images?: Images;
   output: {
-    [key: string]: File | Lambda | Prerender | EdgeFunction;
+    [key: string]: File | Lambda | Prerender | EdgeFunction | ContainerImage;
   };
   wildcard?: Array<{
     domain: string;
@@ -936,7 +939,13 @@ export interface TriggerEvent extends TriggerEventBase {
   consumer: string;
 }
 
-export type ServiceRuntime = 'node' | 'python' | 'go' | 'rust' | 'ruby';
+export type ServiceRuntime =
+  | 'node'
+  | 'python'
+  | 'go'
+  | 'rust'
+  | 'ruby'
+  | 'container';
 
 export type ServiceType = 'web' | 'cron' | 'worker' | 'job';
 
@@ -977,8 +986,10 @@ export interface ExperimentalServiceConfig {
   framework?: string;
   /** Builder to use, e.g. @vercel/node, @vercel/python */
   builder?: string;
-  /** Specific lambda runtime to use, e.g. nodejs24.x, python3.14 */
+  /** Specific lambda runtime to use, e.g. nodejs24.x, python3.14, container */
   runtime?: string;
+  /** Optional command override for container image services. */
+  command?: string | string[];
 
   workspace?: string;
   buildCommand?: string;
@@ -1053,8 +1064,17 @@ export interface ExperimentalServiceV2Config {
   /**
    * Service entrypoint, relative to the service root directory.
    * Can be a file path or a module specification (for Python).
+   * For `runtime: "container"`, a Dockerfile path (built & pushed) or a
+   * prebuilt OCI image reference.
    */
   entrypoint?: string;
+  /**
+   * Prebuilt OCI image reference for `runtime: "container"`. Alternative to a
+   * Dockerfile entrypoint.
+   */
+  image?: string;
+  /** Command override for `runtime: "container"` services. */
+  command?: string | string[];
 
   /* Service-level build setting overrides. */
   installCommand?: string;

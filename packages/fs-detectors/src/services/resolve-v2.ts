@@ -27,6 +27,107 @@ const frameworksBySlug = new Map(frameworkList.map(f => [f.slug, f]));
 
 const SERVICE_NAME_REGEX = /^[a-zA-Z]([a-zA-Z0-9_-]*[a-zA-Z0-9])?$/;
 
+/**
+ * A container entrypoint pointing at a Dockerfile/Containerfile is built &
+ * pushed; anything else (or `config.image`) is a prebuilt image reference.
+ */
+function isDockerfileEntrypoint(entrypoint: string): boolean {
+  const base = posixPath.basename(entrypoint).toLowerCase();
+  return (
+    base === 'dockerfile' ||
+    base === 'containerfile' ||
+    base.endsWith('.dockerfile')
+  );
+}
+
+function normalizeContainerCommand(
+  command: string | string[] | undefined
+): string[] | undefined {
+  if (command === undefined) {
+    return undefined;
+  }
+  return Array.isArray(command) ? command : [command];
+}
+
+/**
+ * Resolve a container (`runtime: "container"`) service. Containers don't go
+ * through framework/entrypoint-extension detection: the entrypoint is either a
+ * Dockerfile to build & push or a prebuilt OCI image reference (also settable
+ * via `config.image`).
+ */
+function resolveContainerServiceV2(
+  name: string,
+  config: ExperimentalServiceV2Config
+): { service?: ExperimentalServiceV2; error?: ServiceDetectionError } {
+  const root = config.root;
+  const normalizedRoot = posixPath.normalize(root);
+  const isRoot = normalizedRoot === '.';
+
+  const entrypoint = config.entrypoint;
+  const dockerfile =
+    typeof entrypoint === 'string' && isDockerfileEntrypoint(entrypoint)
+      ? posixPath.normalize(entrypoint)
+      : undefined;
+  // Prebuilt image: explicit `config.image`, or a non-Dockerfile entrypoint.
+  const image =
+    config.image ??
+    (typeof entrypoint === 'string' && !dockerfile ? entrypoint : undefined);
+
+  if (!dockerfile && !image) {
+    return {
+      error: {
+        code: 'MISSING_SERVICE_CONFIG',
+        message: `Container service "${name}" must specify a Dockerfile "entrypoint" to build, or a prebuilt "image".`,
+        serviceName: name,
+      },
+    };
+  }
+
+  // builder.src is project-root-relative. For a prebuilt image there is no
+  // source file, so default to a Dockerfile path under the root (the builder
+  // treats a missing Dockerfile + configured image as prebuilt).
+  const localSrc = dockerfile ?? image ?? 'Dockerfile';
+  const builderSrc = isRoot
+    ? localSrc
+    : posixPath.join(normalizedRoot, localSrc);
+
+  const builderConfig: Record<string, unknown> = { zeroConfig: true };
+  if (!isRoot) {
+    builderConfig.workspace = normalizedRoot;
+  }
+  if (image) {
+    builderConfig.image = image;
+  }
+  const command = normalizeContainerCommand(config.command);
+  if (command) {
+    builderConfig.command = command;
+  }
+
+  return {
+    service: {
+      schema: 'experimentalServicesV2',
+      name,
+      root,
+      runtime: 'container',
+      entrypoint: image ?? dockerfile,
+      command,
+      builder: {
+        src: builderSrc,
+        use: '@vercel/container',
+        config: builderConfig,
+      },
+      bindings: config.bindings,
+      functions: config.functions,
+      headers: config.headers,
+      redirects: config.redirects,
+      rewrites: config.rewrites,
+      routes: config.routes,
+      cleanUrls: config.cleanUrls,
+      trailingSlash: config.trailingSlash,
+    },
+  };
+}
+
 export function validateServiceConfigV2(
   name: string,
   config: ExperimentalServiceV2Config
@@ -93,7 +194,11 @@ export function validateServiceConfigV2(
       };
     }
   }
-  if (!config.framework && !config.entrypoint) {
+  // Container services may specify a prebuilt `image` instead of a framework or
+  // entrypoint.
+  const isContainer =
+    config.runtime === 'container' || config.image !== undefined;
+  if (!config.framework && !config.entrypoint && !isContainer) {
     return {
       code: 'MISSING_SERVICE_CONFIG',
       message: `Service "${name}" must specify "framework" or "entrypoint".`,
@@ -112,6 +217,19 @@ export async function resolveConfiguredServiceV2(
   // "frontend/"), which double-prefixes builder paths downstream. Strip it so
   // "frontend/" and "frontend" resolve identically.
   const normalizedRoot = stripTrailingSlash(posixPath.normalize(config.root));
+
+  // Container services are resolved separately: they don't go through
+  // framework/entrypoint-extension detection. Container intent is signalled by
+  // an explicit `runtime: "container"`, a Dockerfile entrypoint, or a prebuilt
+  // `image`.
+  const isContainer =
+    config.runtime === 'container' ||
+    config.image !== undefined ||
+    (typeof config.entrypoint === 'string' &&
+      isDockerfileEntrypoint(config.entrypoint));
+  if (isContainer) {
+    return resolveContainerServiceV2(name, config);
+  }
 
   // Scope the filesystem to the service root for entrypoint/framework detection.
   // A root of "." is the project root itself, so there is nothing to chdir into.
