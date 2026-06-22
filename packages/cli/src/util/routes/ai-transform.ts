@@ -308,9 +308,9 @@ export function routingRuleToCurrentRoute(
     });
   }
 
-  const requestPath = allTransforms.find(isPathTransform);
+  const requestPathTransforms = allTransforms.filter(isPathTransform);
 
-  if (requestPath) {
+  for (const requestPath of requestPathTransforms) {
     actions.push({
       type: 'modify',
       subType: 'transform-request-path',

@@ -257,7 +257,7 @@ describe('ai-transform', () => {
       });
     });
 
-    it('should convert request path transforms', () => {
+    it('should convert all request path transforms', () => {
       const generated: GeneratedRoute = {
         name: 'Path Transform',
         description: '',
@@ -268,17 +268,28 @@ describe('ai-transform', () => {
             subType: 'transform-request-path',
             requestPath: { value: '/internal/$1', op: 'set' },
           },
+          {
+            type: 'modify',
+            subType: 'transform-request-path',
+            requestPath: { value: '/rewritten/$1', op: 'set' },
+          },
         ],
       };
 
       const result = generatedRouteToAddInput(generated);
 
-      expect(result.route.transforms).toHaveLength(1);
-      expect(result.route.transforms![0]).toEqual({
-        type: 'request.path',
-        op: 'set',
-        args: '/internal/$1',
-      });
+      expect(result.route.transforms).toEqual([
+        {
+          type: 'request.path',
+          op: 'set',
+          args: '/internal/$1',
+        },
+        {
+          type: 'request.path',
+          op: 'set',
+          args: '/rewritten/$1',
+        },
+      ]);
     });
 
     it('should combine multiple action types', () => {
@@ -592,7 +603,7 @@ describe('ai-transform', () => {
       ]);
     });
 
-    it('should convert request path transforms', () => {
+    it('should convert all request path transforms', () => {
       const rule = {
         id: 'r9',
         name: 'Path',
@@ -604,6 +615,11 @@ describe('ai-transform', () => {
               op: 'set',
               args: '/internal/$1',
             },
+            {
+              type: 'request.path',
+              op: 'set',
+              args: '/rewritten/$1',
+            },
           ],
         },
         enabled: true,
@@ -613,14 +629,27 @@ describe('ai-transform', () => {
 
       const result = routingRuleToCurrentRoute(rule);
 
-      const modifyAction = result.actions.find(
+      const modifyActions = result.actions.filter(
         a => a.type === 'modify' && a.subType === 'transform-request-path'
       );
-      expect(modifyAction).toBeDefined();
-      expect(modifyAction!.requestPath).toEqual({
-        value: '/internal/$1',
-        op: 'set',
-      });
+      expect(modifyActions).toEqual([
+        {
+          type: 'modify',
+          subType: 'transform-request-path',
+          requestPath: {
+            value: '/internal/$1',
+            op: 'set',
+          },
+        },
+        {
+          type: 'modify',
+          subType: 'transform-request-path',
+          requestPath: {
+            value: '/rewritten/$1',
+            op: 'set',
+          },
+        },
+      ]);
     });
 
     it('should default srcSyntax to regex when undefined', () => {
