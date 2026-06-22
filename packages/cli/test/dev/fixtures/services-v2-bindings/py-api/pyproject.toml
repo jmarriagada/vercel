@@ -1,5 +1,5 @@
 [project]
-name = "services-v2-frontend-backend-data-api"
+name = "services-v2-bindings-py-api"
 version = "0.0.0"
 requires-python = ">=3.12"
 dependencies = [

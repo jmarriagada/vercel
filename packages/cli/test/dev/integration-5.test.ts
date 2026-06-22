@@ -715,26 +715,50 @@ describe('[vercel dev] Multi-service with experimentalServicesV2', () => {
       validateResponseHeaders(frontend);
       const frontendHtml = await frontend.text();
       expect(frontendHtml).toContain('Frontend in frontend/ directory');
+    } finally {
+      await dev.kill();
+    }
+  });
+});
 
-      // service binding
-      const bindingInfo = await nodeFetch(
-        `http://localhost:${port}/api/binding-info`
-      );
-      expect(bindingInfo.status).toBe(200);
-      const bindingInfoJson = await bindingInfo.json();
-      expect(bindingInfoJson.data_api_url).toMatch(
-        /^http:\/\/127\.0\.0\.1:\d+\/$/
-      );
+describe('[vercel dev] experimentalServicesV2 service bindings', () => {
+  test('[vercel dev] bindings across node, python and go services', async () => {
+    const dir = fixture('services-v2-bindings');
+    const { dev, port, readyResolver } = await testFixture(
+      dir,
+      {
+        skipNpmInstall: true,
+        env: {
+          VERCEL_USE_EXPERIMENTAL_FRAMEWORKS: '1',
+        },
+      },
+      ['--local']
+    );
 
-      const callBinding = await nodeFetch(
-        `http://localhost:${port}/api/call-binding`
-      );
-      expect(callBinding.status).toBe(200);
-      const callBindingJson = await callBinding.json();
-      expect(callBindingJson).toMatchObject({
-        service: 'data_api',
-        items: ['a', 'b', 'c'],
-      });
+    try {
+      await readyResolver;
+
+      // Each binding env var is injected as a local URL base ending in "/".
+      const info = await nodeFetch(`http://localhost:${port}/binding-info`);
+      expect(info.status).toBe(200);
+      const infoJson = await info.json();
+      expect(infoJson.node_api_url).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/$/);
+      expect(infoJson.py_api_url).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/$/);
+      expect(infoJson.go_api_url).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/$/);
+
+      // The gateway reaches each internal service (one per runtime) through its
+      // binding. None of the targets are publicly routed.
+      const nodeRes = await nodeFetch(`http://localhost:${port}/call/node`);
+      expect(nodeRes.status).toBe(200);
+      expect((await nodeRes.text()).trim()).toBe('node_api: ok');
+
+      const pyRes = await nodeFetch(`http://localhost:${port}/call/py`);
+      expect(pyRes.status).toBe(200);
+      expect(await pyRes.json()).toMatchObject({ service: 'py_api', ok: true });
+
+      const goRes = await nodeFetch(`http://localhost:${port}/call/go`);
+      expect(goRes.status).toBe(200);
+      expect((await goRes.text()).trim()).toBe('go_api: pong');
     } finally {
       await dev.kill();
     }
