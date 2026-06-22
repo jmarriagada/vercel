@@ -114,7 +114,19 @@ async function compileProxyBinaries() {
     // every OS; only override the cross-compile settings.
     await execa(
       'go',
-      ['build', '-trimpath', '-ldflags=-s -w', '-o', outputPath, '.'],
+      [
+        'build',
+        '-trimpath',
+        // Disable VCS stamping: these are reproducible, content-addressed
+        // static binaries that gain nothing from embedded commit info, and
+        // Go's VCS detection fails (`error obtaining VCS status: exit status
+        // 128`) when building from a git worktree — a common local setup.
+        '-buildvcs=false',
+        '-ldflags=-s -w',
+        '-o',
+        outputPath,
+        '.',
+      ],
       {
         cwd: bootstrapDir,
         env: {

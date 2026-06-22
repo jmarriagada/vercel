@@ -129,6 +129,7 @@ import { pullEnvRecords } from '../../util/env/get-env-records';
 import { buildCommand } from './command';
 import { validatePackageManifest } from '../../util/validate-package-manifest';
 import { shouldEmbedFlagsDefinitions } from '../../util/flags/build-embedding';
+import { resolveRepoRoot } from '../../util/build/repo-root';
 
 /** Build a plain suggested command with global flags (e.g. --cwd, --non-interactive) appended. */
 function buildCommandWithGlobalFlags(
@@ -642,10 +643,35 @@ async function doBuild(
 
   const workPath = join(cwd, project.settings.rootDirectory || '.');
 
+  // `repoRootPath` should be the root of the repository/monorepo, but when
+  // `vc build` is invoked from a subdirectory (e.g. `--cwd apps/docs`) it
+  // defaults to `cwd`. That breaks any build whose dependencies live above
+  // `cwd`:
+  //
+  //   * Next.js sets `outputFileTracingRoot` / `turbopack.root` from this
+  //     path, so Turbopack errors ("inferred your workspace root ... couldn't
+  //     find next/package.json") and Webpack `.nft.json` traces omit hoisted
+  //     dependencies (e.g. `sharp`, even `next`), causing runtime
+  //     `Cannot find module` errors.
+  //   * `--standalone` produces function file keys that escape the function
+  //     root (`../../node_modules/...`), breaking zipping and runtime
+  //     resolution.
+  //
+  // Detecting the true repository root (via workspace markers, then git) and
+  // using it as `repoRootPath` fixes all of these consistently — it is not
+  // specific to `--standalone`. Gated behind an opt-in env var while it bakes.
+  const detectRepoRoot = process.env.VERCEL_DETECT_REPO_ROOT === '1';
+  const repoRootPath = detectRepoRoot ? resolveRepoRoot({ cwd }) : cwd;
+  if (repoRootPath !== cwd) {
+    output.debug(
+      `Using detected repository root as repoRootPath: ${repoRootPath} (cwd=${cwd})`
+    );
+  }
+
   const sourceConfigFile = await findSourceVercelConfigFile(workPath);
   let corepackShimDir: string | null | undefined;
   if (sourceConfigFile) {
-    corepackShimDir = await initCorepack({ repoRootPath: cwd });
+    corepackShimDir = await initCorepack({ repoRootPath });
 
     const installDepsSpan = span.child('vc.installDeps');
     try {
@@ -963,7 +989,6 @@ async function doBuild(
   const executedBuilds: Builder[] = [];
   const buildResults: Map<Builder, BuildResult | BuildOutputConfig> = new Map();
   const overrides: PathOverride[] = [];
-  const repoRootPath = cwd;
   // Only initialize corepack if not already done during early install
   if (!corepackShimDir) {
     corepackShimDir = await initCorepack({ repoRootPath });
