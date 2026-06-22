@@ -43,7 +43,7 @@ import {
 } from './install';
 import {
   PythonDependencyExternalizer,
-  HIVE_LAMBDA_SIZE_BYTES,
+  MAX_LARGE_FUNCTION_UNCOMPRESSED_SIZE,
   lambdaKnapsack,
   calculateBundleSize,
 } from './dependency-externalizer';
@@ -1046,84 +1046,87 @@ export const build: BuildVX = async ({
         },
       });
 
-      if (depAnalysis.runtimeInstallEnabled) {
-        // >225 MB source-only: the lambda zip is packed full with source
-        // packages via knapsack.  No room for bytecode.
-        await depExternalizer.generateBundle(files);
-      } else {
-        // ≤225 MB source-only: bundle all dependencies.
-        addFiles(files, depAnalysis.allVendorFiles);
+      // Precompile bytecode and fill remaining capacity for a fully bundled
+      // function. collectAppBytecodeFiles only collects .pyc for .py files
+      // present in the bundle, so excluded source can't re-enter as .pyc.
+      // Shared by the direct-bundle path and the generateBundle Hive fallback.
+      const runCompileAllAndFillBytecode = async () => {
+        await builderSpan
+          .child('vc.builder.python.compileall')
+          .trace(async compileSpan => {
+            const sitePackageDirs = (
+              await getVenvSitePackagesDirs(venvPath)
+            ).filter(d => fs.existsSync(d));
+            const pythonBin = getVenvPythonBin(venvPath);
 
-        // Precompile bytecode and fill remaining Lambda capacity.
-        // compileall runs on the full workPath (with an exclude regex
-        // mirroring the glob excludes) and on site-packages.
-        // collectAppBytecodeFiles only collects .pyc for .py files
-        // present in the bundle, so excluded source files cannot
-        // re-enter the Lambda as generated .pyc files.
-        if (automaticCompileAllEnabled) {
-          await builderSpan
-            .child('vc.builder.python.compileall')
-            .trace(async compileSpan => {
-              const sitePackageDirs = (
-                await getVenvSitePackagesDirs(venvPath)
-              ).filter(d => fs.existsSync(d));
-              const pythonBin = getVenvPythonBin(venvPath);
-
-              console.log('Compiling Python application bytecode...');
-              await runCompileAll({
-                pythonBin,
-                filesOrDirectories: [workPath],
-                env: pythonEnv,
-                excludeRegex: getCompileAllAppExcludeRegex(workPath),
-              });
-
-              console.log('Compiling Python dependency bytecode...');
-              await runCompileAll({
-                pythonBin,
-                filesOrDirectories: sitePackageDirs,
-                env: pythonEnv,
-              });
-
-              compileSpan.setAttributes({
-                'python.compileall.enabled': 'true',
-                'python.compileall.sitePackageDirectoryCount': String(
-                  sitePackageDirs.length
-                ),
-              });
+            console.log('Compiling Python application bytecode...');
+            await runCompileAll({
+              pythonBin,
+              filesOrDirectories: [workPath],
+              env: pythonEnv,
+              excludeRegex: getCompileAllAppExcludeRegex(workPath),
             });
 
-          // Collect bytecode and fill remaining capacity.  Compileall only
-          // runs on Hive (see shouldUseCompileAll), so the Hive Lambda size
-          // threshold always applies here.
-          const currentSize = await calculateBundleSize(files);
-          let remainingCapacity = HIVE_LAMBDA_SIZE_BYTES - currentSize;
-
-          if (pythonVersion.major != null && pythonVersion.minor != null) {
-            const appBytecodeInfo = await collectAppBytecodeFiles({
-              workPath,
-              files,
-              pythonMajor: pythonVersion.major,
-              pythonMinor: pythonVersion.minor,
+            console.log('Compiling Python dependency bytecode...');
+            await runCompileAll({
+              pythonBin,
+              filesOrDirectories: sitePackageDirs,
+              env: pythonEnv,
             });
-            remainingCapacity = addBytecodeWithinCapacity(
-              files,
-              appBytecodeInfo,
-              remainingCapacity
-            );
-          }
 
-          const vendorBytecodeInfo = await depExternalizer.collectBytecodeFiles(
-            {
-              vendorDirName: vendorDir,
-            }
-          );
-          await addVendorBytecodeWithinCapacity({
-            files,
-            depExternalizer,
-            vendorDir,
-            bytecodeInfo: vendorBytecodeInfo,
-            capacity: remainingCapacity,
+            compileSpan.setAttributes({
+              'python.compileall.enabled': 'true',
+              'python.compileall.sitePackageDirectoryCount': String(
+                sitePackageDirs.length
+              ),
+            });
           });
+
+        // Fill remaining capacity up to the large-function size limit.
+        const currentSize = await calculateBundleSize(files);
+        let remainingCapacity =
+          MAX_LARGE_FUNCTION_UNCOMPRESSED_SIZE - currentSize;
+
+        if (pythonVersion.major != null && pythonVersion.minor != null) {
+          const appBytecodeInfo = await collectAppBytecodeFiles({
+            workPath,
+            files,
+            pythonMajor: pythonVersion.major,
+            pythonMinor: pythonVersion.minor,
+          });
+          remainingCapacity = addBytecodeWithinCapacity(
+            files,
+            appBytecodeInfo,
+            remainingCapacity
+          );
+        }
+
+        const vendorBytecodeInfo = await depExternalizer.collectBytecodeFiles({
+          vendorDirName: vendorDir,
+        });
+        await addVendorBytecodeWithinCapacity({
+          files,
+          depExternalizer,
+          vendorDir,
+          bytecodeInfo: vendorBytecodeInfo,
+          capacity: remainingCapacity,
+        });
+      };
+
+      if (depAnalysis.runtimeInstallEnabled) {
+        // Pack the zip and defer the rest to runtime install. If it can't fit
+        // Lambda, generateBundle bundles everything for Hive (which then takes
+        // compileall, below).
+        const { fellBackToFullBundle } =
+          await depExternalizer.generateBundle(files);
+        if (fellBackToFullBundle && automaticCompileAllEnabled) {
+          await runCompileAllAndFillBytecode();
+        }
+      } else {
+        // Bundle all deps directly (fits the threshold, or large functions on).
+        addFiles(files, depAnalysis.allVendorFiles);
+        if (automaticCompileAllEnabled) {
+          await runCompileAllAndFillBytecode();
         }
       }
     });
