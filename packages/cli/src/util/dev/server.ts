@@ -53,6 +53,7 @@ import {
   isOfficialRuntime,
   isExperimentalService,
   isExperimentalServiceV2,
+  type ExperimentalService,
   type Service,
 } from '@vercel/fs-detectors';
 import { frameworkList } from '@vercel/frameworks';
@@ -97,6 +98,7 @@ import type { ProjectSettings } from '@vercel-internals/types';
 import { treeKill } from '../tree-kill';
 import { ServicesOrchestrator } from './services-orchestrator';
 import { QueueBroker } from './queue-broker';
+import { getPyprojectSubscriberServices } from './python-subscriber-services';
 import { injectNextDevWebSocketShimIfNeeded } from './next-dev-websocket-shim-injection';
 import { applyOverriddenHeaders, nodeHeadersToFetchHeaders } from './headers';
 import { formatQueryString, parseQueryString } from './parse-query-string';
@@ -202,11 +204,83 @@ export default class DevServer {
   private projectId?: string;
   private orgId?: string;
 
+  // pyproject.toml queue subscribers run as worker services behind the dev queue
+  // broker, alongside the primary web app which stays on the normal dev path.
+  // Tracked separately from `this.services` (explicitly-configured
+  // `experimentalServices`): the web app must NOT be treated as a service, since
+  // `this.services.length > 0` switches the dev server into services mode, which
+  // filters the web app's own build out of what gets served.
+  private subscriberServices: ExperimentalService[] = [];
+
   private shouldUseServicesOrchestrator(): boolean {
     if (!this.services || this.services.length === 0) {
       return false;
     }
     return true;
+  }
+
+  // When pyproject.toml subscribers run, the web app is served on the normal dev
+  // path but must share the workers' managed virtualenv and sync its own
+  // dependencies, mirroring the `meta` the orchestrator passes its services.
+  //
+  // `serviceCount > 0` routes the web app through the multi-service Python runner
+  // so it uses the project's managed `.venv` (the same one the workers create),
+  // instead of any externally activated venv. `pythonServiceCount` is left unset
+  // (defaults to 1): the web app and workers share that single managed venv, so
+  // the "multiple managed venvs vs an activated venv" guardrail must NOT fire —
+  // it would otherwise reject a valid setup where the user simply has a venv
+  // activated.
+  private getQueueWebServiceDevMeta(): {
+    syncDependencies?: boolean;
+    serviceCount?: number;
+  } {
+    if (this.subscriberServices.length === 0) {
+      return {};
+    }
+    return {
+      syncDependencies: true,
+      serviceCount: this.subscriberServices.length,
+    };
+  }
+
+  private async setupPyprojectSubscribers(): Promise<void> {
+    if (this.shouldUseServicesOrchestrator()) {
+      return;
+    }
+
+    const services = await getPyprojectSubscriberServices({
+      buildMatches: this.buildMatches.values(),
+      workPath: this.cwd,
+    });
+    if (services.length === 0) {
+      return;
+    }
+    this.subscriberServices = services;
+
+    // The web app is served on the normal dev path; the subscribers run as
+    // worker services behind the dev queue broker, exactly like queue-triggered
+    // `experimentalServices` workers. Queue producer env for the web app is
+    // injected in `_getVercelConfig` (so it survives every config rebuild); the
+    // orchestrator injects it for the workers themselves via `getV1StartSpec`.
+    this.orchestrator = new ServicesOrchestrator({
+      services,
+      cwd: this.cwd,
+      repoRoot: this.repoRoot,
+      env: this.envConfigs.allEnv,
+      proxyOrigin: this.address.origin,
+      useImplicitEnvInjection: false,
+    });
+    await this.orchestrator.startAll();
+    this.queueBroker = new QueueBroker(services, name =>
+      this.orchestrator!.getServiceOrigin(name)
+    );
+
+    output.log(
+      `Started ${services.length} ${plural(
+        'Python queue subscriber',
+        services.length
+      )}`
+    );
   }
 
   constructor(cwd: string, options: DevServerOptions) {
@@ -810,6 +884,19 @@ export default class DevServer {
       runEnv['VERCEL_REGION'] = 'dev1';
     }
 
+    // Point the web app (the queue producer, served on the normal dev path) at
+    // the local dev queue broker and disable deployment pinning. The subscriber
+    // workers get their own copy from the orchestrator's `getV1StartSpec`. This
+    // lives alongside the other platform-simulation vars so it is re-applied on
+    // every `_getVercelConfig` rebuild rather than as a one-shot mutation that
+    // later rebuilds would drop. Only `runEnv`, since `allEnv` is exposed to the
+    // user dev command.
+    if (this.subscriberServices.length > 0) {
+      runEnv['VERCEL_HAS_WORKER_SERVICES'] = '1';
+      runEnv['VERCEL_QUEUE_BASE_URL'] = `${this.address.origin}/_svc/_queues`;
+      runEnv['VERCEL_QUEUE_TOKEN'] = 'vc-dev-token';
+    }
+
     this.envConfigs = { buildEnv, runEnv, allEnv };
 
     // If the `devCommand` was modified via project settings
@@ -1065,6 +1152,8 @@ export default class DevServer {
 
     await this.updateBuildMatches(vercelConfig, true);
 
+    await this.setupPyprojectSubscribers();
+
     // Builders that do not define a `shouldServe()` function need to be
     // executed at boot-up time in order to get the initial assets and/or routes
     // that can be served by the builder.
@@ -1126,8 +1215,10 @@ export default class DevServer {
         output.debug(
           `Detected "upgrade" event, but no matching service found for ${pathname}`
         );
-        socket.destroy();
-        return;
+        if (this.shouldUseServicesOrchestrator()) {
+          socket.destroy();
+          return;
+        }
       }
 
       if (this.devProcessOrigin) {
@@ -1159,6 +1250,7 @@ export default class DevServer {
                 isDev: true,
                 requestPath: pathname,
                 devCacheDir: this.devCacheDir,
+                ...this.getQueueWebServiceDevMeta(),
                 env: { ...this.envConfigs.runEnv },
                 buildEnv: { ...this.envConfigs.buildEnv },
               },
@@ -1188,7 +1280,7 @@ export default class DevServer {
     await devCommandPromise;
 
     // For multi-service mode, URLs were already printed.
-    if (!this.orchestrator?.hasServices()) {
+    if (!this.shouldUseServicesOrchestrator()) {
       let addressFormatted = this.address.toString();
       if (this.address.pathname === '/' && this.address.protocol === 'http:') {
         // log address without trailing slash to maintain backwards compatibility
@@ -1938,7 +2030,7 @@ export default class DevServer {
     }
 
     // Handle /_svc/_queues/* routes for the dev queue proxy
-    if (callLevel === 0 && this.orchestrator) {
+    if (callLevel === 0 && this.queueBroker) {
       const pathname = parsed.pathname || '/';
       if (pathname.startsWith('/_svc/_queues/')) {
         await this.handleQueuesRoute(req, res, pathname);
@@ -2480,6 +2572,7 @@ export default class DevServer {
             isDev: true,
             requestPath,
             devCacheDir,
+            ...this.getQueueWebServiceDevMeta(),
             env: {
               ...envConfigs.runEnv,
               VERCEL_DEBUG_PREFIX: output.debugEnabled

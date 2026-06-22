@@ -30,6 +30,13 @@ interface ConsumerGroup {
   initialDelayMs: number;
 }
 
+interface DevServiceQueueTopic {
+  topic: string;
+  retryAfterSeconds?: number;
+  initialDelaySeconds?: number;
+  maxDeliveries?: number;
+}
+
 type DeliveryStatus = 'pending' | 'in-flight' | 'acked';
 
 interface DeliveryState {
@@ -85,13 +92,16 @@ export class QueueBroker {
     for (const service of services) {
       if (!isQueueBackedService(service)) continue;
 
-      const topicConfigs = getServiceQueueTopicConfigs(service);
+      const topicConfigs = getServiceQueueTopicConfigs(
+        service
+      ) as DevServiceQueueTopic[];
+      const consumerGroup = service.group || service.name;
       for (const topicConfig of topicConfigs) {
         const topicPattern = topicConfig.topic;
-        const id = `${service.name}::${topicPattern}`;
+        const id = `${consumerGroup}::${topicPattern}`;
         const group: ConsumerGroup = {
           id,
-          name: service.name,
+          name: consumerGroup,
           topicPattern,
           topicRegex: topicPatternToRegex(topicPattern),
           serviceOriginFn: () => this.getServiceOrigin(service.name),
@@ -99,7 +109,7 @@ export class QueueBroker {
             topicConfig.retryAfterSeconds !== undefined
               ? topicConfig.retryAfterSeconds * 1000
               : DEFAULT_RETRY_AFTER,
-          maxDeliveries: DEFAULT_MAX_DELIVERIES,
+          maxDeliveries: topicConfig.maxDeliveries ?? DEFAULT_MAX_DELIVERIES,
           initialDelayMs:
             topicConfig.initialDelaySeconds !== undefined
               ? topicConfig.initialDelaySeconds * 1000
@@ -206,7 +216,9 @@ export class QueueBroker {
       visibilityTimeoutSeconds?: number;
     }
   ): ReceivedMessage[] {
-    const group = this.consumerGroups.find(g => g.name === consumerGroup);
+    const group = this.consumerGroups.find(
+      g => g.name === consumerGroup && g.topicRegex.test(queueName)
+    );
     if (!group) return [];
 
     const groupDeliveries = this.deliveryState.get(group.id);
