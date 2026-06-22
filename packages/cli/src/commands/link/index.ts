@@ -12,12 +12,55 @@ import output from '../../output-manager';
 import { LinkTelemetryClient } from '../../util/telemetry/commands/link';
 import { getCommandAliases } from '..';
 import getScope, { detectExplicitScope } from '../../util/get-scope';
+import { isPromptCanceledError } from '../../util/input/prompt-cancellation';
+import pull from '../env/pull';
+import { resolveProjectCwd } from '../../util/projects/find-project-root';
 
 const COMMAND_CONFIG = {
   add: getCommandAliases(addSubcommand),
 };
 
+async function pullDevelopmentEnvAfterLink(
+  client: Client,
+  cwd: string
+): Promise<number> {
+  const originalCwd = client.cwd;
+  try {
+    client.cwd = await resolveProjectCwd(cwd);
+    const exitCode = await pull(client, ['--yes'], 'vercel-cli:link', {
+      preserveExisting: true,
+    });
+
+    if (exitCode !== 0) {
+      output.error(
+        'Failed to pull environment variables. You can run `vc env pull` manually.'
+      );
+    }
+
+    return exitCode;
+  } catch (_error) {
+    output.error(
+      'Failed to pull environment variables. You can run `vc env pull` manually.'
+    );
+    return 1;
+  } finally {
+    client.cwd = originalCwd;
+  }
+}
+
 export default async function link(client: Client) {
+  try {
+    return await client.withEscapePromptCancellation(() => linkProject(client));
+  } catch (error) {
+    if (isPromptCanceledError(error)) {
+      output.print('  Canceled.\n');
+      return 0;
+    }
+    throw error;
+  }
+}
+
+async function linkProject(client: Client) {
   let parsedArgs = null;
 
   const flagsSpecification = getFlagsSpecification(linkCommand.options);
@@ -65,6 +108,9 @@ export default async function link(client: Client) {
     try {
       await addRepoLink(client, client.cwd, { yes });
     } catch (err) {
+      if (isPromptCanceledError(err)) {
+        throw err;
+      }
       output.prettyError(err);
       return 1;
     }
@@ -116,6 +162,9 @@ export default async function link(client: Client) {
     try {
       await ensureRepoLink(client, cwd, { yes, overwrite: true });
     } catch (err) {
+      if (isPromptCanceledError(err)) {
+        throw err;
+      }
       output.prettyError(err);
       return 1;
     }
@@ -136,11 +185,14 @@ export default async function link(client: Client) {
       successEmoji: 'success',
       nonInteractive: linkNonInteractive,
       searchAcrossTeams: !explicitScopeProvided,
+      pullEnv: false,
     });
 
     if (typeof link === 'number') {
       return link;
     }
+
+    return await pullDevelopmentEnvAfterLink(client, cwd);
   }
 
   return 0;

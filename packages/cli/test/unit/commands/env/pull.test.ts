@@ -3,13 +3,16 @@ import fs from 'fs-extra';
 import path from 'path';
 import { parse } from 'dotenv';
 import env from '../../../../src/commands/env';
-import { getAcrValuesFromWWWAuthenticate } from '../../../../src/commands/env/pull';
+import pull, {
+  getAcrValuesFromWWWAuthenticate,
+} from '../../../../src/commands/env/pull';
 import { setupUnitFixture } from '../../../helpers/setup-unit-fixture';
 import { client } from '../../../mocks/client';
 import { defaultProject, envs, useProject } from '../../../mocks/project';
 import { useTeams } from '../../../mocks/team';
 import { useUser } from '../../../mocks/user';
 import { performDeviceCodeFlow } from '../../../../src/commands/login/future';
+import { VERCEL_OIDC_TOKEN } from '../../../../src/util/env/constants';
 
 vi.mock('../../../../src/commands/login/future', async importOriginal => ({
   ...(await importOriginal<
@@ -113,6 +116,95 @@ describe('env pull', () => {
         value: 'TRUE',
       },
     ]);
+  });
+
+  it('uses a managed block for new link-origin pulls', async () => {
+    useUser();
+    useTeams('team_dummy');
+    useProject({
+      ...defaultProject,
+      id: 'vercel-env-pull',
+      name: 'vercel-env-pull',
+    });
+    const cwd = setupUnitFixture('vercel-env-pull');
+    client.cwd = cwd;
+
+    await expect(
+      pull(client, ['--yes'], 'vercel-cli:link', { preserveExisting: true })
+    ).resolves.toEqual(0);
+
+    let contents = await fs.readFile(path.join(cwd, '.env.local'), 'utf8');
+    expect(contents).toContain('# Vercel CLI environment variables');
+    expect(contents.match(/^SPECIAL_FLAG=/gm)).toHaveLength(1);
+
+    await expect(
+      pull(client, ['--yes'], 'vercel-cli:link', { preserveExisting: true })
+    ).resolves.toEqual(0);
+
+    contents = await fs.readFile(path.join(cwd, '.env.local'), 'utf8');
+    expect(contents.match(/# Vercel CLI environment variables/g)).toHaveLength(
+      1
+    );
+    expect(contents.match(/^SPECIAL_FLAG=/gm)).toHaveLength(1);
+  });
+
+  it('preserves local variables and refreshes OIDC for link-origin pulls', async () => {
+    const project = {
+      ...defaultProject,
+      id: 'vercel-env-pull',
+      name: 'vercel-env-pull',
+    };
+    let pullCount = 0;
+
+    useUser();
+    useTeams('team_dummy');
+    client.scenario.get(
+      `/v3/env/pull/${project.id}/:target?/:gitBranch?`,
+      (_req, res) => {
+        pullCount += 1;
+        res.json({
+          env: {
+            SPECIAL_FLAG: '1',
+            [VERCEL_OIDC_TOKEN]: `fresh-token-${pullCount}`,
+          },
+        });
+      }
+    );
+    useProject(project);
+
+    const cwd = setupUnitFixture('vercel-env-pull');
+    await fs.writeFile(
+      path.join(cwd, '.env.local'),
+      'LOCAL_ONLY=value\nSPECIAL_FLAG=local-value\nVERCEL_OIDC_TOKEN=stale-token\n',
+      'utf8'
+    );
+    client.cwd = cwd;
+
+    await expect(
+      pull(client, ['--yes'], 'vercel-cli:link', { preserveExisting: true })
+    ).resolves.toEqual(0);
+
+    let contents = await fs.readFile(path.join(cwd, '.env.local'), 'utf8');
+    expect(contents).toContain('LOCAL_ONLY=value');
+    expect(contents).toContain('SPECIAL_FLAG=local-value');
+    expect(contents.match(/^SPECIAL_FLAG=/gm)).toHaveLength(1);
+    expect(contents).not.toContain('stale-token');
+    expect(contents).toContain('VERCEL_OIDC_TOKEN="fresh-token-1"');
+    expect(contents.match(/^VERCEL_OIDC_TOKEN=/gm)).toHaveLength(1);
+    expect(contents).toContain('# Vercel CLI environment variables');
+
+    await expect(
+      pull(client, ['--yes'], 'vercel-cli:link', { preserveExisting: true })
+    ).resolves.toEqual(0);
+
+    contents = await fs.readFile(path.join(cwd, '.env.local'), 'utf8');
+    expect(contents.match(/# Vercel CLI environment variables/g)).toHaveLength(
+      1
+    );
+    expect(contents.match(/^SPECIAL_FLAG=/gm)).toHaveLength(1);
+    expect(contents).not.toContain('fresh-token-1');
+    expect(contents).toContain('VERCEL_OIDC_TOKEN="fresh-token-2"');
+    expect(contents.match(/^VERCEL_OIDC_TOKEN=/gm)).toHaveLength(1);
   });
 
   it('should retry after fresh authentication when sensitive env vars require a challenge', async () => {

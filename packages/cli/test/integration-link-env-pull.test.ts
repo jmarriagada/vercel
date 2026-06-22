@@ -78,7 +78,7 @@ test('[vc link] should skip env pull prompt when creating new project', async ()
   );
 });
 
-test('[vc link] should not create .env.local when linking new project', async () => {
+test('[vc link] should create .env.local when linking new project', async () => {
   const dir = await setupE2EFixture('project-link-gitignore');
   const projectName = `link-env-decline-${Math.random().toString(36).split('.')[1]}`;
 
@@ -120,7 +120,7 @@ test('[vc link] should not create .env.local when linking new project', async ()
     true
   );
 
-  expect(await fs.pathExists(path.join(dir, '.env.local'))).toBe(false);
+  expect(await fs.pathExists(path.join(dir, '.env.local'))).toBe(true);
 });
 
 test('[vc link] should work with --yes flag and auto-confirm all prompts', async () => {
@@ -146,4 +146,5 @@ test('[vc link] should work with --yes flag and auto-confirm all prompts', async
   expect(await fs.pathExists(path.join(dir, '.vercel/project.json'))).toBe(
     true
   );
+  expect(await fs.pathExists(path.join(dir, '.env.local'))).toBe(true);
 });

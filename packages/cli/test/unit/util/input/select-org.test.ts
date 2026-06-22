@@ -40,6 +40,54 @@ describe('selectOrg', () => {
       expect(fullOutput).toContain('Loading teams');
     });
 
+    it('searches teams by a name fragment', async () => {
+      const playground = createTeam(
+        'team_playground',
+        'internal-playground',
+        'Internal Playground'
+      );
+      const selectOrgPromise = selectOrg(
+        client,
+        'Select the scope',
+        false,
+        true
+      );
+
+      await expect(client.stderr).toOutput('Select the scope');
+      client.stdin.write('playground');
+      await expect(client.stderr).toOutput(playground.name);
+      client.stdin.write('\r'); // Return key
+
+      await expect(selectOrgPromise).resolves.toHaveProperty(
+        'id',
+        playground.id
+      );
+    });
+
+    it('searches teams by slug', async () => {
+      const playground = createTeam(
+        'team_playground',
+        'internal-playground',
+        'Internal Playground'
+      );
+      const selectOrgPromise = selectOrg(
+        client,
+        'Select the scope',
+        false,
+        true
+      );
+
+      await expect(client.stderr).toOutput('Select the scope');
+      client.stdin.write(playground.slug);
+      await expect(client.stderr).toOutput(playground.name);
+      client.stdin.write('\r'); // Return key
+
+      await expect(selectOrgPromise).resolves.toHaveProperty(
+        'id',
+        playground.id
+      );
+    });
+
     it('automatically selects the correct scope when autoconfirm flag is passed', async () => {
       const selectOrgPromise = selectOrg(client, 'Select the scope', true);
       await expect(selectOrgPromise).resolves.toHaveProperty('id', user.id);

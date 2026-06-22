@@ -1,5 +1,6 @@
 import chalk from 'chalk';
-import { outputFile } from 'fs-extra';
+import { parse as parseDotenv } from 'dotenv';
+import { outputFile, readFile } from 'fs-extra';
 import { closeSync, openSync, readSync } from 'fs';
 import { resolve } from 'path';
 import type Client from '../../util/client';
@@ -13,6 +14,7 @@ import {
   buildDeltaString,
   createEnvObject,
 } from '../../util/env/diff-env-files';
+import { VERCEL_OIDC_TOKEN } from '../../util/env/constants';
 import { isErrnoException } from '@vercel/error-utils';
 import { addToGitIgnore } from '../../util/link/add-to-gitignore';
 import JSONparse from 'json-parse-better-errors';
@@ -37,6 +39,12 @@ import {
 import { printAlignedLabel } from '../../util/output/print-aligned-label';
 
 const CONTENTS_PREFIX = '# Created by Vercel CLI\n';
+const LINK_ENV_BLOCK_PREFIX = '# Vercel CLI environment variables\n';
+const LINK_ENV_BLOCK_SUFFIX = '# End Vercel CLI environment variables\n';
+
+export interface EnvPullOptions {
+  preserveExisting?: boolean;
+}
 
 function readHeadSync(path: string, length: number) {
   const buffer = Buffer.alloc(length);
@@ -74,7 +82,8 @@ const VARIABLES_TO_IGNORE = [
 export default async function pull(
   client: Client,
   argv: string[],
-  source: EnvRecordsSource = 'vercel-cli:env:pull'
+  source: EnvRecordsSource = 'vercel-cli:env:pull',
+  options: EnvPullOptions = {}
 ) {
   const telemetryClient = new EnvPullTelemetryClient({
     opts: {
@@ -168,7 +177,8 @@ export default async function pull(
     gitBranch,
     client.cwd,
     source,
-    deploymentId
+    deploymentId,
+    options
   );
 
   return 0;
@@ -183,15 +193,16 @@ export async function envPullCommandLogic(
   gitBranch: string | undefined,
   cwd: string,
   source: EnvRecordsSource,
-  deploymentId?: string
+  deploymentId?: string,
+  { preserveExisting = false }: EnvPullOptions = {}
 ) {
   const fullPath = resolve(cwd, filename);
   const head = tryReadHeadSync(fullPath, Buffer.byteLength(CONTENTS_PREFIX));
   const exists = typeof head !== 'undefined';
 
-  if (head === CONTENTS_PREFIX) {
+  if (head === CONTENTS_PREFIX && !preserveExisting) {
     output.log(`Overwriting existing ${chalk.bold(filename)} file`);
-  } else if (exists && !skipConfirmation) {
+  } else if (exists && !skipConfirmation && !preserveExisting) {
     if (client.nonInteractive) {
       outputActionRequired(client, {
         status: 'action_required',
@@ -249,7 +260,7 @@ export async function envPullCommandLogic(
 
   let deltaString = '';
   let oldEnv;
-  if (exists) {
+  if (exists && !preserveExisting) {
     oldEnv = await createEnvObject(fullPath);
     if (oldEnv) {
       // Removes any double quotes from `records`, if they exist
@@ -261,16 +272,38 @@ export async function envPullCommandLogic(
     }
   }
 
+  let existingContents =
+    preserveExisting && exists ? await readFile(fullPath, 'utf8') : undefined;
+
+  if (existingContents && VERCEL_OIDC_TOKEN in records) {
+    // OIDC is short-lived and managed by the CLI, so always refresh it.
+    existingContents = removeEnvAssignment(existingContents, VERCEL_OIDC_TOKEN);
+  }
+
+  const localEnvKeys = existingContents
+    ? new Set(
+        Object.keys(parseDotenv(getUserManagedEnvContents(existingContents)))
+      )
+    : new Set<string>();
+
   const contents =
     CONTENTS_PREFIX +
     Object.keys(records)
       .sort()
-      .filter(key => !VARIABLES_TO_IGNORE.includes(key))
+      .filter(
+        key =>
+          !VARIABLES_TO_IGNORE.includes(key) &&
+          (key === VERCEL_OIDC_TOKEN || !localEnvKeys.has(key))
+      )
       .map(key => `${key}="${escapeValue(records[key])}"`)
       .join('\n') +
     '\n';
 
-  await outputFile(fullPath, contents, 'utf8');
+  const outputContents = preserveExisting
+    ? mergeLinkEnvContents(existingContents ?? '', contents)
+    : contents;
+
+  await outputFile(fullPath, outputContents, 'utf8');
 
   if (deltaString) {
     output.print('\n' + deltaString);
@@ -295,6 +328,53 @@ export async function envPullCommandLogic(
     `${filename} file${isGitIgnoreUpdated ? ' and added it to .gitignore' : ''}`,
     { gutter: '✓' }
   );
+}
+
+function mergeLinkEnvContents(existing: string, pulled: string): string {
+  const block = `${LINK_ENV_BLOCK_PREFIX}${pulled}${LINK_ENV_BLOCK_SUFFIX}`;
+  const blockStart = existing.indexOf(LINK_ENV_BLOCK_PREFIX);
+
+  if (blockStart !== -1) {
+    const blockEnd = existing.indexOf(LINK_ENV_BLOCK_SUFFIX, blockStart);
+    if (blockEnd !== -1) {
+      return (
+        existing.slice(0, blockStart) +
+        block +
+        existing.slice(blockEnd + LINK_ENV_BLOCK_SUFFIX.length)
+      );
+    }
+  }
+
+  const separator =
+    existing.length === 0 ? '' : existing.endsWith('\n') ? '\n' : '\n\n';
+  return `${existing}${separator}${block}`;
+}
+
+function getUserManagedEnvContents(existing: string): string {
+  const blockStart = existing.indexOf(LINK_ENV_BLOCK_PREFIX);
+  if (blockStart === -1) {
+    return existing;
+  }
+
+  const blockEnd = existing.indexOf(LINK_ENV_BLOCK_SUFFIX, blockStart);
+  if (blockEnd === -1) {
+    return existing;
+  }
+
+  return (
+    existing.slice(0, blockStart) +
+    existing.slice(blockEnd + LINK_ENV_BLOCK_SUFFIX.length)
+  );
+}
+
+function removeEnvAssignment(contents: string, key: string): string {
+  const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const assignment = new RegExp(
+    `^[\\t ]*(?:export[\\t ]+)?${escapedKey}[\\t ]*=[^\\r\\n]*(?:\\r?\\n|$)`,
+    'gm'
+  );
+
+  return contents.replace(assignment, '');
 }
 
 async function pullEnvRecordsForEnvPull(

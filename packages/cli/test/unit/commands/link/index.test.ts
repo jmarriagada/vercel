@@ -697,7 +697,8 @@ describe('link', () => {
       expect(mockPull).toHaveBeenCalledWith(
         expect.objectContaining({ cwd }),
         ['--yes'],
-        'vercel-cli:link'
+        'vercel-cli:link',
+        { preserveExisting: true }
       );
     });
 
@@ -824,6 +825,48 @@ describe('link', () => {
     });
   });
 
+  describe('prompt cancellation', () => {
+    it('cancels with Escape before linking', async () => {
+      const cwd = setupTmpDir();
+      useUser({ version: 'northstar' });
+      useTeams('team_dummy');
+      useUnknownProject();
+
+      client.cwd = cwd;
+      const exitCodePromise = link(client);
+
+      await expect(client.stderr).toOutput('Which team?');
+      client.events.keypress('escape');
+
+      await expect(exitCodePromise).resolves.toEqual(0);
+      await expect(client.stderr).toOutput('Canceled.');
+      expect(await pathExists(join(cwd, '.vercel/project.json'))).toBe(false);
+    });
+
+    it('cancels with Escape from the project name prompt without linking', async () => {
+      const cwd = setupTmpDir();
+      useUser({ version: 'northstar' });
+      useTeams('team_dummy');
+      useUnknownProject();
+
+      client.cwd = cwd;
+      const exitCodePromise = link(client);
+
+      await expect(client.stderr).toOutput('Which team?');
+      client.stdin.write('\n');
+
+      await expect(client.stderr).toOutput('Project?');
+      client.stdin.write('\n');
+
+      await expect(client.stderr).toOutput('Name?');
+      client.events.keypress('escape');
+
+      await expect(exitCodePromise).resolves.toEqual(0);
+      await expect(client.stderr).toOutput('Canceled.');
+      expect(await pathExists(join(cwd, '.vercel/project.json'))).toBe(false);
+    });
+  });
+
   describe('--confirm', () => {
     it('should track use of `--confirm` flag', async () => {
       useUser();
@@ -880,11 +923,6 @@ describe('link', () => {
       /^\s{0,2}Config\s+\.vercel\/project\.json/m
     );
 
-    await expect(client.stderr).toOutput(
-      'Pull development environment variables into .env.local?'
-    );
-    client.stdin.write('n\n');
-
     const exitCode = await exitCodePromise;
     expect(exitCode, 'exit code for "link"').toEqual(0);
     const plainOutput = stripAnsi(client.stderr.getFullOutput());
@@ -892,8 +930,8 @@ describe('link', () => {
       /^\s{0,2}Directory\s+.+\n\nSearching for existing projects…\n\n\s{0,2}Found existing project/m
     );
     expect(plainOutput).toMatch(/Link directory to project\?.*\n\n✓ Linked\s+/);
-    expect(plainOutput).toMatch(
-      /✓ Linked\s+.+\n\n\? Pull development environment variables into \.env\.local\?/
+    expect(plainOutput).not.toContain(
+      'Pull development environment variables into .env.local?'
     );
     expectLinkRowsUseExpectedGlyphs(client.stderr.getFullOutput(), [
       'Directory',
@@ -1593,11 +1631,6 @@ describe('link', () => {
         `✓ Linked          ${team.slug}/${project.name}`
       );
 
-      await expect(client.stderr).toOutput(
-        'Pull development environment variables into .env.local?'
-      );
-      client.stdin.write('n\n');
-
       const exitCode = await exitCodePromise;
       selectSpy.mockRestore();
 
@@ -1614,8 +1647,8 @@ describe('link', () => {
     });
   });
 
-  describe('environment variable pull prompt', () => {
-    it('should prompt to pull environment variables after successful linking', async () => {
+  describe('environment variable pull', () => {
+    it('pulls environment variables automatically after successful linking', async () => {
       useUser({ version: 'northstar' });
       const cwd = setupTmpDir();
       const [team] = useTeams('team_dummy') as Team[];
@@ -1637,58 +1670,22 @@ describe('link', () => {
       await expect(client.stderr).toOutput(
         `✓ Linked          ${team.slug}/${project.name}`
       );
-
-      await expect(client.stderr).toOutput(
-        'Pull development environment variables into .env.local?'
-      );
-      client.stdin.write('y\n');
 
       const exitCode = await exitCodePromise;
       expect(exitCode).toEqual(0);
 
       expect(mockPull).toHaveBeenCalledWith(
         expect.objectContaining({ cwd }),
-        [],
-        'vercel-cli:link'
+        ['--yes'],
+        'vercel-cli:link',
+        { preserveExisting: true }
       );
-    });
-
-    it('should not call env pull when user declines the prompt', async () => {
-      useUser({ version: 'northstar' });
-      const cwd = setupTmpDir();
-      const [team] = useTeams('team_dummy') as Team[];
-      const { project } = useProject({
-        ...defaultProject,
-        id: basename(cwd),
-        name: basename(cwd),
-      });
-      useUnknownProject();
-
-      client.cwd = cwd;
-      client.setArgv('--project', project.name!);
-      const exitCodePromise = link(client);
-
-      await expect(client.stderr).toOutput('Directory');
-      await expect(client.stderr).toOutput('Link directory to project?');
-      client.stdin.write('y\n');
-
-      await expect(client.stderr).toOutput(
-        `✓ Linked          ${team.slug}/${project.name}`
-      );
-
-      await expect(client.stderr).toOutput(
+      expect(client.stderr.getFullOutput()).not.toContain(
         'Pull development environment variables into .env.local?'
       );
-      client.stdin.write('n\n');
-
-      const exitCode = await exitCodePromise;
-      expect(exitCode).toEqual(0);
-
-      // Verify env pull was NOT called
-      expect(mockPull).not.toHaveBeenCalled();
     });
 
-    it('should handle env pull failure gracefully', async () => {
+    it('fails when the required environment pull fails', async () => {
       useUser({ version: 'northstar' });
       const cwd = setupTmpDir();
       const [team] = useTeams('team_dummy') as Team[];
@@ -1715,145 +1712,21 @@ describe('link', () => {
       );
 
       await expect(client.stderr).toOutput(
-        'Pull development environment variables into .env.local?'
-      );
-      client.stdin.write('y\n');
-
-      await expect(client.stderr).toOutput(
         'Failed to pull environment variables. You can run `vc env pull` manually.'
       );
 
       const exitCode = await exitCodePromise;
-      expect(exitCode).toEqual(0); // Link should still succeed even if env pull fails
+      expect(exitCode).toEqual(1);
 
       expect(mockPull).toHaveBeenCalledWith(
         expect.objectContaining({ cwd }),
-        [],
-        'vercel-cli:link'
+        ['--yes'],
+        'vercel-cli:link',
+        { preserveExisting: true }
       );
     });
 
-    it('should handle env pull command throwing an error', async () => {
-      useUser({ version: 'northstar' });
-      const cwd = setupTmpDir();
-      const [team] = useTeams('team_dummy') as Team[];
-      const { project } = useProject({
-        ...defaultProject,
-        id: basename(cwd),
-        name: basename(cwd),
-      });
-      useUnknownProject();
-
-      // Mock env pull to throw an error
-      mockPull.mockRejectedValue(new Error('Network error'));
-
-      client.cwd = cwd;
-      client.setArgv('--project', project.name!);
-      const exitCodePromise = link(client);
-
-      await expect(client.stderr).toOutput('Directory');
-      await expect(client.stderr).toOutput('Link directory to project?');
-      client.stdin.write('y\n');
-
-      await expect(client.stderr).toOutput(
-        `✓ Linked          ${team.slug}/${project.name}`
-      );
-
-      await expect(client.stderr).toOutput(
-        'Pull development environment variables into .env.local?'
-      );
-      client.stdin.write('y\n');
-
-      await expect(client.stderr).toOutput(
-        'Failed to pull environment variables. You can run `vc env pull` manually.'
-      );
-
-      const exitCode = await exitCodePromise;
-      expect(exitCode).toEqual(0); // Link should still succeed even if env pull throws
-
-      expect(mockPull).toHaveBeenCalledWith(
-        expect.objectContaining({ cwd }),
-        [],
-        'vercel-cli:link'
-      );
-    });
-
-    it('should pass empty args to env pull when link command does not use --yes', async () => {
-      useUser({ version: 'northstar' });
-      const cwd = setupTmpDir();
-      const [team] = useTeams('team_dummy') as Team[];
-      const { project } = useProject({
-        ...defaultProject,
-        id: basename(cwd),
-        name: basename(cwd),
-      });
-      useUnknownProject();
-
-      client.cwd = cwd;
-      client.setArgv('--project', project.name!);
-      const exitCodePromise = link(client);
-
-      await expect(client.stderr).toOutput('Directory');
-      await expect(client.stderr).toOutput('Link directory to project?');
-      client.stdin.write('y\n');
-
-      await expect(client.stderr).toOutput(
-        `✓ Linked          ${team.slug}/${project.name}`
-      );
-
-      await expect(client.stderr).toOutput(
-        'Pull development environment variables into .env.local?'
-      );
-      client.stdin.write('y\n');
-
-      const exitCode = await exitCodePromise;
-      expect(exitCode).toEqual(0);
-
-      // Verify env pull was called with empty args since link didn't use --yes
-      expect(mockPull).toHaveBeenCalledWith(
-        expect.objectContaining({ cwd }),
-        [],
-        'vercel-cli:link'
-      );
-    });
-
-    it('should restore client.cwd after env pull completes', async () => {
-      useUser({ version: 'northstar' });
-      const cwd = setupTmpDir();
-      const [team] = useTeams('team_dummy') as Team[];
-      const { project } = useProject({
-        ...defaultProject,
-        id: basename(cwd),
-        name: basename(cwd),
-      });
-      useUnknownProject();
-
-      client.cwd = cwd;
-      const originalCwd = client.cwd;
-      client.setArgv('--project', project.name!);
-      const exitCodePromise = link(client);
-
-      await expect(client.stderr).toOutput('Directory');
-      await expect(client.stderr).toOutput('Link directory to project?');
-      client.stdin.write('y\n');
-
-      await expect(client.stderr).toOutput(
-        `✓ Linked          ${team.slug}/${project.name}`
-      );
-
-      await expect(client.stderr).toOutput(
-        'Pull development environment variables into .env.local?'
-      );
-      client.stdin.write('y\n');
-
-      const exitCode = await exitCodePromise;
-      expect(exitCode).toEqual(0);
-
-      // Verify client.cwd is restored to original value after env pull
-      expect(client.cwd).toEqual(originalCwd);
-    });
-
-    it('should restore client.cwd even when env pull throws exception', async () => {
+    it('restores the working directory when the required pull throws', async () => {
       useUser({ version: 'northstar' });
       const cwd = setupTmpDir();
       const [team] = useTeams('team_dummy') as Team[];
@@ -1882,18 +1755,12 @@ describe('link', () => {
       );
 
       await expect(client.stderr).toOutput(
-        'Pull development environment variables into .env.local?'
-      );
-      client.stdin.write('y\n');
-
-      await expect(client.stderr).toOutput(
         'Failed to pull environment variables. You can run `vc env pull` manually.'
       );
 
       const exitCode = await exitCodePromise;
-      expect(exitCode).toEqual(0);
+      expect(exitCode).toEqual(1);
 
-      // Verify client.cwd is restored even when env pull throws
       expect(client.cwd).toEqual(originalCwd);
     });
   });
@@ -1944,11 +1811,6 @@ describe('link', () => {
         `✓ Linked          ${team.slug}/${project.name}`
       );
 
-      await expect(client.stderr).toOutput(
-        'Pull development environment variables into .env.local?'
-      );
-      client.stdin.write('n\n');
-
       const exitCode = await exitCodePromise;
       expect(exitCode, 'exit code for "link"').toEqual(0);
 
@@ -1962,11 +1824,26 @@ describe('link', () => {
       useUser({ version: 'northstar' });
       const cwd = setupTmpDir();
       const [team] = useTeams('team_dummy') as Team[];
-      const { project } = useProject({
+      const project = {
         ...defaultProject,
         id: basename(cwd),
         name: basename(cwd),
+      };
+      let searchedProjectName: string | undefined;
+      let searchedTeamId: string | undefined;
+      client.scenario.get('/v9/projects', (req, res) => {
+        if (typeof req.query.search === 'string') {
+          searchedProjectName = req.query.search;
+          searchedTeamId = req.query.teamId as string | undefined;
+          return res.json({ projects: [project], pagination: {} });
+        }
+
+        return res.json({
+          projects: [project],
+          pagination: { count: 101, next: 1 },
+        });
       });
+      useProject(project);
       useUnknownProject();
 
       client.cwd = cwd;
@@ -1986,35 +1863,54 @@ describe('link', () => {
       await expect(client.stderr).toOutput('Project?');
       client.stdin.write('\n');
 
-      // Mock pagination returns {}, so hasMoreProjects is true → text input
-      await expect(client.stderr).toOutput('Existing project name?');
-      client.stdin.write(`${basename(cwd)}\n`);
+      await expect(client.stderr).toOutput('Search existing project');
+      for (let i = 0; i < project.name!.length; i++) {
+        client.stdin.write(project.name![i]);
+        await vi.waitFor(() => {
+          expect(searchedProjectName).toEqual(project.name!.slice(0, i + 1));
+        });
+      }
+      await expect(client.stderr).toOutput(project.name!);
+      client.stdin.write('\n');
 
       await expect(client.stderr).toOutput(
         `✓ Linked          ${team.slug}/${project.name}`
       );
 
-      await expect(client.stderr).toOutput(
-        'Pull development environment variables into .env.local?'
-      );
-      client.stdin.write('n\n');
-
       const exitCode = await exitCodePromise;
       expect(exitCode).toEqual(0);
+      expect(searchedProjectName).toEqual(project.name);
+      expect(searchedTeamId).toEqual(team.id);
+      expect(client.stderr.getFullOutput()).not.toContain(
+        'Existing project name?'
+      );
     });
 
-    it('should fall through to selectOrg when no project found across teams', async () => {
+    it('should search teams after selected SSO teams have no project match', async () => {
       useUser({ version: 'northstar' });
       const cwd = setupTmpDir();
       useTeams('team_dummy');
+      const playground = createTeam(
+        'team_playground',
+        'internal-playground',
+        'Internal Playground'
+      );
+      (playground as Team & { limited?: boolean }).limited = true;
       useUnknownProject();
 
       client.cwd = cwd;
       const exitCodePromise = link(client);
 
       await expect(client.stderr).toOutput('Directory');
-      // No match found during cross-team search, should go to selectOrg
+      await expect(client.stderr).toOutput('Select teams that require SSO');
+      client.stdin.write(' \n');
+
+      await expect(client.stderr).toOutput(
+        'No matching projects found in the selected teams.'
+      );
       await expect(client.stderr).toOutput('Which team?');
+      client.stdin.write('playground');
+      await expect(client.stderr).toOutput(playground.name);
       client.stdin.write('\n');
 
       // inputProject runs auto-detect (skipAutoDetect=false), finds nothing
@@ -2037,6 +1933,9 @@ describe('link', () => {
 
       const exitCode = await exitCodePromise;
       expect(exitCode).toEqual(0);
+
+      const projectJson = await readJSON(join(cwd, '.vercel/project.json'));
+      expect(projectJson.orgId).toEqual(playground.id);
     });
 
     it('should only search the explicit scope when --scope is provided', async () => {
@@ -2247,10 +2146,6 @@ describe('link', () => {
       await expect(client.stderr).toOutput(
         `✓ Linked          ${teamA.slug}/${projectA.name}`
       );
-      await expect(client.stderr).toOutput(
-        'Pull development environment variables into .env.local?'
-      );
-      client.stdin.write('n\n');
 
       const exitCode = await exitCodePromise;
       expect(exitCode).toEqual(0);
@@ -2398,10 +2293,6 @@ describe('link', () => {
       await expect(client.stderr).toOutput(
         `✓ Linked          ${teamA.slug}/${expectedProject.name}`
       );
-      await expect(client.stderr).toOutput(
-        'Pull development environment variables into .env.local?'
-      );
-      client.stdin.write('n\n');
 
       const exitCode = await exitCodePromise;
       expect(exitCode).toEqual(0);
@@ -2473,10 +2364,6 @@ describe('link', () => {
       await expect(client.stderr).toOutput(
         `✓ Linked          ${teamA.slug}/${repoProject.name}`
       );
-      await expect(client.stderr).toOutput(
-        'Pull development environment variables into .env.local?'
-      );
-      client.stdin.write('n\n');
 
       const exitCode = await exitCodePromise;
       expect(exitCode).toEqual(0);
@@ -2527,10 +2414,6 @@ describe('link', () => {
       await expect(client.stderr).toOutput(
         `✓ Linked          ${limitedTeam.slug}/${limitedProject.name}`
       );
-      await expect(client.stderr).toOutput(
-        'Pull development environment variables into .env.local?'
-      );
-      client.stdin.write('n\n');
 
       const exitCode = await exitCodePromise;
       expect(exitCode).toEqual(0);
@@ -2698,11 +2581,6 @@ describe('link', () => {
 
         await expect(client.stderr).toOutput('✓ Linked          ');
 
-        await expect(client.stderr).toOutput(
-          'Pull development environment variables into .env.local?'
-        );
-        client.stdin.write('n\n');
-
         const exitCode = await exitCodePromise;
         expect(exitCode).toEqual(0);
 
@@ -2751,11 +2629,6 @@ describe('link', () => {
         client.stdin.write('\n');
 
         await expect(client.stderr).toOutput('✓ Linked          ');
-
-        await expect(client.stderr).toOutput(
-          'Pull development environment variables into .env.local?'
-        );
-        client.stdin.write('n\n');
 
         const exitCode = await exitCodePromise;
         expect(exitCode).toEqual(0);

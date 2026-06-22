@@ -26,6 +26,7 @@ import output from '../../output-manager';
 import { printAlignedLabel } from '../output/print-aligned-label';
 import pull from '../../commands/env/pull';
 import { resolveProjectCwd } from './find-project-root';
+import { isPromptCanceledError } from '../input/prompt-cancellation';
 
 const readFile = promisify(fs.readFile);
 const writeFile = promisify(fs.writeFile);
@@ -494,10 +495,14 @@ export async function linkFolderToProject(
 
   const pullEnvConfirmed =
     autoConfirm ||
-    (await client.input.confirm(
-      'Pull development environment variables into .env.local?',
-      true
-    ));
+    (await client.input
+      .confirm('Pull development environment variables into .env.local?', true)
+      .catch(error => {
+        if (isPromptCanceledError(error)) {
+          return false;
+        }
+        throw error;
+      }));
 
   if (pullEnvConfirmed) {
     const originalCwd = client.cwd;
