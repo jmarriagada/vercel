@@ -4,7 +4,7 @@ import {
   downloadFile,
   isExperimentalService,
   type Config,
-  type DeployManifestService,
+  type DeployManifestBuild,
   type Files,
   type PackageManifest,
   type Service,
@@ -26,7 +26,7 @@ export async function writeManifests(
   if (packageManifests.length === 0) return;
 
   const projectManifest: Record<string, unknown> = {};
-  const deployManifestServices: Record<string, DeployManifestService> = {};
+  const deployManifestBuilds: Record<string, DeployManifestBuild> = {};
 
   for (const {
     workspace,
@@ -49,7 +49,7 @@ export async function writeManifests(
           ? service.routePrefix
           : undefined,
     };
-    deployManifestServices[key] = {
+    deployManifestBuilds[key] = {
       ...(manifest as unknown as PackageManifest),
       root: workspace,
       builder: builderUse,
@@ -75,7 +75,7 @@ export async function writeManifests(
   const deployManifestBlob = new FileBlob({
     data: JSON.stringify({
       manifestVersion: '2.0',
-      services: deployManifestServices,
+      builds: deployManifestBuilds,
     }),
   });
   diagnostics['deploy-manifest.json'] = deployManifestBlob;
