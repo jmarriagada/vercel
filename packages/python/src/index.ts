@@ -1047,11 +1047,11 @@ export const build: BuildVX = async ({
       });
 
       if (depAnalysis.runtimeInstallEnabled) {
-        // >245 MB source-only: the lambda zip is packed full with source
+        // >225 MB source-only: the lambda zip is packed full with source
         // packages via knapsack.  No room for bytecode.
         await depExternalizer.generateBundle(files);
       } else {
-        // ≤245 MB source-only: bundle all dependencies.
+        // ≤225 MB source-only: bundle all dependencies.
         addFiles(files, depAnalysis.allVendorFiles);
 
         // Precompile bytecode and fill remaining Lambda capacity.

@@ -62,7 +62,7 @@ function shouldStripVendorFile(filePath: string): boolean {
 // AWS Lambda uncompressed size limit is 250MB, but we use 245MB to leave room
 // for the standard Lambda layers (rusty runtime, lambdawrapper). When the
 // OpenTelemetry collector layer is also attached, we reserve an additional 5MB.
-const LAMBDA_BASE_SIZE_THRESHOLD_BYTES = 245 * 1024 * 1024;
+const LAMBDA_BASE_SIZE_THRESHOLD_BYTES = 225 * 1024 * 1024;
 const OTEL_LAYER_RESERVATION_BYTES = 5 * 1024 * 1024;
 
 export const LAMBDA_SIZE_THRESHOLD_BYTES =
@@ -570,7 +570,7 @@ export class PythonDependencyExternalizer {
     // are included in the bundle, which can push total size over the threshold.
     // Allow 100 KB of tolerance for rounding and estimation discrepancies in the
     // knapsack capacity budget.  The actual AWS Lambda limit is 250 MB and we
-    // target 245 MB, so a slight overshoot here is safe.
+    // target 225 MB, so a slight overshoot here is safe.
     const finalBundleSize = await calculateBundleSize(files);
     if (finalBundleSize > LAMBDA_SIZE_THRESHOLD_BYTES + 100 * 1024) {
       const finalSizeMB = (finalBundleSize / (1024 * 1024)).toFixed(2);
