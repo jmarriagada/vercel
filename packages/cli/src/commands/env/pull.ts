@@ -1,4 +1,5 @@
 import chalk from 'chalk';
+import { parse as parseDotenv } from 'dotenv';
 import { outputFile, readFile } from 'fs-extra';
 import { closeSync, openSync, readSync } from 'fs';
 import { resolve } from 'path';
@@ -13,6 +14,7 @@ import {
   buildDeltaString,
   createEnvObject,
 } from '../../util/env/diff-env-files';
+import { VERCEL_OIDC_TOKEN } from '../../util/env/constants';
 import { isErrnoException } from '@vercel/error-utils';
 import { addToGitIgnore } from '../../util/link/add-to-gitignore';
 import JSONparse from 'json-parse-better-errors';
@@ -270,21 +272,36 @@ export async function envPullCommandLogic(
     }
   }
 
+  let existingContents =
+    preserveExisting && exists ? await readFile(fullPath, 'utf8') : undefined;
+
+  if (existingContents && VERCEL_OIDC_TOKEN in records) {
+    // OIDC is short-lived and managed by the CLI, so always refresh it.
+    existingContents = removeEnvAssignment(existingContents, VERCEL_OIDC_TOKEN);
+  }
+
+  const localEnvKeys = existingContents
+    ? new Set(
+        Object.keys(parseDotenv(getUserManagedEnvContents(existingContents)))
+      )
+    : new Set<string>();
+
   const contents =
     CONTENTS_PREFIX +
     Object.keys(records)
       .sort()
-      .filter(key => !VARIABLES_TO_IGNORE.includes(key))
+      .filter(
+        key =>
+          !VARIABLES_TO_IGNORE.includes(key) &&
+          (key === VERCEL_OIDC_TOKEN || !localEnvKeys.has(key))
+      )
       .map(key => `${key}="${escapeValue(records[key])}"`)
       .join('\n') +
     '\n';
 
-  const existingContents =
-    preserveExisting && exists ? await readFile(fullPath, 'utf8') : undefined;
-  const outputContents =
-    existingContents === undefined
-      ? contents
-      : mergeLinkEnvContents(existingContents, contents);
+  const outputContents = preserveExisting
+    ? mergeLinkEnvContents(existingContents ?? '', contents)
+    : contents;
 
   await outputFile(fullPath, outputContents, 'utf8');
 
@@ -331,6 +348,33 @@ function mergeLinkEnvContents(existing: string, pulled: string): string {
   const separator =
     existing.length === 0 ? '' : existing.endsWith('\n') ? '\n' : '\n\n';
   return `${existing}${separator}${block}`;
+}
+
+function getUserManagedEnvContents(existing: string): string {
+  const blockStart = existing.indexOf(LINK_ENV_BLOCK_PREFIX);
+  if (blockStart === -1) {
+    return existing;
+  }
+
+  const blockEnd = existing.indexOf(LINK_ENV_BLOCK_SUFFIX, blockStart);
+  if (blockEnd === -1) {
+    return existing;
+  }
+
+  return (
+    existing.slice(0, blockStart) +
+    existing.slice(blockEnd + LINK_ENV_BLOCK_SUFFIX.length)
+  );
+}
+
+function removeEnvAssignment(contents: string, key: string): string {
+  const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const assignment = new RegExp(
+    `^[\\t ]*(?:export[\\t ]+)?${escapedKey}[\\t ]*=[^\\r\\n]*(?:\\r?\\n|$)`,
+    'gm'
+  );
+
+  return contents.replace(assignment, '');
 }
 
 async function pullEnvRecordsForEnvPull(

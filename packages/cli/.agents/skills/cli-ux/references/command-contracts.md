@@ -50,7 +50,7 @@ Rules:
 - Link/setup primary completed-phase rows use `✓`: `✓ Linked`, `✓ Created`, `✓ Added`. Discovery, preview, progress, and secondary rows such as `Found existing project`, `Detected`, `Project`, `Directory`, `Config`, `Settings`, and `Source` keep the blank two-space gutter. Never use `▲` for setup/link rows.
 - Default human success output prints the user-facing completion receipt, such as `✓ Linked acme/web` or `✓ Created acme/web`.
 - Do not print `.vercel/project.json`, `.vercel/repo.json`, or a repeated `Directory` row in default human success output when the local target was already shown. Verify link files in tests and expose them through machine/debug/help surfaces when needed.
-- After a successful direct `vc link`, pull development environment variables into `.env.local` automatically. Preserve pre-existing local file content instead of replacing it.
+- After a successful direct `vc link`, pull development environment variables into `.env.local` automatically. Preserve pre-existing local file content instead of replacing it; when a local key conflicts, keep that local definition and omit it from the CLI-managed block. `VERCEL_OIDC_TOKEN` is the exception: replace it with a fresh token in the managed block on every link.
 
 Current gaps to migrate incrementally:
 
