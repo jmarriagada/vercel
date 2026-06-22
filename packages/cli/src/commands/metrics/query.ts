@@ -42,6 +42,20 @@ function handleValidationError(
   return 1;
 }
 
+function combineFilters(filters: string[] | undefined): string | undefined {
+  const nonEmptyFilters = filters?.filter(filter => filter.length > 0) ?? [];
+
+  if (nonEmptyFilters.length === 0) {
+    return undefined;
+  }
+
+  if (nonEmptyFilters.length === 1) {
+    return nonEmptyFilters[0];
+  }
+
+  return nonEmptyFilters.map(filter => `(${filter})`).join(' and ');
+}
+
 async function resolveQueryScope(
   client: Client,
   opts: {
@@ -160,7 +174,8 @@ export default async function query(
   const aggregationFlag = flags['--aggregation'];
   const groupBy = flags['--group-by'] ?? [];
   const limit = flags['--limit'];
-  const filter = flags['--filter'];
+  const filters = flags['--filter'];
+  const filter = combineFilters(filters);
   const since = flags['--since'];
   const until = flags['--until'];
   const granularity = flags['--granularity'];
@@ -173,7 +188,7 @@ export default async function query(
   telemetry.trackCliOptionAggregation(aggregationFlag);
   telemetry.trackCliOptionGroupBy(groupBy.length > 0 ? groupBy : undefined);
   telemetry.trackCliOptionLimit(limit);
-  telemetry.trackCliOptionFilter(filter);
+  telemetry.trackCliOptionFilter(filters);
   telemetry.trackCliOptionSince(since);
   telemetry.trackCliOptionUntil(until);
   telemetry.trackCliOptionGranularity(granularity);

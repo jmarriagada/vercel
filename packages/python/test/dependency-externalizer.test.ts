@@ -209,20 +209,8 @@ describe('dependency externalizer support', () => {
   });
 
   describe('Lambda size constants', () => {
-    it('LAMBDA_SIZE_THRESHOLD_BYTES is 245 MB by default', () => {
-      expect(LAMBDA_SIZE_THRESHOLD_BYTES).toBe(245 * 1024 * 1024);
-    });
-
-    it('LAMBDA_SIZE_THRESHOLD_BYTES is 240 MB when otel layer is present', async () => {
-      process.env.VERCEL_DEPLOYMENT_HAS_OTEL_LAYER = '1';
-      try {
-        vi.resetModules();
-        const mod = await import('../src/dependency-externalizer');
-        expect(mod.LAMBDA_SIZE_THRESHOLD_BYTES).toBe(240 * 1024 * 1024);
-      } finally {
-        delete process.env.VERCEL_DEPLOYMENT_HAS_OTEL_LAYER;
-        vi.resetModules();
-      }
+    it('LAMBDA_SIZE_THRESHOLD_BYTES is 225 MB', () => {
+      expect(LAMBDA_SIZE_THRESHOLD_BYTES).toBe(225 * 1024 * 1024);
     });
 
     it('LAMBDA_EPHEMERAL_STORAGE_BYTES is 500 MB', () => {
@@ -923,7 +911,7 @@ version = "8.1.7"
       const tempDir = path.join(tmpdir(), `dep-ext-analyze-${Date.now()}`);
       fs.mkdirSync(tempDir, { recursive: true });
 
-      // Create a sparse file that reports > 245 MB without using real disk space
+      // Create a sparse file that reports > 225 MB without using real disk space
       const bigFilePath = path.join(tempDir, 'big-file.dat');
       const fd = fs.openSync(bigFilePath, 'w');
       fs.ftruncateSync(fd, LAMBDA_SIZE_THRESHOLD_BYTES + 1024 * 1024);
@@ -1008,6 +996,93 @@ version = "8.1.7"
       try {
         const result = await ext.analyze(files);
         expect(result.runtimeInstallEnabled).toBe(false);
+      } finally {
+        fs.removeSync(tempDir);
+      }
+    });
+
+    it('invokes onSized with the size even when the bundle exceeds the Hive limit and throws', async () => {
+      process.env.VERCEL_PYTHON_ON_HIVE = '1';
+
+      const tempDir = path.join(tmpdir(), `dep-ext-onsized-hive-${Date.now()}`);
+      fs.mkdirSync(tempDir, { recursive: true });
+
+      // Sparse file just over the 1 GB Hive limit (no real disk usage).
+      const bigFilePath = path.join(tempDir, 'big-file.dat');
+      const fd = fs.openSync(bigFilePath, 'w');
+      const oversized = HIVE_LAMBDA_SIZE_BYTES + 1024 * 1024;
+      fs.ftruncateSync(fd, oversized);
+      fs.closeSync(fd);
+
+      const ext = new PythonDependencyExternalizer({
+        venvPath: tempDir,
+        vendorDir: '_vendor',
+        workPath: tempDir,
+        uvLockPath: path.join(tempDir, 'uv.lock'),
+        uvProjectDir: tempDir,
+        projectName: 'test-project',
+        pythonMajor: 3,
+        pythonMinor: 12,
+        pythonPath: '/usr/bin/python3',
+        hasCustomCommand: false,
+      });
+
+      const files = {
+        'big-file.dat': new FileFsRef({ fsPath: bigFilePath }),
+      };
+
+      const onSized = vi.fn();
+
+      try {
+        await expect(ext.analyze(files, { onSized })).rejects.toThrow(
+          'exceeds the extended function size limit'
+        );
+        // The callback must have fired before the throw, carrying the size.
+        expect(onSized).toHaveBeenCalledTimes(1);
+        expect(onSized).toHaveBeenCalledWith({
+          totalSizeBytes: oversized,
+          runtimeInstallEnabled: false,
+        });
+      } finally {
+        fs.removeSync(tempDir);
+      }
+    });
+
+    it('invokes onSized on the under-threshold success path', async () => {
+      delete process.env.VERCEL_PYTHON_ON_HIVE;
+
+      const tempDir = path.join(tmpdir(), `dep-ext-onsized-ok-${Date.now()}`);
+      fs.mkdirSync(tempDir, { recursive: true });
+
+      const smallFilePath = path.join(tempDir, 'small-file.dat');
+      fs.writeFileSync(smallFilePath, 'a'.repeat(100));
+
+      const ext = new PythonDependencyExternalizer({
+        venvPath: tempDir,
+        vendorDir: '_vendor',
+        workPath: tempDir,
+        uvLockPath: path.join(tempDir, 'uv.lock'),
+        uvProjectDir: tempDir,
+        projectName: 'test-project',
+        pythonMajor: 3,
+        pythonMinor: 12,
+        pythonPath: '/usr/bin/python3',
+        hasCustomCommand: false,
+      });
+
+      const files = {
+        'small-file.dat': new FileFsRef({ fsPath: smallFilePath }),
+      };
+
+      const onSized = vi.fn();
+
+      try {
+        await ext.analyze(files, { onSized });
+        expect(onSized).toHaveBeenCalledTimes(1);
+        expect(onSized).toHaveBeenCalledWith({
+          totalSizeBytes: 100,
+          runtimeInstallEnabled: false,
+        });
       } finally {
         fs.removeSync(tempDir);
       }

@@ -60,8 +60,8 @@ export class MetricsTelemetryClient
     }
   }
 
-  trackCliOptionFilter(v: string | undefined) {
-    if (v) {
+  trackCliOptionFilter(v: string[] | undefined) {
+    if (v && v.length > 0) {
       this.trackCliOption({
         option: 'filter',
         value: this.redactedValue,
