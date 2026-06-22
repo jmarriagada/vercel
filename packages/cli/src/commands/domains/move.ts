@@ -40,6 +40,10 @@ export default async function move(client: Client, argv: string[]) {
   telemetry.trackCliArgumentDestination(args[1]);
 
   const { contextName, user } = await getScope(client);
+  if (!user) {
+    output.error('This command requires a user scope.');
+    return 1;
+  }
   const { domainName, destination } = await getArgs(client, args);
   if (!isRootDomain(domainName)) {
     output.error(

@@ -47,6 +47,10 @@ export default async function set(client: Client, argv: string[]) {
   telemetryClient.trackCliFlagDebug(opts['--debug']);
   telemetryClient.trackCliOptionLocalConfig(opts['--local-config']);
   const { contextName, user } = await getScope(client);
+  if (!user) {
+    output.error('This command requires a user scope.');
+    return 1;
+  }
 
   // If there are more than two args we have to error
   if (args.length > 2) {

@@ -8,6 +8,28 @@ import { getLinkFromDir, getVercelDirectory } from './projects/link';
 import { getRepoLink, findProjectsFromPath } from './link/repo';
 import type { RepoProjectsConfig } from './link/repo';
 import output from '../output-manager';
+import { introspectToken } from './introspect-token';
+
+export const APP_PRINCIPAL_SCOPE_ENV = 'VERCEL_CLI_WHOAMI_INTROSPECTION';
+
+type AppPrincipalTeam = Pick<Team, 'id' | 'slug' | 'name'>;
+
+export interface AppPrincipalScopeContext {
+  org: Org;
+  contextName: string;
+  user: null;
+  appPrincipal: {
+    id: string;
+    name?: string;
+    team: AppPrincipalTeam | null;
+  };
+  team: null;
+  globalTeam: null;
+  linkedRepo: null;
+  isCrossTeamRepo: false;
+  scopeMismatch: false;
+  explicitScopeProvided: boolean;
+}
 
 export interface ScopeContext {
   org: Org;
@@ -51,16 +73,34 @@ interface GetScopeWithoutLocalScopeOptions extends GetScopeOptions {
 export default function getScope(
   client: Client,
   opts: GetScopeWithLocalScopeOptions
-): Promise<ScopeContext>;
+): Promise<ScopeContext | AppPrincipalScopeContext>;
 export default function getScope(
   client: Client,
   opts?: GetScopeWithoutLocalScopeOptions
-): Promise<BasicScopeContext>;
+): Promise<BasicScopeContext | AppPrincipalScopeContext>;
 export default async function getScope(
   client: Client,
   opts: GetScopeOptions = {}
-): Promise<BasicScopeContext | ScopeContext> {
-  const user = await getUser(client);
+): Promise<BasicScopeContext | ScopeContext | AppPrincipalScopeContext> {
+  const allowAppPrincipal = isAppPrincipalScopeEnabled();
+  let userError: unknown;
+  const [user, appPrincipal] = await Promise.all([
+    getUser(client).catch(error => {
+      if (!allowAppPrincipal) {
+        throw error;
+      }
+      userError = error;
+      return null;
+    }),
+    allowAppPrincipal ? getAppPrincipal(client) : null,
+  ]);
+
+  if (!user) {
+    if (appPrincipal) {
+      return createAppPrincipalScopeContext(client, appPrincipal);
+    }
+    throw userError;
+  }
   let contextName = user.username || user.email;
   let team: Team | null = null;
   const defaultTeamId =
@@ -192,6 +232,79 @@ export default async function getScope(
     scopeMismatch,
     explicitScopeProvided,
   } satisfies ScopeContext;
+}
+
+export function isAppPrincipalScopeContext(
+  scope: BasicScopeContext | ScopeContext | AppPrincipalScopeContext
+): scope is AppPrincipalScopeContext {
+  return 'appPrincipal' in scope;
+}
+
+async function getAppPrincipal(client: Client): Promise<{
+  id: string;
+  name?: string;
+  team: AppPrincipalTeam | null;
+} | null> {
+  const token = client.authConfig.token;
+  if (!token) {
+    return null;
+  }
+
+  const introspection = await introspectToken(client, token);
+  if (
+    !introspection.active ||
+    introspection.subject_type !== 'client' ||
+    !introspection.client_id
+  ) {
+    return null;
+  }
+
+  return {
+    id: introspection.client_id,
+    name: introspection.client_name,
+    team: introspection.team ?? null,
+  };
+}
+
+function createAppPrincipalScopeContext(
+  client: Client,
+  appPrincipal: {
+    id: string;
+    name?: string;
+    team: AppPrincipalTeam | null;
+  }
+): AppPrincipalScopeContext {
+  const explicitScopeProvided = detectExplicitScope(client);
+  const org = appPrincipal.team
+    ? {
+        type: 'team' as const,
+        id: appPrincipal.team.id,
+        slug: appPrincipal.team.slug,
+      }
+    : {
+        type: 'user' as const,
+        id: appPrincipal.id,
+        slug: appPrincipal.name ?? appPrincipal.id,
+      };
+
+  return {
+    org,
+    contextName:
+      appPrincipal.team?.slug ?? appPrincipal.name ?? appPrincipal.id,
+    user: null,
+    appPrincipal,
+    team: null,
+    globalTeam: null,
+    linkedRepo: null,
+    isCrossTeamRepo: false,
+    scopeMismatch: false,
+    explicitScopeProvided,
+  };
+}
+
+function isAppPrincipalScopeEnabled(): boolean {
+  const value = process.env[APP_PRINCIPAL_SCOPE_ENV];
+  return value === '1' || value?.toLowerCase() === 'true';
 }
 
 export function applyScopeFromLink(client: Client, link: { org: Org }): void {
